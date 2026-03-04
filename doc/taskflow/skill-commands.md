@@ -21,7 +21,7 @@ Discuss a backlog task. Does **not** write a plan.
 Write a plan from the current discussion.
 
 - Takes task name from argument or infers from conversation.
-- Creates `.llm/plans/YYYY-MM-DD-<slug>.md` (using today's date) with:
+- Creates `.llm/plans/YYYY-MM-DD-HHMM-<slug>.md` (using current UTC date and time) with:
   - **Context:** summary of discussion and key decisions
   - **Steps:** concrete, actionable `- [ ]` items
 - Adds `plan:` sub-bullet in `doc/backlog.md` linking to the plan file.
@@ -78,7 +78,7 @@ Add an item to a file with `- [ ] **Title**` format.
 - Takes file path and `Title: description` as parameters.
 - If the input contains a colon, the part before becomes the bold title and the part after becomes an indented description.
 - If no colon, the entire input becomes the bold title with no description.
-- Works on both `doc/backlog.md` and `.llm/plans/YYYY-MM-DD-<slug>.md`.
+- Works on both `doc/backlog.md` and `.llm/plans/YYYY-MM-DD-HHMM-<slug>.md`.
 - Appends the formatted entry followed by a blank line.
 
 ---

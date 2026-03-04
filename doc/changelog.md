@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-04 **Added UTC clock time to plan filenames**
+- Changed plan naming from `YYYY-MM-DD-<slug>.md` to `YYYY-MM-DD-HHMM-<slug>.md` (UTC)
+- Updated skill-llm-context.md, skill-commands.md, skill-formats.md
+- Renamed 8 existing plan files with incrementing time components
+- Rebuilt all skills, commands, and scripts
+
 ## 2026-03-04 **Cleaned up backlog: delete completed tasks instead of marking [x]**
 - Added `--delete` flag to `hanf_task_complete.py` — deletes matched entry (line + sub-bullets + trailing blank) instead of marking `[x]`
 - Updated `hanf-do-planned-task`, `hanf-do-all-planned`, `hanf-retry-blocked` to use `--delete` for backlog operations

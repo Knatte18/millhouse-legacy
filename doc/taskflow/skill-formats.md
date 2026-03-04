@@ -14,14 +14,14 @@ High-level task list. Manually maintained by the user, updated by commands.
 
 - [p] **Refactor data validation layer**
   Extract validators into a clean interface using FluentValidation.
-  - plan: .llm/plans/2026-03-04-refactor-validation.md
+  - plan: .llm/plans/2026-03-04-1430-refactor-validation.md
 
 - [>] **Improve query performance**
   Profile and optimize slow database queries in the reporting module.
 
 - [!] **Fix memory leak in cache manager**
   Cache entries are not evicted under memory pressure.
-  - plan: .llm/plans/2026-03-03-fix-cache-leak.md
+  - plan: .llm/plans/2026-03-03-0915-fix-cache-leak.md
   - blocked: Missing access to test data
 ```
 
@@ -57,7 +57,7 @@ Dated log of completed work. Each entry gets its own heading with date and bold 
 
 ---
 
-## .llm/plans/YYYY-MM-DD-\<slug>.md (untracked)
+## .llm/plans/YYYY-MM-DD-HHMM-\<slug>.md (untracked)
 
 Detailed implementation plan with checkboxed steps.
 
