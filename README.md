@@ -65,6 +65,16 @@ See [BUILD.md](BUILD.md) for the full build spec.
 
 ---
 
+## Known Issue: Plan Mode Conflict
+
+Claude Code's built-in **plan mode** has its own 5-phase workflow with an `ExitPlanMode` approval gate. This conflicts with the `task-*` commands, which define their own planning lifecycle (`task-discuss` → `task-plan` → `task-do`).
+
+**Do not enter plan mode before running `task-*` or `mill-*` commands.** If plan mode is active, the system injects override instructions that fight the task workflow — the LLM will try to call `ExitPlanMode` instead of following `task-plan`, and read-only restrictions block edits that the commands need to make.
+
+If you accidentally enter plan mode, exit it first, then invoke the command.
+
+---
+
 ## Recommended Settings
 
 For the task skills to work correctly, Claude Code needs permission to run tools without constant prompting. Add the following to your `~/.claude/settings.json`, or to a local repo's `.claude/settings.json`:
