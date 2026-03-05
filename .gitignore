@@ -2,3 +2,6 @@
 **/.llm/
 *.local.*
 nul
+
+# Python
+__pycache__/
