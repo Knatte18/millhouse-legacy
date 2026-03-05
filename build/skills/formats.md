@@ -33,17 +33,17 @@ High-level task list. Manually maintained by the user, updated by commands.
 
 | State | Meaning | Set by |
 |-------|---------|--------|
-| `[ ]` | Unplanned / waiting | User or `hanf-add-task` |
+| `[ ]` | Unplanned / waiting | User or `task-add` |
 | `[>]` | Prioritized / focused | User (manually) |
-| `[N]` | In discussion by thread N (any digit 1-9) | `hanf-discuss-task` |
-| `[p]` | Planned (has plan file) | `hanf-finalize-plan` |
-| `[!]` | Blocked (with reason) | `hanf-task-block` script |
+| `[N]` | In discussion by thread N (any digit 1-9) | `task-discuss` |
+| `[p]` | Planned (has plan file) | `task-plan` |
+| `[!]` | Blocked (with reason) | `task_block.py` script |
 
-Completed tasks are deleted from the backlog (via `hanf_task_complete.py --delete`) since `doc/changelog.md` already records them. The `[x]` state is only used in plan files for step tracking.
+Completed tasks are deleted from the backlog (via `task_complete.py --delete`) since `doc/changelog.md` already records them. The `[x]` state is only used in plan files for step tracking.
 
 **Sub-bullets:**
 - `plan: <path>` — links to the implementation plan file
-- `started: <ISO 8601 UTC timestamp>` — records when discussion began (written by `hanf-discuss-task`)
+- `started: <ISO 8601 UTC timestamp>` — records when discussion began (written by `task-discuss`)
 - `blocked: <reason>` — explains why a task is blocked
 
 ---
@@ -92,7 +92,7 @@ Key decisions and constraints identified.
 ```
 
 **YAML frontmatter:**
-- `started:` — ISO 8601 UTC timestamp of when discussion began (copied from backlog `started:` sub-bullet by `hanf-finalize-plan`)
+- `started:` — ISO 8601 UTC timestamp of when discussion began (copied from backlog `started:` sub-bullet by `task-plan`)
 - `finished:` — ISO 8601 UTC timestamp of when the plan was finalized (matches filename timestamp)
 
 The `## Files` section lists files the plan expects to modify. Used for staleness detection (checking if those files changed since discussion started) and for fast implementation start (reading them upfront instead of scanning the codebase).
@@ -100,6 +100,6 @@ The `## Files` section lists files the plan expects to modify. Used for stalenes
 Steps are marked `[x]` progressively as CC completes them, and `[!]` if a step fails.
 
 **Plan step rules:**
-- Steps must describe concrete actions, not reference `/hanf-*` slash commands or `~/.claude/skills/` files. The LLM executor may interpret these as requiring user invocation or skill loading, stalling execution.
-- Bad: `Run /hanf-skill-build` or `Follow ~/.claude/skills/csharp-build.md`
+- Steps must describe concrete actions, not reference `/task-*` slash commands or `~/.claude/skills/` files. The LLM executor may interpret these as requiring user invocation or skill loading, stalling execution.
+- Bad: `Run /mill-build` or `Follow ~/.claude/skills/csharp-build.md`
 - Good: `Regenerate build output following BUILD.md`

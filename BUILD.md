@@ -39,7 +39,7 @@ This ensures the core skills (response style, directory structure, workflow) are
 
 ### Commands → `build/commands/`
 
-Each `## hanf-*` section in `doc/taskflow/skill-commands.md` → `build/commands/<command-name>.md`
+Each `## task-*` or `## mill-*` section in `doc/taskflow/skill-commands.md` → `build/commands/<command-name>.md`
 
 ```yaml
 ---
@@ -55,7 +55,7 @@ argument-hint: "<if applicable>"
 
 ### Scripts → `build/scripts/`
 
-Each `## hanf_*` section in `doc/taskflow/skill-scripts.md` → `build/scripts/<script-name>.py`
+Each `## task_*` section in `doc/taskflow/skill-scripts.md` → `build/scripts/<script-name>.py`
 
 Implement according to the behavioral spec: parameters, selection priority, output, exit codes.
 
@@ -67,17 +67,18 @@ Implement according to the behavioral spec: parameters, selection priority, outp
 build/
 ├── CLAUDE.md                (references core skills)
 ├── commands/
-│   └── hanf-*.md            (one per command)
+│   └── task-*.md            (one per command)
+│   └── mill-*.md            (one per mill command)
 ├── skills/
 │   └── *.md                 (all skills, including core)
 └── scripts/
-    └── hanf_*.py            (one per script)
+    └── task_*.py            (one per script)
 ```
 
 ---
 
 ## Updating skills
 
-Edit spec files in `doc/`, then run `hanf-skill-build` to regenerate into `build/`. Then run `hanf-skill-deploy` to deploy to `~/.claude/`.
+Edit spec files in `doc/`, then run `mill-build` to regenerate into `build/`. Then run `mill-deploy` to deploy to `~/.claude/`.
 
-By default, the build is **incremental**: it uses `git diff --name-only HEAD -- doc/` to detect changed sources and only regenerates their corresponding outputs. Use `hanf-skill-build full` for a complete clean + rebuild.
+By default, the build is **incremental**: it uses `git diff --name-only HEAD -- doc/` to detect changed sources and only regenerates their corresponding outputs. Use `mill-build full` for a complete clean + rebuild.

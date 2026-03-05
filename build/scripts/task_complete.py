@@ -1,6 +1,6 @@
 """Mark the first incomplete item as done.
 
-Usage: hanf_task_complete.py [--delete] <file-path>
+Usage: task_complete.py [--delete] <file-path>
 
 Finds first [ ], [>], or [p] item and replaces with [x].
 Prints the completed item.
@@ -15,7 +15,7 @@ import re
 import sys
 from pathlib import Path
 
-from hanf_lock import lock_backlog
+from task_lock import lock_backlog
 
 CHECKBOX_PATTERN = re.compile(r"^(\s*- \[)([ >p1-9])(\] )")
 
@@ -29,7 +29,7 @@ def main():
         args.remove("--delete")
 
     if len(args) < 1:
-        print("Usage: hanf_task_complete.py [--delete] <file-path>", file=sys.stderr)
+        print("Usage: task_complete.py [--delete] <file-path>", file=sys.stderr)
         sys.exit(1)
 
     file_path = args[0]

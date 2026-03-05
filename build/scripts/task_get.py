@@ -1,6 +1,6 @@
 """Extract the next incomplete task/step with its context lines.
 
-Usage: hanf_task_get.py [--include-planned] <file-path>
+Usage: task_get.py [--include-planned] <file-path>
 
 Selection priority (default):
 1. First [>] (prioritized) item
@@ -19,7 +19,7 @@ import re
 import sys
 from pathlib import Path
 
-from hanf_lock import lock_backlog
+from task_lock import lock_backlog
 
 CHECKBOX_PATTERN = re.compile(r"^(\s*- \[)(.)(\] )")
 
@@ -33,7 +33,7 @@ def main():
         args.remove("--include-planned")
 
     if len(args) < 1:
-        print("Usage: hanf_task_get.py [--include-planned] <file-path>", file=sys.stderr)
+        print("Usage: task_get.py [--include-planned] <file-path>", file=sys.stderr)
         sys.exit(1)
 
     file_path = args[0]

@@ -1,6 +1,6 @@
 """Claim a task for discussion by assigning a thread number and recording start time.
 
-Usage: hanf_task_claim.py <file-path> [task-name]
+Usage: task_claim.py <file-path> [task-name]
 
 Finds the target task (by name if provided, otherwise first [>], then first [ ]).
 Changes its state to [N] where N is the lowest unused digit (1-9).
@@ -13,7 +13,7 @@ import re
 import sys
 from datetime import datetime, timezone
 
-from hanf_lock import lock_backlog
+from task_lock import lock_backlog
 
 CHECKBOX_PATTERN = re.compile(r"^(\s*- \[)(.)(\] )")
 
@@ -56,7 +56,7 @@ def find_task_index(lines, task_name=None):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: hanf_task_claim.py <file-path> [task-name]", file=sys.stderr)
+        print("Usage: task_claim.py <file-path> [task-name]", file=sys.stderr)
         sys.exit(1)
 
     file_path = sys.argv[1]

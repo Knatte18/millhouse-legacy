@@ -1,10 +1,10 @@
 # Commands Skill
 
-Defines the 8 hanf-* commands for task management and git operations.
+Defines the task-* and mill-* commands for task management and git operations.
 
 ---
 
-## hanf-discuss-task
+## task-discuss
 
 Discuss a backlog task. Does **not** write a plan.
 
@@ -14,12 +14,12 @@ Discuss a backlog task. Does **not** write a plan.
 - If the task has a `plan:` sub-bullet, reads and summarizes the existing plan, then continues discussion from there.
 - Reads relevant codebase sections.
 - Asks clarifying questions about approach, constraints, and design.
-- Discussion continues until the user calls `hanf-finalize-plan`.
+- Discussion continues until the user calls `task-plan`.
 - Do not enter plan mode or write plan files. This command is discussion only.
 
 ---
 
-## hanf-finalize-plan
+## task-plan
 
 Write a plan from the current discussion.
 
@@ -31,11 +31,11 @@ Write a plan from the current discussion.
   - **Steps:** concrete, actionable `- [ ]` items
 - Adds `plan:` sub-bullet in `doc/backlog.md` linking to the plan file.
 - Changes task state to `[p]` (planned) in `doc/backlog.md`.
-- Steps must use concrete actions (e.g. `Regenerate build output following BUILD.md`), never `/hanf-*` commands or `~/.claude/skills/` references — the executor treats these as user-invocable, stalling execution.
+- Steps must use concrete actions (e.g. `Regenerate build output following BUILD.md`), never `/task-*` commands or `~/.claude/skills/` references — the executor treats these as user-invocable, stalling execution.
 
 ---
 
-## hanf-do-planned-task
+## task-do
 
 Implement the next planned task. Does **not** commit.
 
@@ -49,11 +49,11 @@ Implement the next planned task. Does **not** commit.
 - If a step fails: marks `- [!]` and blocks the task via script.
 - Runs build + test after all steps (see `skill-build`).
 - If all steps complete: deletes task from `doc/backlog.md` (via `--delete`), updates `doc/changelog.md`.
-- Does **not** commit — user calls `hanf-commit` when ready.
+- Does **not** commit — user calls `mill-commit` when ready.
 
 ---
 
-## hanf-do-all-planned
+## task-do-all
 
 Implement all planned tasks. Commits after **each** completed task.
 
@@ -61,17 +61,17 @@ Implement all planned tasks. Commits after **each** completed task.
 
 - Loops through planned tasks using `--include-planned` (those with `plan:` sub-bullet, priority: `[>]` → `[p]` → `[ ]`).
 - For each task:
-  1. Read the plan file and all files listed in `## Files`. Run the same staleness check as `hanf-do-planned-task` (using `started:` from plan frontmatter); if changes found, re-read affected files and revise plan steps.
+  1. Read the plan file and all files listed in `## Files`. Run the same staleness check as `task-do` (using `started:` from plan frontmatter); if changes found, re-read affected files and revise plan steps.
   2. Implement each `- [ ]` step, marking as `- [x]`.
   3. If a step fails: mark `- [!]`, block the task, move to the next task.
   4. Run build + test.
   5. Delete task from `doc/backlog.md` (via `--delete`), update `doc/changelog.md`.
-  6. Commit and push (using `hanf-commit` workflow).
+  6. Commit and push (using `mill-commit` workflow).
 - Stops when no planned tasks remain.
 
 ---
 
-## hanf-list-tasks
+## task-list
 
 Show task status and let the user pick one to discuss.
 
@@ -79,11 +79,11 @@ Show task status and let the user pick one to discuss.
 - Prints status summary: `Status: 1 prioritized | 1 in discussion | 2 planned | 3 unplanned | 1 blocked`.
 - Groups open tasks by state: prioritized `[>]`, in discussion `[N]`, planned `[p]`, unplanned `[ ]`, blocked `[!]`.
 - Shows plan file path and blocked reason if applicable.
-- User picks a task number to start discussion (proceeds as `hanf-discuss-task`).
+- User picks a task number to start discussion (proceeds as `task-discuss`).
 
 ---
 
-## hanf-add-task
+## task-add
 
 Add an item to a file with `- [ ] **Title**` format.
 
@@ -95,7 +95,7 @@ Add an item to a file with `- [ ] **Title**` format.
 
 ---
 
-## hanf-commit
+## mill-commit
 
 Commit and push. No rebase.
 
@@ -105,7 +105,7 @@ Commit and push. No rebase.
 
 ---
 
-## hanf-retry-blocked
+## task-retry
 
 Retry the first blocked task.
 
@@ -121,17 +121,17 @@ Retry the first blocked task.
 ## Workflow Summary
 
 ```
-backlog.md          hanf-discuss-task        .llm/plans/
+backlog.md          task-discuss             .llm/plans/
 ┌──────────┐       ┌────────────────┐       ┌───────────┐
 │ - [ ] ... │──────▶│  Discussion    │──────▶│ - [ ] ... │
 │ - [>] ... │       │  (no plan yet) │       │ - [ ] ... │
 └──────────┘       └───────┬────────┘       └─────┬─────┘
                            │                      │
-                   hanf-finalize-plan      hanf-do-planned-task
+                       task-plan              task-do
                            │                      │
                    adds plan: link         marks [x] per step
                    in backlog.md           runs build+test
                                                   │
-                                           hanf-commit (manual)
-                                           or auto in hanf-do-all-planned
+                                           mill-commit (manual)
+                                           or auto in task-do-all
 ```

@@ -46,9 +46,9 @@ Commands, scripts, and file formats for planning and executing work.
 
 | Skill | Purpose |
 |-------|---------|
-| [skill-commands](doc/taskflow/skill-commands.md) | 8 hanf-* commands (discuss, plan, execute, commit) |
+| [skill-commands](doc/taskflow/skill-commands.md) | task-* and mill-* commands (discuss, plan, execute, commit) |
 | [skill-formats](doc/taskflow/skill-formats.md) | backlog.md, changelog.md, plan file format |
-| [skill-scripts](doc/taskflow/skill-scripts.md) | 4 Python scripts for checkbox file operations |
+| [skill-scripts](doc/taskflow/skill-scripts.md) | Python scripts for checkbox file operations |
 
 ---
 
@@ -58,8 +58,8 @@ Specs in `doc/` are transformed into working Claude Code files in `build/`, then
 
 | Command | What it does |
 |---------|-------------|
-| `/hanf-skill-build` | Reads specs from `doc/`, generates skills, commands, and scripts into `build/` |
-| `/hanf-skill-deploy` | Copies `build/` to `~/.claude/` (default) or a given path |
+| `/mill-build` | Reads specs from `doc/`, generates skills, commands, and scripts into `build/` |
+| `/mill-deploy` | Copies `build/` to `~/.claude/` (default) or a given path |
 
 See [BUILD.md](BUILD.md) for the full build spec.
 

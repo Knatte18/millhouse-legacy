@@ -1,6 +1,6 @@
 """Mark the first incomplete item as blocked.
 
-Usage: hanf_task_block.py <file-path> [reason]
+Usage: task_block.py <file-path> [reason]
 
 Finds first [ ], [>], or [p] item and replaces with [!].
 Optionally inserts a `blocked: <reason>` sub-bullet.
@@ -11,14 +11,14 @@ import re
 import sys
 from pathlib import Path
 
-from hanf_lock import lock_backlog
+from task_lock import lock_backlog
 
 CHECKBOX_PATTERN = re.compile(r"^(\s*- \[)([ >p1-9])(\] )")
 
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: hanf_task_block.py <file-path> [reason]", file=sys.stderr)
+        print("Usage: task_block.py <file-path> [reason]", file=sys.stderr)
         sys.exit(1)
 
     file_path = sys.argv[1]
