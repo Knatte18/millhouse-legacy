@@ -16,6 +16,7 @@ Discuss a backlog task. Does **not** write a plan.
 - Asks clarifying questions about approach, constraints, and design.
 - Discussion continues until the user calls `task-plan`.
 - Do not enter plan mode or write plan files. This command is discussion only.
+- Do not edit any files other than `doc/backlog.md` (for claiming the task). No code edits, no file creation.
 
 ---
 
@@ -32,6 +33,7 @@ Write a plan from the current discussion.
 - Adds `plan:` sub-bullet in `doc/backlog.md` linking to the plan file.
 - Changes task state to `[p]` (planned) in `doc/backlog.md`.
 - Steps must use concrete actions (e.g. `Regenerate build output following BUILD.md`), never `/task-*` commands or `~/.claude/skills/` references — the executor treats these as user-invocable, stalling execution.
+- Do not edit any files other than `doc/backlog.md` and `.llm/plans/`. No code edits, no build changes.
 
 ---
 
@@ -102,6 +104,24 @@ Commit and push. No rebase.
 - See `git/skill-git` for full commit rules.
 - Stages files individually, commits with title + bullet-point format, pushes.
 - Sets upstream if needed: `git push --set-upstream origin <branch>`.
+
+---
+
+## mill-logentry
+
+Generate a changelog entry from recent git commits. Prints to stdout only — does not write to `doc/changelog.md`.
+
+**Frontmatter:** `argument-hint: "[since] [language] [length/emphasis]"`
+
+- Accepts optional arguments in any order or combination:
+  - **cutoff time**: ISO 8601 timestamp or natural-language date (e.g. `yesterday`, `2026-03-01`). If omitted, reads `doc/changelog.md` and finds the date of the newest `## YYYY-MM-DD` heading, then uses that date as the cutoff.
+  - **language**: e.g. `norwegian`, `french`. Default: English.
+  - **length/emphasis guidance**: e.g. `brief`, `detailed`, `focus on architecture decisions`.
+- Runs `git log --oneline --since=<cutoff>` to gather commits since the cutoff.
+- Reads `doc/changelog.md` to match the existing tone and format.
+- Generates a single entry as dense, technical narrative prose — work-journal style covering what was done, key decisions, discoveries, and open items.
+- Prints the entry to stdout (with the `## YYYY-MM-DD` heading using today's date). Does NOT modify any files.
+- Honors the language argument if provided; otherwise defaults to English.
 
 ---
 

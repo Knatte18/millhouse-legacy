@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-05 **New command: mill-logentry**
+- Added `mill-logentry` command that generates a changelog entry from recent git commits and prints to stdout
+- Accepts optional cutoff time, language, and length/emphasis arguments
+- Auto-detects cutoff from newest changelog heading if not specified
+- Added spec section to `doc/taskflow/skill-commands.md`, built and deployed to `~/.claude/commands/`
+
 ## 2026-03-05 **Fixed build reference in plan steps**
 - Changed plan step example from nonexistent `python scripts/build_skills.py` to `Regenerate build output following BUILD.md`
 - Updated doc/taskflow/skill-formats.md, doc/taskflow/skill-commands.md, and corresponding build outputs

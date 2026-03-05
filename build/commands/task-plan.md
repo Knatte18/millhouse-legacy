@@ -1,9 +1,8 @@
 ---
 description: "Write a plan from the current discussion"
-argument-hint: "[task-name]"
+argument-hint: "[task name]"
 ---
 
-Read and follow ~/.claude/skills/workflow.md
 Read and follow ~/.claude/skills/formats.md
 Read and follow ~/.claude/skills/llm-context.md
 
@@ -20,3 +19,4 @@ Write a plan from the current discussion.
 - Adds `plan:` sub-bullet in `doc/backlog.md` linking to the plan file.
 - Changes task state to `[p]` (planned) in `doc/backlog.md`.
 - Steps must use concrete actions (e.g. `Regenerate build output following BUILD.md`), never `/task-*` commands or `~/.claude/skills/` references — the executor treats these as user-invocable, stalling execution.
+- Do not edit any files other than `doc/backlog.md` and `.llm/plans/`. No code edits, no build changes.
