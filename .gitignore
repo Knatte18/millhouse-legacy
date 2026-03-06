@@ -1,0 +1,7 @@
+# Claude Code Files
+**/.llm/
+*.local.*
+nul
+
+# Python
+__pycache__/

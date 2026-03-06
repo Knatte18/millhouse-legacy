@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "taskmill",
+  "version": "1.0.0",
+  "description": "Task management, workflow orchestration, and coding skills for Claude Code",
+  "owner": {
+    "name": "Knatte18"
+  },
+  "plugins": [
+    {
+      "name": "taskmill",
+      "description": "Task management, workflow orchestration, and coding skills for Claude Code",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./build/taskmill",
+      "category": "productivity"
+    }
+  ]
+}

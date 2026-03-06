@@ -1,0 +1,2 @@
+- [ ] **Simplify backlog task handling**
+  Skip using scripts for backlog operations (CC handles them directly and the scripts are getting complicated). Keep scripts only for plans, which are simpler (just unchecked/checked) and have more commands. BUT: To support having several threads of CC all attempting to edit backlog.md at the same time ... is this supported by Claude from before? Or de we need a "filelock" mechanism as we did for the python scripts?
