@@ -1,6 +1,6 @@
 # Claude Code Skills
 
-Shareable skill specifications for Claude Code. Colleagues can customize these specs and have Claude Code build working skills from them into `~/.claude/`.
+Customizable skill specifications for Claude Code. Fork the repo, tweak the specs to fit your workflow, and have Claude Code build working skills from them into `~/.claude/`.
 
 ---
 

@@ -39,20 +39,7 @@ Every `skill-*.md` becomes a SKILL.md file in its own directory:
 - Language subfolders get a prefix: `doc/coding/csharp/skill-comments.md` → `build/taskmill/skills/csharp-comments/SKILL.md`
 - **Exception:** `skill-commands.md` and `skill-scripts.md` are not skills — they are sources for commands and scripts.
 
-Each SKILL.md gets YAML frontmatter with `name` and `description`:
-
-```yaml
----
-name: <skill-name>
-description: <one-line description>. <when to use>.
----
-```
-
-The three core skills (conversation, llm-context, workflow) get descriptions ending with `ALWAYS use on startup.` to ensure they load every session.
-
-Skill content is copied as-is after the frontmatter.
-
-**Cross-references:** Any `~/.claude/skills/<name>.md` references in the content become `@taskmill:<name>`. Any `skill-build` or `skill-<name>` references become `@taskmill:<name>`.
+**Skill files in `doc/` are plugin-ready.** They already contain YAML frontmatter (`name`, `description`) and use `@taskmill:<name>` cross-references. The build step copies each skill file verbatim into its output path — no transformation is applied.
 
 ### Commands → `build/taskmill/commands/`
 
