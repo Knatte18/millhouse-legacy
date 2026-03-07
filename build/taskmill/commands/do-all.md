@@ -1,6 +1,6 @@
 ---
 description: "Implement all planned tasks, committing after each"
-model: sonnet
+model: opus
 ---
 
 Implement all planned tasks, committing after each.

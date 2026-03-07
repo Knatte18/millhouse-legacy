@@ -1,6 +1,6 @@
 ---
 description: "Implement the next planned task (does not commit)"
-model: sonnet
+model: opus
 ---
 
 Implement the next planned task. Does **not** commit.

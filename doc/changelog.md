@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-07 **Added finalize-do, finalize-do-commit, finalize-do-all commands**
+- Three new commands combine finalization with immediate implementation, eliminating the manual two-step process
+- `finalize-do`: finalize + implement, no commit
+- `finalize-do-commit`: finalize + implement + commit (refuses on main without `--onmain`)
+- `finalize-do-all`: finalize + implement all planned tasks committing after each
+- Changed `model: sonnet` to `model: opus` in do, do-commit, do-all commands
+
 ## 2026-03-07 **Added add-discuss command**
 - New command adds a task to the backlog via `task_add.py`, claims it via `task_claim.py`, then proceeds with the standard discuss flow
 

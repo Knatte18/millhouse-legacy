@@ -1,6 +1,6 @@
 ---
 description: "Implement the next planned task and commit"
-model: sonnet
+model: opus
 ---
 
 Implement the next planned task and commit. Combines `do` then `commit`.

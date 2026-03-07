@@ -40,7 +40,7 @@ Write a plan from the current discussion.
 
 Implement the next planned task. Does **not** commit.
 
-**Frontmatter:** `model: sonnet`
+**Frontmatter:** `model: opus`
 
 - Finds next planned task using `--include-planned`: first `[>]` with `plan:`, then first `[p]` with `plan:`, then first `[ ]` with `plan:`.
 - Reads the plan file.
@@ -58,7 +58,7 @@ Implement the next planned task. Does **not** commit.
 
 Implement the next planned task and commit. Combines `do` then `commit`.
 
-**Frontmatter:** `model: sonnet`
+**Frontmatter:** `model: opus`
 
 - **Branch check first:** run `git branch --show-current`. If on `main`/`master`:
   1. Derive a branch name from the task title slug (e.g. `feature/revise-git-workflow`).
@@ -74,11 +74,52 @@ Implement the next planned task and commit. Combines `do` then `commit`.
 
 Implement all planned tasks, committing after each.
 
-**Frontmatter:** `model: sonnet`
+**Frontmatter:** `model: opus`
 
 - **Branch check first:** same as `do-commit` — if on `main`/`master`, prompt to create a new branch, wait for confirmation, create and switch to it. One branch for the entire batch.
 - Loop: run `do-commit` until no planned tasks remain (task_get.py --include-planned returns exit code 1).
 - Stops when no planned tasks remain.
+
+---
+
+## finalize-do
+
+Finalize the current discussion and immediately implement the resulting task. Does **not** commit.
+
+**Frontmatter:** `model: opus`
+
+- Takes task name from argument or infers from conversation.
+- Creates `.llm/plans/YYYY-MM-DD-HHMMSS-<slug>.md` (using current UTC date and time) with YAML frontmatter, context, files, and steps. (Same as `finalize`.)
+- Runs `python ${CLAUDE_PLUGIN_ROOT}/scripts/task_plan.py doc/backlog.md "<task-name>" <plan-path>` to change state to `[p]` and add the `plan:` sub-bullet.
+- Runs `do` on the resulting task: reads plan and listed files, staleness check, implements steps, runs build + test, updates backlog and changelog.
+- Does **not** commit — user calls `commit` when ready.
+
+---
+
+## finalize-do-commit
+
+Finalize the current discussion, implement the resulting task, and commit.
+
+**Frontmatter:** `model: opus`
+
+- **Branch check first:** run `git branch --show-current`. If on `main`/`master` and `--onmain` is not in the argument: refuse to proceed. Suggest a branch name based on the task context (e.g. `feature/task-name`), prompt the user to create it and re-run. Do not create the branch.
+- Takes task name from argument or infers from conversation.
+- Creates `.llm/plans/YYYY-MM-DD-HHMMSS-<slug>.md` with YAML frontmatter, context, files, and steps.
+- Runs `python ${CLAUDE_PLUGIN_ROOT}/scripts/task_plan.py doc/backlog.md "<task-name>" <plan-path>` to change state to `[p]` and add the `plan:` sub-bullet.
+- Runs `do` on the resulting task: reads plan and listed files, staleness check, implements steps, runs build + test, updates backlog and changelog.
+- Runs `commit`: stage individually, commit with title + bullet-point format, push. Set upstream if needed.
+
+---
+
+## finalize-do-all
+
+Finalize the current discussion, then implement all planned tasks committing after each.
+
+**Frontmatter:** `model: opus`
+
+- **Branch check first:** same as `finalize-do-commit` — if on `main`/`master` and `--onmain` is not in the argument, refuse, suggest a branch name, and stop. One branch for the entire batch.
+- Finalize current discussion: create plan file, run `task_plan.py` to update backlog.
+- Loop: run `do-commit` (find next planned task, implement, commit) until `task_get.py --include-planned` exits with code 1 (no planned tasks remain).
 
 ---
 
