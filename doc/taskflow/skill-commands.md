@@ -181,19 +181,18 @@ Commit and push. No rebase.
 
 ## log
 
-Generate a changelog entry from recent git commits. Prints to stdout only — does not write to `doc/changelog.md`.
+Generate a work-journal entry from recent git commits. Prints to stdout only — does not modify any files.
 
-**Frontmatter:** `argument-hint: "[since] [language] [length/emphasis]"`
+**Frontmatter:** `argument-hint: "<cutoff> [language-prefix] [guidance]"`
 
-- Accepts optional arguments in any order or combination:
-  - **cutoff time**: ISO 8601 timestamp or natural-language date (e.g. `yesterday`, `2026-03-01`). If omitted, reads `doc/changelog.md` and finds the date of the newest `## YYYY-MM-DD` heading, then uses that date as the cutoff.
-  - **language**: e.g. `norwegian`, `french`. Default: English.
-  - **length/emphasis guidance**: e.g. `brief`, `detailed`, `focus on architecture decisions`.
+- **Cutoff (required):** ISO 8601 timestamp or natural-language date (e.g. `today`, `yesterday`, `2h ago`, `2026-03-01`). No default — the user must specify when to start from.
+- **Language prefix (optional):** any recognizable prefix of a language name. Examples: `nor`, `no`, `norwegian`, `eng`, `en`, `english`, `fr`, `french`. Default: English.
+- **Guidance (optional):** free-text for emphasis, length, or focus. Examples: `"Emphasize the refactoring work"`, `"3 sentences"`, `brief`, `detailed`.
+- Arguments can appear in any order. Quoted strings are treated as guidance.
 - Runs `git log --oneline --since=<cutoff>` to gather commits since the cutoff.
-- Reads `doc/changelog.md` to match the existing tone and format.
-- Generates a single entry as dense, technical narrative prose — work-journal style covering what was done, key decisions, discoveries, and open items.
-- Prints the entry to stdout (with the `## YYYY-MM-DD` heading using today's date). Does NOT modify any files.
-- Honors the language argument if provided; otherwise defaults to English.
+- Generates plain narrative prose — dense, technical, work-journal style. No headings, no bullet points, no markdown formatting.
+- Prints the entry to stdout. Does NOT read or write any files.
+- Does NOT read `doc/changelog.md`.
 
 ---
 

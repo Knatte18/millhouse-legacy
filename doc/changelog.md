@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-08 **Revised log command to use git commits only**
+- Removed changelog.md dependency: no longer reads changelog for cutoff detection or tone matching
+- Made cutoff argument required (e.g. `today`, `yesterday`, `2h ago`)
+- Changed output to plain narrative prose with no headings, no bullet points, no markdown
+- Added language prefix support (e.g. `nor`, `en`, `fr`) and free-text guidance for emphasis/length
+
 ## 2026-03-08 **Revised plan step format for better granularity and mandatory tests**
 - Added step-writing rules to `finalize` command: one step per file, explicit file paths and function/class names, no compound steps
 - Added mandatory test steps: plans must include test steps when `## Files` contains source code files
