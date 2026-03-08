@@ -18,12 +18,25 @@ Use the appropriate skill based on the current activity:
 | Before editing code | `@taskmill:code-quality` |
 | When running shell commands | `@taskmill:cli` |
 | For project-specific style rules | `@taskmill:linting` |
-| For C# comments, tests, or build | `@taskmill:csharp-*` |
+| For language-specific build, test, or comments | Detect language, then use `@taskmill:{lang}-*` (see below) |
 | For all git operations | `@taskmill:git` |
 | For file format specs (backlog, plans) | `@taskmill:formats` |
 | For response style guidelines | `@taskmill:conversation` |
 | For file placement and .llm/ rules | `@taskmill:llm-context` |
 | For workflow and completion rules | `@taskmill:workflow` |
+
+---
+
+## Language Detection
+
+Detect the project language from marker files in the working directory and use the matching skills:
+
+| Marker files | Language | Skills |
+|-------------|----------|--------|
+| `pyproject.toml`, `setup.py`, `setup.cfg` | Python | `@taskmill:python-build`, `python-comments`, `python-testing` |
+| `.csproj`, `.sln` | C# | `@taskmill:csharp-build`, `csharp-comments`, `csharp-testing` |
+
+If multiple languages are present, use the skills matching the files being edited.
 
 ---
 
@@ -45,7 +58,7 @@ Reading `doc/backlog.md` with the Read tool is allowed.
 
 ## Task Completion
 
-- Run build + tests after each completed task (see `@taskmill:csharp-build` for details).
+- Run build + tests after each completed task (see Language Detection above to select the correct `{lang}-build` skill).
 - When a task is fully complete, update:
   1. The plan file (all steps marked `[x]`)
   2. `doc/backlog.md` (task entry deleted via `task_complete.py --delete`)

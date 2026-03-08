@@ -106,7 +106,10 @@ build/taskmill/
 │   ├── git/SKILL.md
 │   ├── csharp-build/SKILL.md
 │   ├── csharp-comments/SKILL.md
-│   └── csharp-testing/SKILL.md
+│   ├── csharp-testing/SKILL.md
+│   ├── python-build/SKILL.md
+│   ├── python-comments/SKILL.md
+│   └── python-testing/SKILL.md
 ├── scripts/
 │   └── task_*.py                (one per script)
 └── hooks/

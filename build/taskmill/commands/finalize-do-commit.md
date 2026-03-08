@@ -15,7 +15,7 @@ Finalize the current discussion, implement the resulting task, and commit.
 6. **Staleness check:** read the `started:` timestamp from the plan's YAML frontmatter and run `git log --since=<started-timestamp> -- <file1> <file2> ...`. If changes are found, re-read affected files and revise plan steps.
 7. Implement each `- [ ]` step, marking as `- [x]` immediately after completion.
 8. If a step fails: mark `- [!]` and block via `python ${CLAUDE_PLUGIN_ROOT}/scripts/task_block.py`.
-9. Run build + test after all steps. Use @taskmill:csharp-build skill.
+9. Run build + test after all steps (detect project language and use the matching `{lang}-build` skill — see `@taskmill:workflow` Language Detection).
 10. If all steps complete: run `python ${CLAUDE_PLUGIN_ROOT}/scripts/task_complete.py --delete doc/backlog.md`, then update `doc/changelog.md`.
 11. Commit and push: stage files individually, commit with title + bullet-point format, push. Set upstream if needed.
 

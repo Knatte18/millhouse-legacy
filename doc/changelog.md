@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-08 **Added Python skills and language-agnostic build routing**
+- Created `python-build` skill: `ruff check .` + `pytest` as mandatory build commands
+- Created `python-comments` skill: module docstrings required, concise function docstrings, no Args/Returns sections, imperative inline comments
+- Created `python-testing` skill: pytest conventions with fixtures, parametrize, strict assertions
+- Made workflow skill language-agnostic: added Language Detection section with marker-file table (`pyproject.toml` → Python, `.csproj` → C#)
+- Updated `do` command to route to the detected language's build skill instead of hardcoding `@taskmill:csharp-build`
+- Updated BUILD.md result tree with new `python-*` skill entries
+
 ## 2026-03-07 **Added finalize-do, finalize-do-commit, finalize-do-all commands**
 - Three new commands combine finalization with immediate implementation, eliminating the manual two-step process
 - `finalize-do`: finalize + implement, no commit
