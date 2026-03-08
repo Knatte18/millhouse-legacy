@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-08 **Added git guard hook**
+- Created `validate-git.sh` PreToolUse hook that blocks dangerous git commands via JSON decisions
+- `deny` for `git add -A/--all`, `git commit -a`, `git push --force/-f`
+- `ask` for `git reset --hard` and `git clean -fd` (user can approve when intentional)
+- Added Bash matcher to hooks.json with 500ms timeout
+
 ## 2026-03-08 **Added language-agnostic testing skill**
 - Created base `testing` skill with universal principles: strict assertions, mock discipline (terminology: mock vs fake vs stub), naming conventions, record/replay preference
 - Updated `csharp-testing` and `python-testing` to reference `@taskmill:testing` instead of repeating general principles
