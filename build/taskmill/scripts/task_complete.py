@@ -2,41 +2,12 @@
 """Mark the first incomplete item as done, or delete it."""
 
 import argparse
-import re
 import sys
-from pathlib import Path
-import filelock
 
-from backlog_format import normalize_backlog
-
-CHECKBOX_RE = re.compile(r'^(\s*)- \[(.)\] ')
-LOCK_PATH = Path('.llm/backlog.lock')
-
-
-def find_incomplete(lines):
-    """Find first [ ], [>], [p], or [1]-[9] item. Returns index or None."""
-    for i, line in enumerate(lines):
-        m = CHECKBOX_RE.match(line)
-        if m:
-            state = m.group(2)
-            if state in (' ', '>', 'p') or state.isdigit():
-                return i
-    return None
-
-
-def delete_block(lines, start):
-    """Delete the task line, all indented sub-bullets, and trailing blank line."""
-    end = start + 1
-    while end < len(lines):
-        line = lines[end]
-        if line.strip() == '':
-            end += 1
-            break
-        if line.startswith('  ') or line.startswith('\t'):
-            end += 1
-        else:
-            break
-    return lines[:start] + lines[end:]
+from lib.state import change_state
+from lib.locking import locked
+from lib.parsing import read_lines, find_incomplete, delete_block
+from lib.io import write_file, is_backlog
 
 
 def main():
@@ -46,23 +17,8 @@ def main():
                         help='Delete the entry instead of marking [x]')
     args = parser.parse_args()
 
-    file_path = Path(args.file)
-    if not file_path.exists():
-        print(f'File not found: {args.file}', file=sys.stderr)
-        sys.exit(1)
-
-    is_backlog = file_path.name == 'backlog.md'
-
-    if is_backlog:
-        LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
-        lock = filelock.FileLock(LOCK_PATH, timeout=5)
-    else:
-        lock = None
-
-    try:
-        if lock:
-            lock.acquire()
-        lines = file_path.read_text(encoding='utf-8').splitlines(keepends=True)
+    with locked(args.file):
+        lines = read_lines(args.file)
         idx = find_incomplete(lines)
         if idx is None:
             print('No incomplete items found.', file=sys.stderr)
@@ -74,15 +30,9 @@ def main():
         if args.delete:
             lines = delete_block(lines, idx)
         else:
-            lines[idx] = re.sub(r'^(\s*- \[)[> p1-9p](\])', r'\1x\2', lines[idx])
+            lines[idx] = change_state(lines[idx], 'x')
 
-        content = ''.join(lines)
-        if is_backlog:
-            content = normalize_backlog(content)
-        file_path.write_text(content, encoding='utf-8')
-    finally:
-        if lock:
-            lock.release()
+        write_file(args.file, lines, normalize=is_backlog(args.file))
 
 
 if __name__ == '__main__':

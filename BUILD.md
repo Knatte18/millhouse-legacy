@@ -61,9 +61,11 @@ argument-hint: "<if applicable>"
 
 ### Scripts → `build/taskmill/scripts/`
 
-Each `## task_*` section in `doc/taskflow/skill-scripts.md` → `build/taskmill/scripts/<script-name>.py`
+`doc/taskflow/skill-scripts.md` defines a `lib/` package and thin CLI wrappers.
 
-Implement according to the behavioral spec: parameters, selection priority, output, exit codes.
+**Shared library:** Each `### lib/<module>.py` section → `build/taskmill/scripts/lib/<module>.py`. Also generate `build/taskmill/scripts/lib/__init__.py` (empty file).
+
+**CLI scripts:** Each `### <script>.py` section under `## CLI scripts` → `build/taskmill/scripts/<script>.py`. Implement as thin wrappers that import from `lib.*` and follow the behavioral spec (parameters, selection priority, output, exit codes).
 
 ### Hooks → `build/taskmill/hooks/`
 
@@ -113,7 +115,23 @@ build/taskmill/
 │   ├── python-comments/SKILL.md
 │   └── python-testing/SKILL.md
 ├── scripts/
-│   └── task_*.py                (one per script)
+│   ├── lib/
+│   │   ├── __init__.py          (empty — makes lib a package)
+│   │   ├── state.py             (CHECKBOX_RE, change_state, is_incomplete)
+│   │   ├── parsing.py           (read_lines, find_task, extract_block, delete_block, etc.)
+│   │   ├── subbullet.py         (upsert_subbullet)
+│   │   ├── locking.py           (get_lock, locked context manager)
+│   │   ├── io.py                (write_file, is_backlog)
+│   │   ├── backlog_format.py    (normalize_backlog)
+│   │   └── frontmatter.py       (find_frontmatter, upsert_frontmatter_key)
+│   ├── task_get.py              (thin CLI wrappers)
+│   ├── task_add.py
+│   ├── task_complete.py
+│   ├── task_block.py
+│   ├── task_subbullet.py
+│   ├── task_claim.py
+│   ├── task_plan.py
+│   └── plan_finish.py
 └── hooks/
     ├── hooks.json               (PreToolUse hook config — copied from doc/taskflow/)
     ├── validate-protected-files.sh (blocks direct edits to backlog.md and plan files — copied from doc/taskflow/)

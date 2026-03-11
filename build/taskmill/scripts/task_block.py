@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """Mark the first incomplete item as blocked."""
 
-import re
 import sys
-from pathlib import Path
-import filelock
 
-from backlog_format import normalize_backlog
-
-CHECKBOX_RE = re.compile(r'^(\s*)- \[(.)\] ')
-LOCK_PATH = Path('.llm/backlog.lock')
+from lib.state import change_state
+from lib.locking import locked
+from lib.parsing import read_lines, find_incomplete
+from lib.subbullet import upsert_subbullet
+from lib.io import write_file, is_backlog
 
 
 def main():
@@ -17,53 +15,23 @@ def main():
         print('Usage: task_block.py <file-path> [reason]', file=sys.stderr)
         sys.exit(1)
 
-    file_path = Path(sys.argv[1])
+    file_path = sys.argv[1]
     reason = ' '.join(sys.argv[2:]) if len(sys.argv) > 2 else None
 
-    if not file_path.exists():
-        print(f'File not found: {sys.argv[1]}', file=sys.stderr)
-        sys.exit(1)
-
-    is_backlog = file_path.name == 'backlog.md'
-
-    if is_backlog:
-        LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
-        lock = filelock.FileLock(LOCK_PATH, timeout=5)
-    else:
-        lock = None
-
-    try:
-        if lock:
-            lock.acquire()
-        lines = file_path.read_text(encoding='utf-8').splitlines(keepends=True)
-
-        idx = None
-        for i, line in enumerate(lines):
-            m = CHECKBOX_RE.match(line)
-            if m and (m.group(2) in (' ', '>', 'p') or m.group(2).isdigit()):
-                idx = i
-                break
-
+    with locked(file_path):
+        lines = read_lines(file_path)
+        idx = find_incomplete(lines)
         if idx is None:
             print('No incomplete items found.', file=sys.stderr)
             sys.exit(1)
 
-        lines[idx] = re.sub(r'^(\s*- \[)[> p1-9p](\])', r'\1!\2', lines[idx])
+        lines[idx] = change_state(lines[idx], '!')
         print(lines[idx].rstrip('\n'))
 
         if reason:
-            # Insert blocked reason as sub-bullet after the task line
-            indent = '  '
-            reason_line = f'{indent}- blocked: {reason}\n'
-            lines.insert(idx + 1, reason_line)
+            upsert_subbullet(lines, idx, 'blocked', reason)
 
-        content = ''.join(lines)
-        if is_backlog:
-            content = normalize_backlog(content)
-        file_path.write_text(content, encoding='utf-8')
-    finally:
-        if lock:
-            lock.release()
+        write_file(file_path, lines, normalize=is_backlog(file_path))
 
 
 if __name__ == '__main__':

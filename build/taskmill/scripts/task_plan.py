@@ -2,31 +2,13 @@
 """Mark a task as planned and link its plan file."""
 
 import argparse
-import re
 import sys
-from pathlib import Path
 
-import filelock
-
-from backlog_format import normalize_backlog
-from task_subbullet import upsert_subbullet
-
-CHECKBOX_RE = re.compile(r'^(\s*)- \[(.)\] ')
-LOCK_PATH = Path('.llm/backlog.lock')
-
-
-def find_task_by_name(lines, name):
-    """Find a top-level task by name (case-insensitive substring match)."""
-    name_lower = name.lower()
-    for i, line in enumerate(lines):
-        match = CHECKBOX_RE.match(line)
-        if not match:
-            continue
-        if len(match.group(1)) > 0:
-            continue  # skip sub-bullets
-        if name_lower in line.lower():
-            return i
-    return None
+from lib.state import change_state
+from lib.locking import locked
+from lib.parsing import read_lines, find_task
+from lib.subbullet import upsert_subbullet
+from lib.io import write_file, is_backlog
 
 
 def main():
@@ -42,38 +24,19 @@ def main():
         print(f'--state must be a single character, got: {args.state!r}', file=sys.stderr)
         sys.exit(1)
 
-    file_path = Path(args.file)
-    if not file_path.exists():
-        print(f'File not found: {args.file}', file=sys.stderr)
-        sys.exit(1)
+    with locked(args.file):
+        lines = read_lines(args.file)
 
-    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
-    lock = filelock.FileLock(LOCK_PATH, timeout=5)
-
-    try:
-        lock.acquire()
-        lines = file_path.read_text(encoding='utf-8').splitlines(keepends=True)
-
-        idx = find_task_by_name(lines, args.task_name)
+        idx = find_task(lines, name=args.task_name)
         if idx is None:
             print(f'Task not found: {args.task_name}', file=sys.stderr)
             sys.exit(1)
 
-        # Change state to the specified state (default: p)
-        state = args.state
-        lines[idx] = re.sub(r'^(\s*- \[).(\])',
-                            lambda m: f'{m.group(1)}{state}{m.group(2)}',
-                            lines[idx])
-
-        # Add or update plan sub-bullet
+        lines[idx] = change_state(lines[idx], args.state)
         upsert_subbullet(lines, idx, 'plan', args.plan_path)
 
-        content = ''.join(lines)
-        content = normalize_backlog(content)
-        file_path.write_text(content, encoding='utf-8')
+        write_file(args.file, lines, normalize=is_backlog(args.file))
         print(lines[idx].rstrip('\n'))
-    finally:
-        lock.release()
 
 
 if __name__ == '__main__':

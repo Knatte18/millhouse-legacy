@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-11 **Revised backlog/plan scripts with shared library architecture**
+- Replaced monolithic per-script implementations with a `lib/` package: `state.py`, `parsing.py`, `subbullet.py`, `locking.py`, `io.py`, `backlog_format.py`, `frontmatter.py`
+- Each CLI script is now a thin wrapper importing from `lib.*`
+- Unified task-finding logic via `find_task()` with configurable `top_level_only` and state priority
+- Standardized state changes through single `change_state()` function with correct regex (fixed duplicate `p` in character class)
+- Centralized sub-bullet insertion: `task_block.py` now uses `upsert_subbullet()` instead of manual `lines.insert()`
+- Centralized locking via `lib/locking.py` context manager; deleted unused `task_lock.py`
+- Updated `skill-scripts.md` spec and `BUILD.md` to document new architecture
+
 ## 2026-03-11 **Added backlog formatting normalization**
 - Created `backlog_format.py` with `normalize_backlog()`: ensures `# Backlog` header, one blank line between task entries, single trailing newline
 - Integrated into all six mutating scripts (`task_add`, `task_complete`, `task_block`, `task_claim`, `task_plan`, `task_subbullet`)

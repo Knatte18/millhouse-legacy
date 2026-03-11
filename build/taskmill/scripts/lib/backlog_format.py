@@ -1,11 +1,7 @@
-#!/usr/bin/env python3
-"""Shared normalization for doc/backlog.md formatting."""
-
 import re
 
 HEADER = '# Backlog'
-CHECKBOX_RE = re.compile(r'^- \[.\] ')
-
+_CHECKBOX_RE = re.compile(r'^- \[.\] ')
 
 def normalize_backlog(text):
     """Normalize backlog formatting: header, blank lines between entries, trailing newline."""
@@ -25,13 +21,14 @@ def normalize_backlog(text):
     if len(lines) < 2 or lines[1].strip() != '':
         lines.insert(1, '')
 
-    # Ensure blank line before each top-level checkbox, then collapse consecutive blanks
+    # Ensure blank line before each top-level checkbox
     expanded = []
     for i, line in enumerate(lines):
-        if CHECKBOX_RE.match(line) and i > 0 and expanded and expanded[-1].strip() != '':
+        if _CHECKBOX_RE.match(line) and i > 0 and expanded and expanded[-1].strip() != '':
             expanded.append('')
         expanded.append(line)
 
+    # Collapse consecutive blank lines
     normalized = []
     previous_blank = False
     for line in expanded:
