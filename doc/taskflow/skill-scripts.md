@@ -36,9 +36,9 @@ Functions for finding and extracting tasks from checkbox files.
 
 **`read_lines(path) -> list[str]`** — read a file and return `splitlines(keepends=True)`. Raises `FileNotFoundError` if the file does not exist.
 
-**`find_task(lines, name=None, states=None, top_level_only=True) -> int | None`** — find a task by priority or by name.
+**`find_task(lines, name=None, states=None, top_level_only=True, skip_claimed=False) -> int | None`** — find a task by priority or by name.
 
-- If `name` is provided: case-insensitive substring match against checkbox lines. Skips already-claimed (digit-state) tasks when searching top-level only. Returns first match index or `None`.
+- If `name` is provided: case-insensitive substring match against checkbox lines. When `skip_claimed=True`, skips digit-state tasks (used by `task_claim.py` to avoid re-claiming). Returns first match index or `None`.
 - If `name` is `None`: iterates through `states` list in order (e.g. `['>', ' ']`), returning the first top-level task matching each state before moving to the next.
 - `top_level_only=True`: skip lines where indent (CHECKBOX_RE group 1) has length > 0.
 - `top_level_only=False`: search all checkbox lines including indented sub-steps.
@@ -213,7 +213,7 @@ Claim a task for discussion by assigning it a thread number and recording the st
 Usage: task_claim.py <file-path> [task-name]
 ```
 
-If `task-name` provided: calls `find_task(lines, name=task_name)` (top-level only, skips already-claimed digit tasks).
+If `task-name` provided: calls `find_task(lines, name=task_name, skip_claimed=True)` (top-level only, skips already-claimed digit tasks).
 
 If no name: calls `find_task(lines, states=['>', ' '])` (same priority as `task_get.py`).
 

@@ -8,7 +8,7 @@ def read_lines(path):
         raise FileNotFoundError(f'File not found: {path}')
     return p.read_text(encoding='utf-8').splitlines(keepends=True)
 
-def find_task(lines, name=None, states=None, top_level_only=True):
+def find_task(lines, name=None, states=None, top_level_only=True, skip_claimed=False):
     """Find a task by name or by state priority. Returns line index or None."""
     if name is not None:
         name_lower = name.lower()
@@ -19,7 +19,7 @@ def find_task(lines, name=None, states=None, top_level_only=True):
             indent, state = m.group(1), m.group(2)
             if top_level_only and len(indent) > 0:
                 continue
-            if top_level_only and state.isdigit():
+            if skip_claimed and state.isdigit():
                 continue  # skip already-claimed tasks
             if name_lower in line.lower():
                 return i

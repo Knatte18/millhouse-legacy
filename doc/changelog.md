@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-12 **Fixed find_task skipping digit-state tasks in name-based search**
+- Added `skip_claimed` parameter to `find_task()` in `lib/parsing.py` (default `False`)
+- Name-based search now finds tasks in digit states (`[1]`-`[9]`) by default, fixing `task_plan.py` and `task_subbullet.py` which need to operate on claimed tasks
+- `task_claim.py` passes `skip_claimed=True` to preserve correct behavior: don't re-claim already-claimed tasks
+- State-priority search (no name given) unchanged — still skips digit-state tasks unconditionally
+
 ## 2026-03-11 **Revised backlog/plan scripts with shared library architecture**
 - Replaced monolithic per-script implementations with a `lib/` package: `state.py`, `parsing.py`, `subbullet.py`, `locking.py`, `io.py`, `backlog_format.py`, `frontmatter.py`
 - Each CLI script is now a thin wrapper importing from `lib.*`

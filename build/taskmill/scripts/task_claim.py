@@ -23,7 +23,7 @@ def main():
         lines = read_lines(file_path)
 
         if task_name:
-            idx = find_task(lines, name=task_name)
+            idx = find_task(lines, name=task_name, skip_claimed=True)
         else:
             idx = find_task(lines, states=['>', ' '])
 
