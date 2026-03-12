@@ -1,6 +1,6 @@
-# Commands Skill
+# Commands Reference
 
-Defines the commands for task management and git operations.
+Human-readable reference for task management and git operation commands. This file does **not** drive the build — command source files are `doc/taskflow/commands/skill-<name>.md`, copied verbatim to `build/taskmill/skills/<name>/SKILL.md`.
 
 ---
 

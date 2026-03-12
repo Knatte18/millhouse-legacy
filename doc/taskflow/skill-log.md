@@ -1,5 +1,6 @@
 ---
-description: "Generate a work-journal entry from recent git commits"
+name: log
+description: "Generate a work-journal entry from recent commits"
 argument-hint: "<cutoff> [language-prefix] [guidance]"
 ---
 

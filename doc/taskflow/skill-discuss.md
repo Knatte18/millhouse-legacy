@@ -1,4 +1,5 @@
 ---
+name: discuss
 description: "Discuss a backlog task without writing a plan"
 argument-hint: "<task name>"
 ---
@@ -7,7 +8,7 @@ Discuss a backlog task. Does **not** write a plan.
 
 ## Steps
 
-1. Run `python ${CLAUDE_PLUGIN_ROOT}/scripts/task_claim.py doc/backlog.md <task-name>` to find and claim the task.
+1. Run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_claim.py doc/backlog.md <task-name>` to find and claim the task.
    - If a task name argument was provided, pass it to the script.
    - If no argument, the script selects the first `[>]`, then first `[ ]`.
    - `[N]` tasks (already claimed by another thread) are skipped.

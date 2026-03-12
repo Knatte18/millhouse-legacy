@@ -1,4 +1,5 @@
 ---
+name: list
 description: "Show task status and pick one to discuss"
 ---
 

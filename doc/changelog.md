@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-12 **Converted commands to verbatim-copied skills**
+- Created 14 skill source files in `doc/taskflow/commands/` (one per command), replacing LLM-generated command files that drifted on each rebuild
+- Replaced `${CLAUDE_PLUGIN_ROOT}` with `${CLAUDE_SKILL_DIR}/../..` in all script paths (skills use a different variable)
+- Combined skills (`do-commit`, `do-all`, `finalize-do*`) inline all steps for self-contained execution
+- Updated `BUILD.md`: removed Commands section, added command-skills to verbatim-copy pipeline
+- Marked `skill-commands.md` as human-readable reference (no longer drives the build)
+- Build output changes from `commands/*.md` to `skills/<name>/SKILL.md` for these files
+
 ## 2026-03-12 **Fixed find_task skipping digit-state tasks in name-based search**
 - Added `skip_claimed` parameter to `find_task()` in `lib/parsing.py` (default `False`)
 - Name-based search now finds tasks in digit states (`[1]`-`[9]`) by default, fixing `task_plan.py` and `task_subbullet.py` which need to operate on claimed tasks

@@ -1,4 +1,5 @@
 ---
+name: finalize
 description: "Write a plan from the current discussion"
 argument-hint: "[--park] <task name>"
 ---
@@ -15,7 +16,7 @@ Write an implementation plan from the current discussion.
    - **Steps:** concrete, actionable `- [ ]` items (see step-writing rules below)
 3. **Park flag (`--park`):** When `--park` is in the argument, pass `--state ' '` to `task_plan.py` instead of the default `[p]`. This sets the task back to `[ ]` while preserving the `plan:` sub-bullet, signaling "partially discussed, parked for later." The `do` command requires `[p]`, so parked tasks won't execute.
 4. **Incomplete discussion guard:** If the discussion has not produced concrete, complete steps covering all aspects of the task, prompt the user: *"This discussion seems incomplete. Finalize as planned (`[p]`) or park for later (`--park`)?"* Wait for the user's choice before proceeding.
-5. Run `python ${CLAUDE_PLUGIN_ROOT}/scripts/task_plan.py doc/backlog.md "<task-name>" <plan-path>` to change state to `[p]` and add/replace the `plan:` sub-bullet. With `--park`: run `python ${CLAUDE_PLUGIN_ROOT}/scripts/task_plan.py --state ' ' doc/backlog.md "<task-name>" <plan-path>` instead.
+5. Run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_plan.py doc/backlog.md "<task-name>" <plan-path>` to change state to `[p]` and add/replace the `plan:` sub-bullet. With `--park`: run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_plan.py --state ' ' doc/backlog.md "<task-name>" <plan-path>` instead.
 
 ## Step-writing rules
 

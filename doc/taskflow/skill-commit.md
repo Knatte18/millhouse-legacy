@@ -1,4 +1,5 @@
 ---
+name: commit
 description: "Commit and push (no rebase)"
 argument-hint: "[--onmain] [message]"
 ---

@@ -8,8 +8,9 @@ Instructions for Claude Code. Read this file, then generate the taskmill plugin 
 
 Scan `doc/` for:
 - All `skill-*.md` files (in any subfolder)
-- `doc/taskflow/skill-commands.md` (command specs)
 - `doc/taskflow/skill-scripts.md` (script specs)
+
+**Note:** `doc/taskflow/skill-commands.md` is a human-readable reference only — it does not drive the build. Command source files are `doc/taskflow/skill-<name>.md`.
 
 ---
 
@@ -37,27 +38,9 @@ Every `skill-*.md` becomes a SKILL.md file in its own directory:
 
 - `skill-<name>.md` → `build/taskmill/skills/<name>/SKILL.md`
 - Language subfolders get a prefix: `doc/coding/csharp/skill-comments.md` → `build/taskmill/skills/csharp-comments/SKILL.md`
-- **Exception:** `skill-commands.md` and `skill-scripts.md` are not skills — they are sources for commands and scripts.
+- **Exception:** `skill-scripts.md` is not a skill — it is the source for scripts. `skill-commands.md` is a reference doc and is also excluded.
 
 **Skill files in `doc/` are plugin-ready.** They already contain YAML frontmatter (`name`, `description`) and use `@taskmill:<name>` cross-references. The build step copies each skill file verbatim into its output path — no transformation is applied.
-
-### Commands → `build/taskmill/commands/`
-
-Each `## <name>` section in `doc/taskflow/skill-commands.md` → `build/taskmill/commands/<name>.md`
-
-**Exception:** `mill-build` and `mill-deploy` are repo-local dev commands. They are NOT included in the plugin output — they live only in `.claude/commands/` inside the taskmill repo.
-
-```yaml
----
-description: "<what the command does>"
-argument-hint: "<if applicable>"
----
-
-<complete behavioral spec for this command>
-```
-
-- When a command needs skill rules, reference them as: `Use @taskmill:<name> skill`
-- Reference scripts as: `python ${CLAUDE_PLUGIN_ROOT}/scripts/<script-name>`
 
 ### Scripts → `build/taskmill/scripts/`
 
@@ -87,17 +70,6 @@ The file `.claude-plugin/marketplace.json` at the repo root is maintained manual
 build/taskmill/
 ├── .claude-plugin/
 │   └── plugin.json              (plugin manifest)
-├── commands/
-│   ├── discuss.md               (one file per command section)
-│   ├── finalize.md
-│   ├── do.md
-│   ├── do-commit.md
-│   ├── do-all.md
-│   ├── list.md
-│   ├── add.md
-│   ├── retry.md
-│   ├── commit.md
-│   └── log.md                   (mill-build and mill-deploy are excluded)
 ├── skills/
 │   ├── conversation/SKILL.md    (core — loads on startup)
 │   ├── workflow/SKILL.md        (core — loads on startup)
@@ -113,7 +85,21 @@ build/taskmill/
 │   ├── csharp-testing/SKILL.md
 │   ├── python-build/SKILL.md
 │   ├── python-comments/SKILL.md
-│   └── python-testing/SKILL.md
+│   ├── python-testing/SKILL.md
+│   ├── discuss/SKILL.md         (command skills — verbatim from doc/taskflow/)
+│   ├── finalize/SKILL.md
+│   ├── do/SKILL.md
+│   ├── do-commit/SKILL.md
+│   ├── do-all/SKILL.md
+│   ├── finalize-do/SKILL.md
+│   ├── finalize-do-commit/SKILL.md
+│   ├── finalize-do-all/SKILL.md
+│   ├── commit/SKILL.md
+│   ├── list/SKILL.md
+│   ├── add/SKILL.md
+│   ├── add-discuss/SKILL.md
+│   ├── log/SKILL.md
+│   └── retry/SKILL.md
 ├── scripts/
 │   ├── lib/
 │   │   ├── __init__.py          (empty — makes lib a package)
