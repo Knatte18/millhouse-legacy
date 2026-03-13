@@ -28,7 +28,7 @@ CHECKBOX_RE = re.compile(r'^(\s*)- \[(.)\] ')
 
 **State characters:** ` ` (unplanned), `>` (prioritized), `1`-`9` (in discussion), `p` (planned), `x` (done), `!` (blocked).
 
-**`change_state(line, new_state) -> str`** — replace the state character in a checkbox line. Uses `re.sub(r'^(\s*- \[)[> p1-9!](])', ...)` with the new state character injected via a lambda (to handle special regex characters like space). Returns the modified line. Raises `ValueError` if the line does not match `CHECKBOX_RE`.
+**`change_state(line, new_state) -> str`** — replace the state character in a checkbox line. Uses `re.sub(r'^(\s*- \[)[> p1-9!x](])', ...)` with the new state character injected via a lambda (to handle special regex characters like space). Returns the modified line. Raises `ValueError` if the line does not match `CHECKBOX_RE`.
 
 **`is_incomplete(state) -> bool`** — returns `True` if state is in `(' ', '>', 'p')` or is a digit 1-9. Used by scripts that need to find actionable items.
 
@@ -44,6 +44,8 @@ Functions for finding and extracting tasks from checkbox files.
 - If `name` is `None`: iterates through `states` list in order (e.g. `['>', ' ']`), returning the first top-level task matching each state before moving to the next.
 - `top_level_only=True`: skip lines where indent (CHECKBOX_RE group 1) has length > 0.
 - `top_level_only=False`: search all checkbox lines including indented sub-steps.
+
+**`find_incomplete(lines) -> int | None`** — find the first incomplete item at any indent level. Iterates all lines, returns the index of the first checkbox whose state satisfies `is_incomplete()`, or `None`.
 
 **`find_item_by_index(lines, index) -> int | None`** — find the Nth checkbox item (1-based) in the file. Counts all checkbox lines regardless of indent. Returns line index or `None`.
 

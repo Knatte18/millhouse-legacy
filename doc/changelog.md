@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-13 **Updated doc/ reference files after build elimination**
+- Added `find_incomplete()` documentation to `skill-scripts.md` (was missing from `lib/parsing.py` section)
+- Fixed `change_state()` regex in `skill-scripts.md` to match actual implementation: `[> p1-9!x]` (was `[> p1-9!]`)
+- Fixed duplicate `p` in `change_state()` regex in `lib/state.py`: `[> p1-9!xp]` → `[> p1-9!x]`
+
 ## 2026-03-13 **Eliminated build step, restructured to taskmill/ as source of truth**
 - Moved `build/taskmill/` to `taskmill/` at repo root — skills and scripts are now edited directly
 - Deleted `BUILD.md`, `.claude/commands/mill-build.md`, and `.claude/commands/mill-deploy.md`
