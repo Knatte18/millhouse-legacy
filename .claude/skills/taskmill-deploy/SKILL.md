@@ -1,25 +1,25 @@
 ---
-description: "Deploy built skills by reinstalling the taskmill plugin"
+description: "Deploy the taskmill plugin by reinstalling it"
 ---
-
-## Behavior
 
 Reinstall the taskmill plugin from the local marketplace.
 
-### Steps
+**Note:** There is no build step. `taskmill/` at the repo root is the source of truth — edit skills and scripts there directly.
+
+## Steps
 
 1. Run `claude plugin uninstall taskmill@taskmill` (ignore errors if not yet installed).
 2. Run `claude plugin install taskmill@taskmill`.
 3. Print confirmation that the plugin was reinstalled.
 
-### First-time setup
+## First-time setup
 
 If the marketplace has not been added yet:
 
 1. Run `claude plugin marketplace add c:/Code/taskmill` (the repo root containing `.claude-plugin/marketplace.json`).
 2. Then proceed with install as above.
 
-### Fallback
+## Fallback
 
 If `claude` is not found on PATH, try `npx @anthropic-ai/claude-code` instead. If that also fails, print the commands for the user to run manually and explain they need `claude` CLI available.
 

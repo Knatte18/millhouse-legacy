@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-13 **Eliminated build step, restructured to taskmill/ as source of truth**
+- Moved `build/taskmill/` to `taskmill/` at repo root — skills and scripts are now edited directly
+- Deleted `BUILD.md`, `.claude/commands/mill-build.md`, and `.claude/commands/mill-deploy.md`
+- Created repo-local skill `.claude/skills/taskmill-deploy/SKILL.md` replacing the old build+deploy commands
+- Deleted 29 `doc/**/skill-*.md` spec files (kept `skill-commands.md` and `skill-scripts.md` as reference docs)
+- Updated `marketplace.json`, `CLAUDE.md`, `INSTALL.md`, and reference docs to reflect the new structure
+
 ## 2026-03-12 **Added task-name targeting to task_complete.py and task_block.py**
 - `task_complete.py` now accepts an optional `task_name` positional argument for case-insensitive substring matching via `find_task(name=...)`
 - `task_block.py` now accepts `--name` flag for the same targeting

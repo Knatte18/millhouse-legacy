@@ -1,5 +1,7 @@
 # Scripts Skill
 
+> **Source of truth:** Scripts in `taskmill/scripts/` are the authoritative implementation. This file is reference documentation only.
+
 Python scripts that operate on files with `- [ ]` checkbox format. Same scripts work for `doc/backlog.md` and `.llm/plans/*.md`.
 
 **Purpose:** Reduce token usage. CC does not read the entire file — it gets only the relevant extract via script output.

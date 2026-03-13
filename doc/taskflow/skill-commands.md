@@ -1,6 +1,6 @@
 # Commands Reference
 
-Human-readable reference for task management and git operation commands. This file does **not** drive the build — command source files are `doc/taskflow/commands/skill-<name>.md`, copied verbatim to `build/taskmill/skills/<name>/SKILL.md`.
+Human-readable reference for task management and git operation commands. Source of truth for skills is `taskmill/skills/<name>/SKILL.md`.
 
 ---
 
@@ -214,24 +214,9 @@ Retry the first blocked task.
 
 ---
 
-## mill-build
+## taskmill-deploy (repo-local skill)
 
-Build skills from `doc/` specs into `build/taskmill/` plugin structure.
-
-Read and follow `BUILD.md`.
-
----
-
-## mill-deploy
-
-Reinstall the taskmill plugin from the local marketplace.
-
-- Run `claude plugin uninstall taskmill@taskmill` (ignore errors if not yet installed).
-- Run `claude plugin install taskmill@taskmill`.
-- If `claude` is not found, try `npx @anthropic-ai/claude-code` instead.
-- If both fail, print the commands for the user to run manually in a terminal.
-- Remind the user to restart Claude Code after installation.
-- For first-time setup, also run: `claude plugin marketplace add c:/Code/taskmill`
+Repo-local skill at `.claude/skills/taskmill-deploy/SKILL.md`. Reinstalls the taskmill plugin from the local marketplace. There is no build step — `taskmill/` is the source of truth.
 
 ---
 
