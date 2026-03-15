@@ -1,6 +1,10 @@
-## Build rules
+# CLAUDE.md
+Instructions for Claude Code when working in this repository.
 
-- **NEVER edit files under `build/` directly.**
-    - All source of truth lives in `doc/`.
-    - To regenerate build files: run `/mill-build`.
-    - To deploy (reinstall plugin): run `/mill-deploy`.
+## Background
+- This repos is based on a repo by Craig Motlin. When refering to "what Motlin does", I am referring to his code and repo. The repo can be found here: "C:\Code\motlin-claude-code-plugins". 
+
+## Plugin structure
+
+- `taskmill/` at the repo root is the source of truth for the plugin. Edit skills and scripts there directly.
+- To deploy (reinstall plugin): run `/taskmill-deploy`.
