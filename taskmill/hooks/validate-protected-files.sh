@@ -5,13 +5,13 @@ set -euo pipefail
 
 input=$(cat)
 
-file_path=$(echo "$input" | python3 -c "
+file_path=$(echo "$input" | python -c "
 import sys, json
 data = json.load(sys.stdin)
 print(data.get('tool_input', {}).get('file_path', ''))
 ")
 
-tool_name=$(echo "$input" | python3 -c "
+tool_name=$(echo "$input" | python -c "
 import sys, json
 data = json.load(sys.stdin)
 print(data.get('tool_name', ''))

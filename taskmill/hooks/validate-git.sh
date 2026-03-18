@@ -4,7 +4,7 @@
 set -euo pipefail
 
 input=$(cat)
-command=$(python3 -c "
+command=$(python -c "
 import sys, json
 try:
     data = json.loads('''$input''')
