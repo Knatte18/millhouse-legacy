@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-03-20 **Hardened against destructive rm commands**
+- Added rule to `mill-cli` skill: never use `rm -rf` or `rm -fr`, always use `rm -r` without `-f`
+- The deny rule in settings.json stays as an invisible safety net CC should never trigger
+
 ## 2026-03-17 **Renamed doc/ to _taskmill/**
 - Renamed `doc/` directory to `_taskmill/` so task management files don't mix with project documentation
 - Updated all 13 skill files and the hook script to reference `_taskmill/backlog.md` and `_taskmill/changelog.md`
