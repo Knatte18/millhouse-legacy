@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-24 **Enforced correct UTC timestamps in plan files**
+- Created `lib/timestamp.py` with shared `utcnow()` function returning `YYYY-MM-DD-HHMMSS` format
+- Created `utcnow.py` CLI wrapper for Claude to call when generating plan filenames
+- Updated `task_claim.py` and `plan_finish.py` to use `utcnow()` instead of inline `datetime` formatting
+- Updated `mill-finalize` skill to call `utcnow.py` for the plan filename and frontmatter timestamp instead of letting Claude guess
+
 ## 2026-03-20 **Hardened against destructive rm commands**
 - Added rule to `mill-cli` skill: never use `rm -rf` or `rm -fr`, always use `rm -r` without `-f`
 - The deny rule in settings.json stays as an invisible safety net CC should never trigger

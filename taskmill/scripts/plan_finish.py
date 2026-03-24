@@ -2,11 +2,11 @@
 """Set the finished: timestamp in a plan file's YAML frontmatter."""
 
 import sys
-from datetime import datetime, timezone
 
 from lib.parsing import read_lines
 from lib.frontmatter import upsert_frontmatter_key
 from lib.io import write_file
+from lib.timestamp import utcnow
 
 
 def main():
@@ -22,10 +22,8 @@ def main():
         print(f'File not found: {file_path}', file=sys.stderr)
         sys.exit(1)
 
-    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-
     try:
-        finished_line = upsert_frontmatter_key(lines, 'finished', now)
+        finished_line = upsert_frontmatter_key(lines, 'finished', utcnow())
     except ValueError as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)

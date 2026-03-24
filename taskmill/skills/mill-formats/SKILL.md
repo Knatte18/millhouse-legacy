@@ -26,7 +26,7 @@ High-level task list. Manually maintained by the user, updated by commands.
 
 - [1] **Add structured logging**
   Configure Serilog with JSON output for production diagnostics.
-  - started: 2026-03-04T14:30:00Z
+  - started: 2026-03-04-143000
 
 - [!] **Fix memory leak in cache manager**
   Cache entries are not evicted under memory pressure.
@@ -48,7 +48,7 @@ Completed tasks are deleted from the backlog (via `task_complete.py --delete`) s
 
 **Sub-bullets:**
 - `plan: <path>` — links to the implementation plan file
-- `started: <ISO 8601 UTC timestamp>` — records when discussion began (written by `discuss`)
+- `started: <YYYY-MM-DD-HHMMSS UTC timestamp>` — records when discussion began (written by `discuss`)
 - `blocked: <reason>` — explains why a task is blocked
 
 **Mutation rule:** Never use Edit or Write on `_taskmill/backlog.md`. All mutations must go through scripts in `scripts/` (e.g. `task_plan.py`, `task_complete.py`, `task_block.py`). Reading with Read is allowed.
@@ -76,8 +76,8 @@ Detailed implementation plan with checkboxed steps. Includes YAML frontmatter wi
 
 ```markdown
 ---
-started: 2026-03-04T14:30:00Z
-finished: 2026-03-04T15:45:00Z
+started: 2026-03-04-143000
+finished: 2026-03-04-154500
 ---
 
 # Refactor data validation layer
@@ -105,8 +105,8 @@ library. Keep the existing ValidationService as a thin orchestrator.
 ```
 
 **YAML frontmatter:**
-- `started:` — ISO 8601 UTC timestamp of when discussion began (copied from backlog `started:` sub-bullet by `finalize`)
-- `finished:` — ISO 8601 UTC timestamp of when the plan was finalized (matches filename timestamp)
+- `started:` — `YYYY-MM-DD-HHMMSS` UTC timestamp of when discussion began (copied from backlog `started:` sub-bullet by `finalize`)
+- `finished:` — `YYYY-MM-DD-HHMMSS` UTC timestamp of when the plan was finalized (matches filename timestamp)
 
 The `## Files` section lists files the plan expects to modify. Used for staleness detection (checking if those files changed since discussion started) and for fast implementation start (reading them upfront instead of scanning the codebase).
 
