@@ -27,6 +27,45 @@ pytest
 
 ---
 
+## Import Organization
+
+Organize imports in three tiers, separated by blank lines and labeled with comments:
+
+```python
+# Python packages
+import datetime
+import logging
+import os
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+# Domain packages
+from solgt.timeseries import convert_date_to_t
+
+# Local packages
+import utils_config
+import utils_file_io as fio
+```
+
+- Standard library first, then third-party, then local — each group with a section comment.
+- Aliased imports are fine for frequently used modules (e.g., `import utils_file_io as fio`).
+- No wildcard imports.
+
+## Logging
+
+- Configure logging at the module level using `logging.getLogger(__name__)`.
+- Use structured format: `[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s`.
+- Use appropriate levels: `info` for status, `warning` for recoverable issues, `error` for failures.
+- Log messages should be descriptive with context: `"Extracting CBI into cube form..."`, not `"Processing..."`.
+
+## Configuration
+
+- Use a dedicated config module (e.g., `utils_config.py`) for constants and paths.
+- Load environment variables with `dotenv` and construct paths using `pathlib.Path`.
+- Group constants by purpose with section comments: tweakable parameters, file paths, external config.
+
 ## Project Configuration
 
 > Customize per project. Specify test paths, ruff config, and virtual environment setup.
