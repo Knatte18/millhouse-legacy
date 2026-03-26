@@ -51,6 +51,18 @@ def test_classify_number(input_value, expected):
 - For floating point: `assert result == pytest.approx(expected)`.
 - For exceptions: `with pytest.raises(ValueError, match="specific message")`.
 
+### DataFrame assertions
+
+- For pandas DataFrames, use `pd.testing.assert_frame_equal(result, expected)`.
+- For numpy arrays, use `np.testing.assert_array_almost_equal(result, expected)`.
+- When comparing DataFrame subsets, be explicit about columns and index: `assert list(df.columns) == [...]`.
+
+### Data-heavy tests
+
+- For tests that need real-looking data, construct small representative DataFrames inline rather than loading from files.
+- When integration tests require data loading, use `pytest.mark.skip` with a descriptive reason if the data source is unavailable.
+- Sample large datasets for speed: `df.sample(N).reset_index(drop=True)`.
+
 ### Project layout
 
 - Tests live in a `tests/` directory at the project root, mirroring the source structure.
