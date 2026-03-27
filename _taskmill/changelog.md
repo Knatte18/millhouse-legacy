@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-27 **Added codeguide sync and ruff to mill-commit**
+- Added pre-commit step: run `ruff check --fix` on changed `.py` files
+- Added pre-commit step: detect stale codeguide docs via `codeguide_stale.py`, run scoped `codeguide-sync` on each
+- Both steps are conditional — ruff only for Python files, codeguide only if `_codeguide/Overview.md` exists
+
 ## 2026-03-24 **Enforced correct UTC timestamps in plan files**
 - Created `lib/timestamp.py` with shared `utcnow()` function returning `YYYY-MM-DD-HHMMSS` format
 - Created `utcnow.py` CLI wrapper for Claude to call when generating plan filenames

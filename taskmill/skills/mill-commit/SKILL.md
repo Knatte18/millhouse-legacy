@@ -6,6 +6,25 @@ argument-hint: "[--onmain] [message]"
 
 Commit and push. No rebase.
 
+## Pre-commit steps
+
+Run these before staging. Both are conditional — skip if the condition isn't met.
+
+### 1. Ruff (Python files only)
+
+If any changed files are `.py` files: run `ruff check --fix` on those files. If ruff reports unfixable errors, fix them manually before proceeding.
+
+### 2. Codeguide sync (only if `_codeguide/` exists)
+
+If `_codeguide/Overview.md` exists anywhere in the repo:
+
+1. Run `git diff --name-only` to list changed source files.
+2. Pipe the list to `python <codeguide-plugin-path>/codeguide_stale.py`. If it exits 0 (no stale docs), skip to staging.
+3. For each stale doc path in the output, determine the codeguide-sync scope (project/module path relative to the `_codeguide/` root) and follow the `@codeguide:codeguide-sync <scope>` skill steps to update that doc.
+4. Stage the updated doc files alongside source files.
+
+The codeguide plugin path can be found at: `C:/Users/hanf/.claude/plugins/cache/codeguide/codeguide/1.0.0/codeguide/codeguide_stale.py` (or locate it via the installed plugin).
+
 ## Rules
 
 - Use @taskmill:mill-git skill for full commit rules.
