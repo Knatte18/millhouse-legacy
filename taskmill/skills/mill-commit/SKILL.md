@@ -10,9 +10,9 @@ Commit and push. No rebase.
 
 Run these before staging. Both are conditional — skip if the condition isn't met.
 
-### 1. Ruff (Python files only)
+### 1. Lint (language-specific)
 
-If any changed files are `.py` files: run `ruff check --fix` on those files. If ruff reports unfixable errors, fix them manually before proceeding.
+Detect the project language (see `@taskmill:mill-workflow` Language Detection) and run the lint step from the matching `{lang}-build` skill on changed files. Skip if no source files changed or no language detected.
 
 ### 2. Codeguide sync (only if `_codeguide/` exists)
 
