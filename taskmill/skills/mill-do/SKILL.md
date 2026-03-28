@@ -15,5 +15,6 @@ Implement the next planned task. Does **not** commit.
 5. Implement each `- [ ]` step. After completing each step, run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_complete.py <plan-file>` to mark it `[x]`.
 6. If a step fails: run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_block.py <plan-file> "<reason>"` to mark it `[!]`, then block the backlog task via `python ${CLAUDE_SKILL_DIR}/../../scripts/task_block.py _taskmill/backlog.md "<reason>" --name "<task-name>"`.
 7. Run build + test after all steps (detect project language and use the matching `{lang}-build` skill — see `@taskmill:mill-workflow` Language Detection).
-8. If all steps complete: run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_complete.py --delete _taskmill/backlog.md "<task-name>"`, then update `_taskmill/changelog.md`.
-9. Does **not** commit — user calls `commit` when ready.
+8. **Codeguide update (only if `_codeguide/` exists):** If `_codeguide/Overview.md` exists, run `@codeguide:codeguide-update` (no arguments — defaults to git diff). Implementation can touch files beyond the plan's `## Files` list, so git diff is the accurate scope.
+9. If all steps complete: run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_complete.py --delete _taskmill/backlog.md "<task-name>"`, then update `_taskmill/changelog.md`.
+10. Does **not** commit — user calls `commit` when ready.

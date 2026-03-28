@@ -8,16 +8,17 @@ Write an implementation plan from the current discussion.
 
 ## Steps
 
-1. Take task name from argument or infer from conversation.
-2. Run `python ${CLAUDE_SKILL_DIR}/../../scripts/utcnow.py` to get the current UTC timestamp (format: `YYYY-MM-DD-HHMMSS`). Use this value for both the filename and frontmatter below. **Do not guess or fabricate a timestamp.**
-3. Create `.llm/plans/<timestamp>-<slug>.md` with:
-   - **YAML frontmatter:** `started:` (copied from the task's `started:` sub-bullet in `_taskmill/backlog.md`) and `finished:` (the timestamp from step 2)
+1. If `_codeguide/Overview.md` exists anywhere in the repo, read it. Use its module table and routing hints to identify which modules and files the plan should target — do not guess file paths without consulting the guide first.
+2. Take task name from argument or infer from conversation.
+3. Run `python ${CLAUDE_SKILL_DIR}/../../scripts/utcnow.py` to get the current UTC timestamp (format: `YYYY-MM-DD-HHMMSS`). Use this value for both the filename and frontmatter below. **Do not guess or fabricate a timestamp.**
+4. Create `.llm/plans/<timestamp>-<slug>.md` with:
+   - **YAML frontmatter:** `started:` (copied from the task's `started:` sub-bullet in `_taskmill/backlog.md`) and `finished:` (the timestamp from step 3)
    - **Context:** summary of discussion and key decisions
    - **Files:** flat list of file paths the plan expects to modify (used for staleness detection and fast implementation start)
    - **Steps:** concrete, actionable `- [ ]` items (see step-writing rules below)
-4. **Park flag (`--park`):** When `--park` is in the argument, pass `--state ' '` to `task_plan.py` instead of the default `[p]`. This sets the task back to `[ ]` while preserving the `plan:` sub-bullet, signaling "partially discussed, parked for later." The `do` command requires `[p]`, so parked tasks won't execute.
-5. **Incomplete discussion guard:** If the discussion has not produced concrete, complete steps covering all aspects of the task, prompt the user: *"This discussion seems incomplete. Finalize as planned (`[p]`) or park for later (`--park`)?"* Wait for the user's choice before proceeding.
-6. Run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_plan.py _taskmill/backlog.md "<task-name>" <plan-path>` to change state to `[p]` and add/replace the `plan:` sub-bullet. With `--park`: run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_plan.py --state ' ' _taskmill/backlog.md "<task-name>" <plan-path>` instead.
+5. **Park flag (`--park`):** When `--park` is in the argument, pass `--state ' '` to `task_plan.py` instead of the default `[p]`. This sets the task back to `[ ]` while preserving the `plan:` sub-bullet, signaling "partially discussed, parked for later." The `do` command requires `[p]`, so parked tasks won't execute.
+6. **Incomplete discussion guard:** If the discussion has not produced concrete, complete steps covering all aspects of the task, prompt the user: *"This discussion seems incomplete. Finalize as planned (`[p]`) or park for later (`--park`)?"* Wait for the user's choice before proceeding.
+7. Run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_plan.py _taskmill/backlog.md "<task-name>" <plan-path>` to change state to `[p]` and add/replace the `plan:` sub-bullet. With `--park`: run `python ${CLAUDE_SKILL_DIR}/../../scripts/task_plan.py --state ' ' _taskmill/backlog.md "<task-name>" <plan-path>` instead.
 
 ## Step-writing rules
 

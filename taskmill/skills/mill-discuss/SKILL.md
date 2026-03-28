@@ -12,10 +12,11 @@ Discuss a backlog task. Does **not** write a plan.
    - If a task name argument was provided, pass it to the script.
    - If no argument, the script selects the first `[>]`, then first `[ ]`.
    - `[N]` tasks (already claimed by another thread) are skipped.
-2. If the claimed task has a `plan:` sub-bullet, read and summarize the existing plan, then continue discussion from there.
-3. Read relevant codebase sections.
-4. Ask clarifying questions about approach, constraints, and design.
-5. Discussion continues until the user calls `finalize`.
+2. If `_codeguide/Overview.md` exists anywhere in the repo, read it. Use its module table and routing hints to navigate to the relevant module docs and source files in steps 4–5 — do not search blindly.
+3. If the claimed task has a `plan:` sub-bullet, read and summarize the existing plan, then continue discussion from there.
+4. Read relevant codebase sections (routed via codeguide if available, otherwise search).
+5. Ask clarifying questions about approach, constraints, and design.
+6. Discussion continues until the user calls `finalize`.
 
 ## Rules
 

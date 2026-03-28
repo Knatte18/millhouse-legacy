@@ -16,14 +16,7 @@ If any changed files are `.py` files: run `ruff check --fix` on those files. If 
 
 ### 2. Codeguide sync (only if `_codeguide/` exists)
 
-If `_codeguide/Overview.md` exists anywhere in the repo:
-
-1. Run `git diff --name-only` to list changed source files.
-2. Pipe the list to `python <codeguide-plugin-path>/codeguide_stale.py`. If it exits 0 (no stale docs), skip to staging.
-3. For each stale doc path in the output, determine the codeguide-sync scope (project/module path relative to the `_codeguide/` root) and follow the `@codeguide:codeguide-sync <scope>` skill steps to update that doc.
-4. Stage the updated doc files alongside source files.
-
-The codeguide plugin path can be found at: `C:/Users/hanf/.claude/plugins/cache/codeguide/codeguide/1.0.0/codeguide/codeguide_stale.py` (or locate it via the installed plugin).
+If `_codeguide/Overview.md` exists anywhere in the repo, run `@codeguide:codeguide-update` (no arguments — it defaults to the current git diff). Stage any updated or created doc files alongside source files.
 
 ## Rules
 
