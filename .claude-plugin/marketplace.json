@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "taskmill",
-      "description": "Task management, workflow orchestration, and coding skills for Claude Code",
+      "description": "Task management and workflow orchestration for Claude Code",
       "version": "1.0.0",
       "author": {
         "name": "Knatte18"
@@ -25,6 +25,56 @@
         "name": "Knatte18"
       },
       "source": "./plugins/codeguide",
+      "category": "productivity"
+    },
+    {
+      "name": "orchestration",
+      "description": "Skill coordination, conversation style, and LLM context rules",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/orchestration",
+      "category": "productivity"
+    },
+    {
+      "name": "code",
+      "description": "Code quality, CLI, linting, and testing standards",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/code",
+      "category": "productivity"
+    },
+    {
+      "name": "git",
+      "description": "Git workflow rules",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/git",
+      "category": "productivity"
+    },
+    {
+      "name": "python",
+      "description": "Python build, comments, and testing conventions",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/python",
+      "category": "productivity"
+    },
+    {
+      "name": "csharp",
+      "description": "C# build, comments, and testing conventions",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/csharp",
       "category": "productivity"
     }
   ]

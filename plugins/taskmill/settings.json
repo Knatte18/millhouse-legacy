@@ -5,7 +5,12 @@
       "Edit(~/.claude/**)",
       "Bash(python ~/.claude/scripts/*)",
       "Skill(taskmill:*)",
-      "SlashCommand(/taskmill:*)"
+      "SlashCommand(/taskmill:*)",
+      "Skill(orchestration:*)",
+      "Skill(code:*)",
+      "Skill(git:*)",
+      "Skill(python:*)",
+      "Skill(csharp:*)"
     ]
   }
 }

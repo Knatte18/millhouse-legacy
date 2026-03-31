@@ -119,6 +119,6 @@ Steps are marked `[x]` progressively via `task_complete.py`, and `[!]` via `task
 - **Explicit names.** Each step must include the target file path and the specific functions, classes, or fields being added or changed.
 - **No slash commands or skill references.** Steps must describe concrete actions, not reference `/taskmill.*` slash commands or `@taskmill:` skill names. The LLM executor may interpret these as requiring user invocation or skill loading, stalling execution.
 - **Test steps required for source code tasks.** When `## Files` contains source code files, the plan must include steps for writing new tests or updating existing tests that cover the changes. Omit test steps only when the task is purely doc or config changes.
-- Bad: `Run /taskmill.do` or `Follow @taskmill:mill-csharp-build`
+- Bad: `Run /taskmill.do` or `Follow @csharp:csharp-build`
 - Bad: `Extract interface and implement validators` (compound, no file paths)
 - Good: `Create src/Interfaces/IValidator.cs: define IValidator<T> interface with Validate(T entity) returning ValidationResult.`
