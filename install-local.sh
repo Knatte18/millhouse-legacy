@@ -12,6 +12,7 @@ claude plugin marketplace add "$SCRIPT_DIR"
 
 echo "Installing plugins..."
 claude plugin install taskmill@millhouse
+claude plugin install codeguide@millhouse
 
 echo "Installing Python dependencies..."
 pip install -r "$SCRIPT_DIR/plugins/taskmill/requirements.txt"

@@ -13,6 +13,7 @@ Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `p
 | Directory | Plugin | Description |
 |-----------|--------|-------------|
 | `plugins/taskmill/` | taskmill | Task management, workflow orchestration, and coding skills |
+| `plugins/codeguide/` | codeguide | Navigation-first documentation system for AI-assisted codebases |
 
 ### Adding a new plugin
 
