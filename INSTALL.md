@@ -1,6 +1,6 @@
 # Install
 
-How to install the taskmill plugin for Claude Code.
+How to install plugins from the millhouse marketplace for Claude Code.
 
 ---
 
@@ -8,34 +8,38 @@ How to install the taskmill plugin for Claude Code.
 
 - [Claude Code](https://claude.com/claude-code) CLI installed and on your PATH.
 - Python 3 and pip installed and on your PATH.
-- This repository cloned locally (e.g. `c:\Code\taskmill`).
+- This repository cloned locally (e.g. `c:\Code\millhouse`).
 
 ---
 
-## Steps
+## Quick install (all plugins)
+
+```
+./install-local.sh
+```
+
+This registers the marketplace and installs all plugins listed in `.claude-plugin/marketplace.json`.
+
+---
+
+## Manual steps
 
 ### 1. Add the marketplace (first time only)
 
-Register this repo as a local plugin marketplace:
-
 ```
-claude plugin marketplace add c:/Code/taskmill
+claude plugin marketplace add c:/Code/millhouse
 ```
 
-This tells Claude Code where to find `.claude-plugin/marketplace.json`.
-
-### 2. Install the plugin
+### 2. Install a plugin
 
 ```
-claude plugin install taskmill@taskmill
+claude plugin install taskmill@millhouse
 ```
 
-The plugin source is `taskmill/` at the repo root. There is no build step.
-
-### 3. Install Python dependencies
+### 3. Install Python dependencies (if needed)
 
 ```
-pip install -r taskmill/requirements.txt
+pip install -r plugins/taskmill/requirements.txt
 ```
 
 ### 4. Start a new session
@@ -46,6 +50,7 @@ Close and reopen Claude Code so it picks up the installed plugin.
 
 ## Updating
 
-After editing skills or scripts in `taskmill/`:
+After editing skills or scripts in `plugins/`:
 
-1. `/taskmill-deploy` — reinstalls the plugin.
+1. `/taskmill-deploy` — reinstalls all plugins.
+2. Or run `./install-local.sh` directly.
