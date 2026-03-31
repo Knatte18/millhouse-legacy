@@ -1,7 +1,10 @@
 # Claude Code Files
 **/.llm/
+**/_codeguide/runtime/
 *.local.*
 nul
 
 # Python
 __pycache__/
+.pytest_cache/
+.ruff_cache/

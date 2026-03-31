@@ -1,0 +1,37 @@
+---
+name: workflow
+description: Skill invocation table and language detection. ALWAYS use on startup.
+---
+
+# Workflow Skill
+
+Skill routing and language detection. Use the right skill for the right activity.
+
+---
+
+## Skill Invocation Table
+
+Use the appropriate skill based on the current activity:
+
+| Situation | Skill |
+|-----------|-------|
+| Before editing code | `@code:code-quality` |
+| When running shell commands | `@code:cli` |
+| For project-specific style rules | `@code:linting` |
+| When writing or reviewing tests | `@code:testing` (+ language-specific `{lang}-testing`) |
+| For language-specific build, test, or comments | Detect language, then use `@{lang}:{lang}-*` (see below) |
+| For all git operations | `@git:git-workflow` |
+| For response style guidelines | `@conduct:conversation` |
+
+---
+
+## Language Detection
+
+Detect the project language from marker files in the working directory and use the matching skills:
+
+| Marker files | Language | Skills |
+|-------------|----------|--------|
+| `pyproject.toml`, `setup.py`, `setup.cfg` | Python | `@python:python-build`, `python-comments`, `python-testing` |
+| `.csproj`, `.sln` | C# | `@csharp:csharp-build`, `csharp-comments`, `csharp-testing` |
+
+If multiple languages are present, use the skills matching the files being edited.

@@ -1,20 +1,80 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "taskmill",
+  "name": "millhouse",
   "version": "1.0.0",
-  "description": "Task management, workflow orchestration, and coding skills for Claude Code",
+  "description": "Multi-plugin marketplace for Claude Code",
   "owner": {
     "name": "Knatte18"
   },
   "plugins": [
     {
       "name": "taskmill",
-      "description": "Task management, workflow orchestration, and coding skills for Claude Code",
+      "description": "Task management and workflow orchestration for Claude Code",
       "version": "1.0.0",
       "author": {
         "name": "Knatte18"
       },
-      "source": "./taskmill",
+      "source": "./plugins/taskmill",
+      "category": "productivity"
+    },
+    {
+      "name": "codeguide",
+      "description": "Navigation-first documentation system for AI-assisted codebases",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/codeguide",
+      "category": "productivity"
+    },
+{
+      "name": "code",
+      "description": "Code quality, CLI, linting, and testing standards",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/code",
+      "category": "productivity"
+    },
+    {
+      "name": "git",
+      "description": "Git workflow rules",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/git",
+      "category": "productivity"
+    },
+    {
+      "name": "python",
+      "description": "Python build, comments, and testing conventions",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/python",
+      "category": "productivity"
+    },
+    {
+      "name": "csharp",
+      "description": "C# build, comments, and testing conventions",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/csharp",
+      "category": "productivity"
+    },
+    {
+      "name": "conduct",
+      "description": "Response style, behavior rules, skill routing, and language detection",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/conduct",
       "category": "productivity"
     }
   ]

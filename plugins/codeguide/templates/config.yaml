@@ -1,0 +1,14 @@
+# Extensions recognized as source files by _codeguide/ hooks and skills.
+# Add entries here to support additional languages without modifying hook code.
+source_extensions:
+  # - .cs
+  # - .py
+  # - .ts
+
+# Block search tools until _codeguide/Overview.md has been read.
+# Recommended: keeps Claude from bypassing the routing system.
+enforcement: true
+
+# Log navigation violations to runtime/navigation-issues.md for
+# review with /review-navigation. Useful during guide development.
+violation_logging: false

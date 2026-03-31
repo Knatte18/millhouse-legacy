@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(~/.claude/**)",
+      "Edit(~/.claude/**)",
+      "Bash(python ~/.claude/scripts/*)",
+      "Skill(taskmill:*)",
+      "SlashCommand(/taskmill:*)",
+      "Skill(conduct:*)",
+      "Skill(code:*)",
+      "Skill(git:*)",
+      "Skill(python:*)",
+      "Skill(csharp:*)"
+    ]
+  }
+}

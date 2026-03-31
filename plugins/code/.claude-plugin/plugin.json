@@ -1,0 +1,9 @@
+{
+  "name": "code",
+  "description": "Code quality, CLI, linting, and testing standards",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Knatte18"
+  }
+}

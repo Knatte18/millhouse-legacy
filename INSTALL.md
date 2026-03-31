@@ -1,51 +1,37 @@
 # Install
 
-How to install the taskmill plugin for Claude Code.
-
----
-
 ## Prerequisites
 
 - [Claude Code](https://claude.com/claude-code) CLI installed and on your PATH.
-- Python 3 and pip installed and on your PATH.
-- This repository cloned locally (e.g. `c:\Code\taskmill`).
+- This repository cloned locally (e.g. `c:\Code\millhouse`).
 
----
-
-## Steps
-
-### 1. Add the marketplace (first time only)
-
-Register this repo as a local plugin marketplace:
+## Global install (copy-paste into terminal)
 
 ```
-claude plugin marketplace add c:/Code/taskmill
+claude plugin marketplace add c:/Code/millhouse
+claude plugin install taskmill@millhouse
+claude plugin install codeguide@millhouse
+claude plugin install conduct@millhouse
+claude plugin install code@millhouse
+claude plugin install git@millhouse
+claude plugin install python@millhouse
+claude plugin install csharp@millhouse
 ```
 
-This tells Claude Code where to find `.claude-plugin/marketplace.json`.
-
-### 2. Install the plugin
-
+Taskmill requires Python dependencies (will be removed when Helm replaces taskmill):
 ```
-claude plugin install taskmill@taskmill
+pip install -r c:/Code/millhouse/plugins/taskmill/requirements.txt
 ```
 
-The plugin source is `taskmill/` at the repo root. There is no build step.
+## Per-repo setup
 
-### 3. Install Python dependencies
+Run these inside the target repo after global install:
 
-```
-pip install -r taskmill/requirements.txt
-```
-
-### 4. Start a new session
-
-Close and reopen Claude Code so it picks up the installed plugin.
-
----
+- **codeguide:** `/codeguide-setup .py .cs` (adjust extensions for your project)
+- **helm:** `/helm-setup` (when available)
 
 ## Updating
 
-After editing skills or scripts in `taskmill/`:
+After editing skills or scripts in `plugins/`, re-run the install commands above. Or use `/taskmill-deploy` from within Claude Code.
 
-1. `/taskmill-deploy` — reinstalls the plugin.
+Close and reopen Claude Code after updating so it picks up changes.

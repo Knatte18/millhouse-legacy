@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SubagentStart": [
+      {
+        "hooks": [{"type": "command", "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/audit_track_subagent.py"}]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [{"type": "command", "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/audit_track_task.py"}]
+      }
+    ]
+  }
+}
