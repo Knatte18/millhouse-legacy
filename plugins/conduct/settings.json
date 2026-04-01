@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Skill(conduct:*)"
+      "Skill(conduct:*)",
+      "Skill(code:*)",
+      "Skill(git:*)",
+      "Skill(python:*)",
+      "Skill(csharp:*)",
+      "Skill(codeguide:*)"
     ]
   }
 }

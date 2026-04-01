@@ -6,7 +6,7 @@ Build order based on dependencies. Each phase produces a testable artifact. Do n
 
 ### 1.1 Plugin skeleton
 - Create `plugins/helm/.claude-plugin/plugin.json`
-- Create `plugins/helm/settings.json` with permissions: `Bash(gh *)`, `Bash(git worktree *)`, `Bash(git branch *)`, `Bash(code *)`, `Skill(helm:*)`, `Skill(codeguide:*)`, `Skill(code:*)`, `Skill(git:*)`, `Skill(conduct:*)`, `Agent(*)`
+- Create `plugins/helm/settings.json` with permissions: `Skill(helm:*)`, `SlashCommand(/helm:*)` (Bash, Agent, etc. are already allowed by CC's default permissions)
 - Create skill directory stubs
 - Add to `marketplace.json`
 
