@@ -26,9 +26,9 @@ Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `p
 1. Create `plugins/<name>/` with a `.claude-plugin/plugin.json` (see `plugins/taskmill/.claude-plugin/plugin.json` for reference).
 2. Add a `settings.json` in the plugin directory for permissions.
 3. Add an entry to `.claude-plugin/marketplace.json` pointing to `./plugins/<name>`.
-4. Run `./install-local.sh` or `/taskmill-deploy` to deploy.
+4. Run `/taskmill-deploy` to deploy, or re-run the install commands from `INSTALL.md`.
 
 ### Editing plugins
 
 - Each plugin directory is the source of truth. Edit skills and scripts there directly.
-- To deploy (reinstall all plugins): run `/taskmill-deploy` or `./install-local.sh`.
+- To deploy (reinstall all plugins): run `/taskmill-deploy` or re-run install commands from `INSTALL.md`.

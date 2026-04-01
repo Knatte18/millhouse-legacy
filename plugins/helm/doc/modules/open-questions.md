@@ -12,7 +12,7 @@
 **Decision:** One board per repo. Sub-tasks within a worktree are checkboxes on the parent issue, not separate board items (unless large enough for their own worktree/issue).
 
 ### Dimension templates
-**Decision:** Ship defaults with the plugin (like Autoboard). Per-repo override via `.claude/dimensions.json`.
+**Decision:** Ship defaults with the plugin (like Autoboard). Per-repo override via `_helm/dimensions.json`.
 
 ### Python scripts
 **Decision:** Dropped. CC reads/writes files directly. No script-based mutations. Format consistency via skill instructions and optional validation hooks.
@@ -39,7 +39,6 @@ _helm/
   scratch/                ← gitignored (entire directory)
     plans/                ← implementation plans
     briefs/               ← handoff documents
-    reviews/              ← review prompts and results
     status.md             ← worktree status for helm-status
     merge.lock            ← merge locking
 ```
@@ -53,7 +52,7 @@ _helm/
 **Decision:** Codeguide-update runs BEFORE commit in helm-go, not after. Sequence: implement → verify → code-review → codeguide-update → commit.
 
 ### Dimension config vs auto-detection
-**Decision:** `.claude/dimensions.json` defines which dimensions are active for the repo. Auto-detection (based on diff content) selects which of the active dimensions to check for a given change. Config sets the pool, auto-detection picks from it.
+**Decision:** `_helm/dimensions.json` defines which dimensions are active for the repo. Auto-detection (based on diff content) selects which of the active dimensions to check for a given change. Config sets the pool, auto-detection picks from it.
 
 ### helm-setup skill
 **Decision:** Fully specified in kanban.md "Setup" section with exact GraphQL queries, step-by-step flow, and config.yaml format.
@@ -67,10 +66,10 @@ _helm/
 ### Cross-platform notifications
 **Decision:** Windows (BurntToast), macOS (osascript), Linux (notify-send). Detect platform. Specified in notifications.md.
 
-## Still Open
+### Notification config location
+**Decision:** Per-repo in `_helm/config.yaml` alongside worktree and GitHub Projects config. Not global.
 
-### Notification channel config location
-Where to store Slack webhook/channel config? Currently proposed: `~/.claude/helm.json` (global). Alternative: per-repo `.claude/helm.json`. Global makes sense for personal notifications, per-repo for team-shared config.
+## Still Open
 
 ### helm-go context budget
 For very large tasks, should `helm-go` detect context window pressure and suggest splitting? Or trust the plan review to catch oversized plans? Plan review is probably sufficient — if the plan has 15 steps, the reviewer should flag it.

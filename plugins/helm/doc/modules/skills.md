@@ -14,7 +14,7 @@ Interactive. Pick a task and design the solution.
 2. **Worktree decision.** User decides: worktree or in-place?
    - `-w` flag: create worktree immediately (see [worktrees.md](worktrees.md)), write brief, open VS Code. Stop. User runs `helm-start` in the new window to continue discussion there.
    - No flag: discuss in current context. Continue below.
-3. **Explore first.** Before asking a single question, explore the relevant parts of the codebase (codeguide-assisted). Check files, docs, and recent commits related to the task. Don't ask questions you can answer from the codebase.
+3. **Explore first.** Before asking a single question, explore the relevant parts of the codebase. Use the codeguide navigation pattern: Overview → module doc → Source section → code (see [codeguide.md](codeguide.md)). Check recent commits related to the task. Don't ask questions you can answer from the codebase.
 4. **Clarifying questions.** Ask questions **one at a time**. Cover:
    - Scope — what's in, what's out?
    - Constraints — performance, compatibility, existing patterns to follow?
@@ -68,25 +68,26 @@ Plan must be approved (`approved: true` in frontmatter). If no approved plan exi
 
 `helm-go` is always autonomous. It never runs a discuss phase or asks clarifying questions. That is `helm-start`'s job.
 
+**Never ask for permission or confirmation during execution.** Do not say "Want me to continue?", "Should I proceed?", "Shall I fix this?". The only valid stopping points are listed in "Stops when" below. Everything else — just do it.
+
 ### Execution flow per task
 
-1. Read plan. Read all files in `## Files`. Staleness check (`git log --since=<started>` against listed files).
-2. Load quality dimensions: read `## Quality dimensions` from plan, load dimension templates from plugin defaults (or repo overrides at `.claude/dimensions.json`). These are passed to the code-reviewer Agent in step 5.
+1. Read plan. Read all files in `## Files`. Staleness check (`git log --since=<started>` against listed files). If files changed: classify severity. Minor changes (formatting, unrelated files) → log warning, proceed. Major changes (files restructured, APIs changed, interfaces modified) → halt execution, move task to **Discussing** on kanban, notify user to re-run `helm-start`.
+2. Load quality dimensions: read `## Quality dimensions` from plan, load dimension templates from plugin defaults (or repo overrides at `_helm/dimensions.json`). These are passed to the code-reviewer Agent in step 5.
 3. Explore relevant code (codeguide-assisted, following plan's `Explore:` targets). Read accumulated knowledge from `_helm/knowledge/`.
 4. For each step:
    - **If TDD-marked:** write test → run test suite → confirm the new test FAILS (RED). If it passes, stop — the test is wrong, it's not testing what you think. → implement minimum to make it pass (GREEN) → refactor, keeping tests green (REFACTOR).
    - **If not TDD:** implement → run tests.
-   - On test failure: diagnose, fix, retry. Max 3 retries per step.
+   - On test failure: diagnose, fix, retry. Max 3 retries per step. Update retry count in `_helm/scratch/status.md` after each attempt.
    - On failure after 3 retries: classify failure (see [failures.md](failures.md)) and route accordingly.
 5. After all steps: full verification (lint, type-check, build, test).
-6. **MANDATORY:** Invoke `helm-receiving-review` skill BEFORE reading reviewer findings. Then spawn `code-reviewer` Agent with the diff, approved plan, and active quality dimensions. Evaluate feedback via the loaded receiving-review protocol. Fix accepted issues, re-verify, re-review. Max 3 rounds. (See [reviews.md](reviews.md))
+6. Spawn `code-reviewer` Agent with the diff, approved plan, and active quality dimensions. When the reviewer returns: **FIRST** invoke `helm-receiving-review` skill via the Skill tool. **THEN** read and evaluate the reviewer's findings using the loaded protocol. Fix accepted issues, re-verify, re-review. Max 3 rounds. (See [reviews.md](reviews.md)). Verify the reviewer's APPROVE is substantiated — the output must contain per-file observations. A bare "APPROVE" with no specifics is treated as a failed review and re-spawned.
 7. Codeguide update: run `codeguide-update` on the diff.
 8. Commit with message from plan's `Commit:` field.
 9. Write knowledge entry (see [knowledge.md](knowledge.md)).
 10. Update GitHub issue: mark task complete, post summary comment.
-11. Update retry counts in `_helm/scratch/status.md`.
-12. If accumulated knowledge exceeds 5 entries: synthesize into `_helm/knowledge/summary.md` (see [knowledge.md](knowledge.md)).
-13. If more planned tasks: pick next, repeat from step 1.
+11. If accumulated knowledge exceeds 5 entries: synthesize into `_helm/knowledge/summary.md` (see [knowledge.md](knowledge.md)).
+12. If more planned tasks: pick next, repeat from step 1.
 
 ### Stops when
 
@@ -152,6 +153,23 @@ Worktrees:
 ```
 
 Also queries GitHub Projects board for kanban status.
+
+---
+
+## helm-abandon
+
+Discard a worktree. Moves the task back to Backlog.
+
+1. Check for uncommitted changes. If found, warn: "This worktree has uncommitted work. Abandon anyway?"
+2. Check for committed-but-unmerged work on the branch. If found, warn with commit count.
+3. User confirms.
+4. `git worktree remove <path>`
+5. `git branch -D <branch-name>`
+6. Move issue to **Backlog** on kanban.
+7. Post comment on issue: "Worktree abandoned. Reason: <user-provided or 'no reason given'>"
+8. If checkpoint branch exists: `git branch -D helm-checkpoint-<name>`
+
+Never auto-abandon. Always require user confirmation after warnings.
 
 ---
 

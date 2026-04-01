@@ -1,75 +1,37 @@
 # Install
 
-How to install plugins from the millhouse marketplace for Claude Code.
-
----
-
 ## Prerequisites
 
 - [Claude Code](https://claude.com/claude-code) CLI installed and on your PATH.
-- Python 3 and pip installed and on your PATH.
 - This repository cloned locally (e.g. `c:\Code\millhouse`).
 
----
-
-## Quick install (all plugins)
-
-```
-./install-local.sh
-```
-
-This registers the marketplace and installs all plugins globally:
-
-| Plugin | Description |
-|--------|-------------|
-| taskmill | Task management and workflow orchestration |
-| codeguide | Navigation-first documentation system |
-| orchestration | Conversation style and LLM context rules |
-| code | Code quality, CLI, linting, and testing standards |
-| git | Git workflow rules |
-| python | Python build, comments, and testing conventions |
-| csharp | C# build, comments, and testing conventions |
-
----
-
-## Manual steps
-
-### 1. Add the marketplace (first time only)
+## Global install (copy-paste into terminal)
 
 ```
 claude plugin marketplace add c:/Code/millhouse
-```
-
-### 2. Install plugins
-
-```
 claude plugin install taskmill@millhouse
 claude plugin install codeguide@millhouse
+claude plugin install conduct@millhouse
+claude plugin install code@millhouse
+claude plugin install git@millhouse
+claude plugin install python@millhouse
+claude plugin install csharp@millhouse
 ```
 
-### 3. Install Python dependencies
-
+Taskmill requires Python dependencies (will be removed when Helm replaces taskmill):
 ```
-pip install -r plugins/taskmill/requirements.txt
+pip install -r c:/Code/millhouse/plugins/taskmill/requirements.txt
 ```
-
-### 4. Start a new session
-
-Close and reopen Claude Code so it picks up the installed plugins.
-
----
 
 ## Per-repo setup
 
-Some plugins require per-repo initialization after global install:
+Run these inside the target repo after global install:
 
-- **codeguide:** Run `/codeguide-setup .py .cs` in the target repo to create the `_codeguide/` skeleton.
-
----
+- **codeguide:** `/codeguide-setup .py .cs` (adjust extensions for your project)
+- **helm:** `/helm-setup` (when available)
 
 ## Updating
 
-After editing skills or scripts in `plugins/`:
+After editing skills or scripts in `plugins/`, re-run the install commands above. Or use `/taskmill-deploy` from within Claude Code.
 
-1. `/taskmill-deploy` — reinstalls all plugins.
-2. Or run `./install-local.sh` directly.
+Close and reopen Claude Code after updating so it picks up changes.

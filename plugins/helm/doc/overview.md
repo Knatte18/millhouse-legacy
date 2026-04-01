@@ -49,6 +49,7 @@ The user controls the transition. `helm-go` never asks for input during normal o
 | `helm-add` | Create a new task (GitHub issue + board) | One-shot |
 | `helm-merge` | Merge worktree back to parent | Semi-autonomous |
 | `helm-status` | Dashboard of all worktrees | Read-only |
+| `helm-abandon` | Discard a worktree, move task back to Backlog | Interactive |
 | `helm-commit` | Ad-hoc commit outside helm-go | One-shot |
 
 Details in [skills.md](skills.md).

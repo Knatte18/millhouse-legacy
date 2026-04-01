@@ -74,21 +74,16 @@ last_updated: 2026-04-01T14:30:00Z
 
 ## Configuration
 
-Notification channel config in `~/.claude/helm.json` (global, not per-repo):
+Notification config lives in `_helm/config.yaml` (per-repo, alongside worktree and GitHub Projects config):
 
-```json
-{
-  "notifications": {
-    "slack": {
-      "enabled": true,
-      "webhook": "https://hooks.slack.com/services/...",
-      "channel": "#cc-notifications"
-    },
-    "toast": {
-      "enabled": true
-    }
-  }
-}
+```yaml
+notifications:
+  slack:
+    enabled: true
+    webhook: "https://hooks.slack.com/services/..."
+    channel: "#cc-notifications"
+  toast:
+    enabled: true
 ```
 
 Status file is always written regardless of config.

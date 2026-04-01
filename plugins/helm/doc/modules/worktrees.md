@@ -47,7 +47,7 @@ The `{parent-slug}` is the parent branch's slug (last segment of the branch name
 
 The slug is derived from the task title (kebab-case, max 30 chars), or user-provided.
 
-The `path-template` controls where the worktree directory is created on disk. `../` places sibling worktrees next to the repo root rather than nested inside it.
+The `path-template` controls where the worktree directory is created on disk. `../` places worktrees as sibling directories to the repo root (e.g. repo at `C:\Code\myproject` → worktree at `C:\Code\auth`), not inside the repo.
 
 ## When to Use a Worktree
 
@@ -71,7 +71,7 @@ When `helm-start -w` is called:
 1. `git worktree add <path> -b <branch-name> <parent-branch>`
 2. Symlink gitignored environment files: `for f in .env*; do [ -f "$f" ] && ln -sf "$(pwd)/$f" <worktree-path>/"$f"; done`
 3. Create `_helm/` directory structure in worktree (tracked: `knowledge/`, `changelog.md`, `config.yaml`; ignored: `scratch/`)
-4. Write `_helm/scratch/briefs/handoff.md` in the child worktree (context from parent discussion, if any)
+4. Write `_helm/scratch/briefs/handoff.md` in the child worktree (see [plans.md](plans.md) Handoff Brief Format). If no discussion has happened, populate Discussion Summary from the GitHub issue body.
 5. Add one issue to the GitHub Projects board (or reference existing issue) with worktree metadata
 6. `code <worktree-path>` — open VS Code in the new worktree
 7. Parent session continues with other work

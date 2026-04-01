@@ -89,7 +89,7 @@ Dimensions are selective (loaded per-diff), skills are always-on. They coexist.
 
 ### Configuration
 
-Per-repo config at `.claude/dimensions.json` (or similar):
+Per-repo config at `_helm/dimensions.json`:
 
 ```json
 {

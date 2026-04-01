@@ -69,6 +69,14 @@ security, api-design, test-quality
 | `Key test scenarios:` | Autoboard | Happy/error/edge — reviewer verifies coverage |
 | `Commit:` | Autoboard | Consistent commit message |
 
+### Step granularity
+
+Each step should touch a small, reviewable scope. Guidelines:
+- Prefer one file created or modified per step.
+- If a step must touch multiple files, each file change should serve a single coherent purpose.
+- Never bundle unrelated file operations into a single step.
+- The plan reviewer should flag steps that are too broad to review meaningfully.
+
 ### Fields NOT adopted (not needed for sequential execution)
 
 - `Depends on:` — implicit from step order

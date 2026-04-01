@@ -11,7 +11,7 @@
 7. User sees the final result and approves.
 8. Plan is locked (`approved: true` in frontmatter).
 
-Plan review in `helm-go` (fresh worktree path): same flow, but the discuss phase with the user happens first. The user approves the plan before autonomous execution begins.
+Plan review happens exclusively during `helm-start`. `helm-go` requires an already-approved plan and never runs a discuss or review phase.
 
 ## Code Review (during helm-go, autonomous)
 

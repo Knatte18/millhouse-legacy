@@ -66,7 +66,7 @@ Copy `_helm/knowledge/` from worktree to parent. Since `_helm/` is tracked, this
 
 ### 7. Codeguide update
 
-Run `codeguide-update` on the merged diff.
+Run `codeguide-update` with scope `git diff helm-checkpoint-<worktree-name>..HEAD`. This captures all changes introduced by the worktree, including conflict resolutions. Must run BEFORE the final merge to parent (between steps 4 and 5), when the diff is still meaningful.
 
 ### 8. Cleanup
 
@@ -100,7 +100,8 @@ When `git merge <parent-branch>` produces conflicts:
 1. List conflicting files: `git diff --name-only --diff-filter=U`
 2. For each file:
    - Whitespace/formatting only → accept worktree version
-   - Generated files (lock files, build artifacts) → accept worktree version
+   - Package lock files (`package-lock.json`, `yarn.lock`) → accept worktree version, then regenerate by running the install command
+   - Other generated files (build artifacts) → accept worktree version
    - Real code conflicts → attempt resolution based on understanding both sides
 3. If conflicts remain unresolvable: reset to checkpoint, escalate to user with the list of conflicting files and context.
 
