@@ -34,12 +34,15 @@
 ```
 _helm/
   knowledge/              ← tracked. knowledge entries
+  knowledge/decisions.md  ← tracked. architectural decisions register (append-only)
   changelog.md            ← tracked. completed task log
   config.yaml             ← tracked. worktree config + GitHub Projects metadata
+  dimensions.json         ← tracked. active quality dimensions for this repo
   scratch/                ← gitignored (entire directory)
     plans/                ← implementation plans
     briefs/               ← handoff documents
-    status.md             ← worktree status for helm-status
+    status.md             ← worktree status (updated every step, not just on error)
+    test-baseline.md      ← pre-existing test failures (captured before work starts)
     merge.lock            ← merge locking
 ```
 
@@ -69,10 +72,32 @@ _helm/
 ### Notification config location
 **Decision:** Per-repo in `_helm/config.yaml` alongside worktree and GitHub Projects config. Not global.
 
-## Still Open
-
 ### helm-go context budget
-For very large tasks, should `helm-go` detect context window pressure and suggest splitting? Or trust the plan review to catch oversized plans? Plan review is probably sufficient — if the plan has 15 steps, the reviewer should flag it.
+**Decision:** No hard limit on step count. Plan reviewer is responsible for flagging oversized plans. If a plan is too large for one context window, the reviewer should suggest splitting into sub-tasks or child worktrees.
+
+### Agent model selection
+**Decision:** Different models for different agent roles to balance cost and quality:
+
+| Agent | Model | Rationale |
+|-------|-------|-----------|
+| `helm-go` (session agent) | opus | Full reasoning needed for implementation |
+| Plan reviewer | sonnet | Reasoning for review, but no implementation |
+| Code reviewer | sonnet | Same — review, not implementation |
+| Coherence audit dimension agents | haiku | Breadth over depth — scanning, not reasoning |
+| Explore subagents | haiku | Fast codebase scanning |
+
+Configurable in `_helm/config.yaml`:
+
+```yaml
+models:
+  session: opus
+  plan-review: sonnet
+  code-review: sonnet
+  audit: haiku
+  explore: haiku
+```
+
+## Still Open
 
 ### Changelog format
 Carry over Taskmill's changelog format? Use `_helm/changelog.md`? Or rely on GitHub issue comments as the changelog? A tracked changelog is useful for commit history and PR descriptions. Lean toward keeping it.

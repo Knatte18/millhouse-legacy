@@ -70,24 +70,49 @@ Plan must be approved (`approved: true` in frontmatter). If no approved plan exi
 
 **Never ask for permission or confirmation during execution.** Do not say "Want me to continue?", "Should I proceed?", "Shall I fix this?". The only valid stopping points are listed in "Stops when" below. Everything else — just do it.
 
+### Resume protocol
+
+On entry, check if this is a resume (prior work exists):
+
+1. Check `git log --oneline` for commits matching plan step `Commit:` messages.
+2. For each matching commit: mark that step as already done — skip it.
+3. Read `_helm/scratch/status.md` for phase and retry counts.
+4. Continue from the first incomplete step.
+
+Do NOT redo completed work. Do NOT re-run tests for steps that already committed successfully.
+
+### Test baseline
+
+Before implementing any steps, capture the test baseline:
+
+1. Run the full test suite (`verify` command from plan frontmatter).
+2. Record which tests fail (if any) to `_helm/scratch/test-baseline.md`.
+3. If all pass: write "All tests pass — clean baseline."
+4. If verify command isn't runnable yet: write "No baseline — not yet buildable."
+
+During implementation, if a test failure matches the baseline (pre-existing), do not count it as a regression. Only new failures trigger retries.
+
 ### Execution flow per task
 
 1. Read plan. Read all files in `## Files`. Staleness check (`git log --since=<started>` against listed files). If files changed: classify severity. Minor changes (formatting, unrelated files) → log warning, proceed. Major changes (files restructured, APIs changed, interfaces modified) → halt execution, move task to **Discussing** on kanban, notify user to re-run `helm-start`.
-2. Load quality dimensions: read `## Quality dimensions` from plan, load dimension templates from plugin defaults (or repo overrides at `_helm/dimensions.json`). These are passed to the code-reviewer Agent in step 5.
+2. Load quality dimensions: read `## Quality dimensions` from plan, load dimension templates from plugin defaults (or repo overrides at `_helm/dimensions.json`). These are passed to the code-reviewer Agent in step 6.
 3. Explore relevant code (codeguide-assisted, following plan's `Explore:` targets). Read accumulated knowledge from `_helm/knowledge/`.
 4. For each step:
+   - Update `_helm/scratch/status.md` with current step number and phase.
    - **If TDD-marked:** write test → run test suite → confirm the new test FAILS (RED). If it passes, stop — the test is wrong, it's not testing what you think. → implement minimum to make it pass (GREEN) → refactor, keeping tests green (REFACTOR).
    - **If not TDD:** implement → run tests.
-   - On test failure: diagnose, fix, retry. Max 3 retries per step. Update retry count in `_helm/scratch/status.md` after each attempt.
+   - On test failure: invoke systematic debugging (see [failures.md](failures.md) "Systematic Debugging Protocol") before retrying. Max 3 retries per step. Update retry count in `_helm/scratch/status.md` after each attempt.
    - On failure after 3 retries: classify failure (see [failures.md](failures.md)) and route accordingly.
+   - **Commit after each step** with the step's `Commit:` message. This enables resume on crash.
 5. After all steps: full verification (lint, type-check, build, test).
-6. Spawn `code-reviewer` Agent with the diff, approved plan, and active quality dimensions. When the reviewer returns: **FIRST** invoke `helm-receiving-review` skill via the Skill tool. **THEN** read and evaluate the reviewer's findings using the loaded protocol. Fix accepted issues, re-verify, re-review. Max 3 rounds. (See [reviews.md](reviews.md)). Verify the reviewer's APPROVE is substantiated — the output must contain per-file observations. A bare "APPROVE" with no specifics is treated as a failed review and re-spawned.
+6. Spawn `code-reviewer` Agent with the diff (since plan start, not just last step), approved plan, and active quality dimensions. When the reviewer returns: **FIRST** invoke `helm-receiving-review` skill via the Skill tool. **THEN** read and evaluate the reviewer's findings using the loaded protocol. Fix accepted issues, re-verify, re-review. Max 3 rounds. (See [reviews.md](reviews.md)). Verify the reviewer's APPROVE is substantiated — the output must contain per-file observations. A bare "APPROVE" with no specifics is treated as a failed review and re-spawned.
 7. Codeguide update: run `codeguide-update` on the diff.
-8. Commit with message from plan's `Commit:` field.
-9. Write knowledge entry (see [knowledge.md](knowledge.md)).
-10. Update GitHub issue: mark task complete, post summary comment.
-11. If accumulated knowledge exceeds 5 entries: synthesize into `_helm/knowledge/summary.md` (see [knowledge.md](knowledge.md)).
-12. If more planned tasks: pick next, repeat from step 1.
+8. Write knowledge entry (see [knowledge.md](knowledge.md)).
+9. Record architectural decisions made during implementation to `_helm/knowledge/decisions.md` (see [knowledge.md](knowledge.md)).
+10. Update `_helm/scratch/status.md`: phase = complete.
+11. Update GitHub issue: mark task complete, post summary comment.
+12. If accumulated knowledge exceeds 5 entries: synthesize into `_helm/knowledge/summary.md` (see [knowledge.md](knowledge.md)).
+13. If more planned tasks: pick next, repeat from step 1.
 
 ### Stops when
 

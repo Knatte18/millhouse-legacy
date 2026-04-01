@@ -54,20 +54,31 @@ Requires `libnotify` (pre-installed on most desktop distros).
 
 Less context than Slack, but works offline from Slack. Detect platform via `uname` or `$OSTYPE`.
 
-### 3. Status file (always)
+### 3. Status file (always — updated continuously, not just on notifications)
 
-Every notification also updates `_helm/scratch/status.md` in the worktree:
+`_helm/scratch/status.md` is updated after **every step**, not just on errors. This is the live progress indicator.
 
 ```markdown
 parent: feature/auth
-phase: blocked
+phase: implementing
 issue: #57
+current_step: 3
+current_step_name: Add callback endpoint
 tasks_total: 3
 tasks_done: 1
+steps_total: 5
+steps_done: 2
+blocked: false
+retries:
+  step_3: 1
+last_updated: 2026-04-01T14:30:00Z
+```
+
+On error, adds:
+```markdown
 blocked: true
 blocked_reason: Test failure in step 3 after 3 retries — Cannot find module '@auth/google'
 needs_input: true
-last_updated: 2026-04-01T14:30:00Z
 ```
 
 `helm-status` reads these files to show the dashboard. This is the most reliable channel — always written, no external dependencies.

@@ -42,6 +42,8 @@ Based on changed files (same as Autoboard's checkpoint mode):
 
 ### Audit Agent Prompt
 
+Use `haiku` model for dimension agents (configured in `_helm/config.yaml` under `models.audit`). They do breadth scanning, not deep reasoning.
+
 Each dimension agent receives:
 - The dimension's checklist (Principle, Criteria, Common Violations)
 - The diff (`git diff <checkpoint>..HEAD`)

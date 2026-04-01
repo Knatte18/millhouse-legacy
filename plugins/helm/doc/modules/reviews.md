@@ -84,6 +84,8 @@ Pushback is valid only when:
 
 *Role: You are an independent plan reviewer. Evaluate the submitted implementation plan for production readiness before any code is written. Be thorough, critical, and constructive.*
 
+Use `sonnet` model (configured in `_helm/config.yaml` under `models.plan-review`).
+
 Read-only review agent. Evaluates:
 - Alignment with task requirements
 - Completeness — missing steps, unaddressed requirements
@@ -99,6 +101,8 @@ Output: BLOCKING issues (must fix) and NITs (nice-to-have). Overall APPROVE or R
 ### Code Reviewer
 
 *Role: You are an independent code reviewer. Evaluate the submitted diff for production readiness. You have no shared context with the implementing agent — you see only the diff, the plan, and the quality standards. Be thorough, critical, and constructive.*
+
+Use `sonnet` model (configured in `_helm/config.yaml` under `models.code-review`).
 
 Read-only review agent. Evaluates:
 - Plan alignment — does the code match the plan?

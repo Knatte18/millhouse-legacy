@@ -62,6 +62,49 @@ User resolves by:
 - Siding with implementer (CC proceeds)
 - Providing a different resolution
 
+## Systematic Debugging Protocol
+
+Adapted from Autoboard's `diagnose` skill. Before retrying any code error, follow this protocol. No guessing. No "I think I know what's wrong."
+
+### Phase 1: Reproduce
+
+Before investigating, reproduce the exact failure.
+
+- If test failure: run the specific failing test, confirm it fails with the same error.
+- If build failure: run the build command, confirm the same error.
+- Document: exact steps, exact error message, exact location.
+
+If you cannot reproduce after 3 attempts, escalate — the issue may be environmental.
+
+### Phase 2: Trace backward
+
+Trace from symptom to root cause. Do NOT trace forward from a guess.
+
+1. **Observe the symptom** — what error, where, what was the code trying to do?
+2. **Find the immediate cause** — what code directly produces the error?
+3. **Ask "what called this?"** — map the call chain backward.
+4. **Keep tracing** — continue asking "what called this?" while reading actual code at each step.
+5. **Find the root cause** — often far from the symptom: initialization, config, data transformation.
+
+### Phase 3: One hypothesis at a time
+
+1. State the hypothesis clearly: "The root cause is X because Y."
+2. Make ONE minimal change to test it.
+3. Run the reproduction steps. Did it help?
+4. If not: form a NEW hypothesis based on what you learned.
+5. **After 3 failed hypotheses: STOP.** The problem is likely architectural, not a simple bug. Escalate.
+
+Never change multiple things at once. You can't learn from simultaneous changes.
+
+### Phase 4: Targeted fix
+
+Root cause confirmed. Fix it properly:
+
+1. Write a failing test that captures the root cause.
+2. Implement a minimal, clean fix.
+3. Re-run the exact reproduction steps from Phase 1 — the fix is not done until the original failure passes.
+4. Remove any temporary debug logging.
+
 ## Retry Budget
 
 - **Per step:** max 3 retries for code errors

@@ -31,7 +31,9 @@ Run full verification (lint, type-check, build, test). The merged code must pass
 
 If verification fails: diagnose and fix. Max 3 attempts. If unresolvable, reset to checkpoint and escalate to user.
 
-### 4. Coherence audit
+### 4. Coherence audit (main branch only)
+
+**Only runs when merging to `main` (or the configured protected branch).** Worktree-to-worktree merges skip this step — they are internal workflow, not shipping code.
 
 Run coherence audit on the diff between parent HEAD and worktree HEAD (see [coherence.md](coherence.md)). This catches inconsistencies between the feature code and the rest of the codebase.
 
@@ -41,7 +43,7 @@ If BLOCKING issues: fix, re-verify, re-audit. Max 3 cycles. If unresolvable, esc
 
 Two paths:
 
-**Direct merge** (parent is not `main`, or solo project):
+**Direct merge** (parent is not `main`, or worktree-to-worktree):
 ```bash
 git checkout <parent-branch>
 git merge <worktree-branch>

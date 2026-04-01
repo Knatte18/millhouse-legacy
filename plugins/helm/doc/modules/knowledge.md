@@ -66,3 +66,20 @@ When accumulated knowledge exceeds ~5 entries, `helm-go` should synthesize befor
 5. Subsequent tasks read only the summary, not individual entries
 
 This prevents context bloat as a worktree accumulates tasks.
+
+## Decisions Register
+
+Architectural decisions are recorded in `_helm/knowledge/decisions.md` (tracked, append-only). This captures *why* something was done a particular way — complementing codeguide (which captures *what exists*) and knowledge entries (which capture *what was learned*).
+
+Format:
+
+```markdown
+## [Step N] Decision title
+**Why:** Reasoning behind the choice
+**Trade-off:** What was traded off
+**Alternatives rejected:** What else was considered and why not
+```
+
+Written by `helm-go` after implementing steps that involve architectural choices. Not every step produces a decision — only choices where a future session might ask "why did they do it this way?"
+
+Decisions survive merge (tracked). They are included in knowledge synthesis and in handoff briefs for child worktrees. They are also useful for PR descriptions — the reviewer sees not just *what* changed but *why*.
