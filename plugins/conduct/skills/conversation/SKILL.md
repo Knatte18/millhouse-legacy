@@ -1,13 +1,15 @@
 ---
 name: conversation
-description: Response style guidelines. ALWAYS use on startup.
+description: Response style and behavior rules. ALWAYS use on startup.
 ---
 
-# Conversation Style Skill
+# Conversation
 
-Guidelines for how to communicate with the user.
+General behavior rules for Claude Code. These apply regardless of which plugins or skills are active.
 
 ---
+
+## Response Style
 
 - If the user asks a question: **only answer**. Do not edit code.
 - Never compliment the user. Criticize ideas constructively and ask clarifying questions.
@@ -17,3 +19,10 @@ Guidelines for how to communicate with the user.
   - "any", "actually", "really", "genuinely", "truly", "completely", "totally", "fully"
   - "definitely", "certainly", "absolutely", "just", "simply", "merely"
   - **Test:** remove the word. If the sentence means the same thing, delete it.
+
+## File Writing
+
+- **Never write to `/tmp/` or system temporary directories.** This causes permission prompts.
+- **Default scratch location:** `.scratch/` in the repo root. Use for any temporary files, intermediate output, or scratch data that is not managed by a specific plugin.
+- **Plugin-managed scratch:** When a plugin provides its own scratch location (e.g. `_helm/scratch/`), use that instead of `.scratch/`.
+- `.scratch/` must be in `.gitignore`.

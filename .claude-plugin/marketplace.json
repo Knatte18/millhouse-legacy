@@ -27,17 +27,7 @@
       "source": "./plugins/codeguide",
       "category": "productivity"
     },
-    {
-      "name": "orchestration",
-      "description": "Skill coordination, conversation style, and LLM context rules",
-      "version": "1.0.0",
-      "author": {
-        "name": "Knatte18"
-      },
-      "source": "./plugins/orchestration",
-      "category": "productivity"
-    },
-    {
+{
       "name": "code",
       "description": "Code quality, CLI, linting, and testing standards",
       "version": "1.0.0",
@@ -75,6 +65,16 @@
         "name": "Knatte18"
       },
       "source": "./plugins/csharp",
+      "category": "productivity"
+    },
+    {
+      "name": "conduct",
+      "description": "Response style, behavior rules, skill routing, and language detection",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/conduct",
       "category": "productivity"
     }
   ]

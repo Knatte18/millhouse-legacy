@@ -6,7 +6,7 @@
       "Bash(python ~/.claude/scripts/*)",
       "Skill(taskmill:*)",
       "SlashCommand(/taskmill:*)",
-      "Skill(orchestration:*)",
+      "Skill(conduct:*)",
       "Skill(code:*)",
       "Skill(git:*)",
       "Skill(python:*)",

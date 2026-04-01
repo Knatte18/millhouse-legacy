@@ -1,0 +1,82 @@
+# Open Questions
+
+## Resolved
+
+### Backlog format
+**Decision:** GitHub Projects V2 is the backlog. No local backlog files. Issues are cards on a kanban board.
+
+### Backlog inheritance on merge
+**Decision:** Yes. Child worktree's changelog entries propagate to parent on merge (they're tracked and travel with the merge). Knowledge files also propagate via `_helm/knowledge/`.
+
+### Kanban granularity
+**Decision:** One board per repo. Sub-tasks within a worktree are checkboxes on the parent issue, not separate board items (unless large enough for their own worktree/issue).
+
+### Dimension templates
+**Decision:** Ship defaults with the plugin (like Autoboard). Per-repo override via `.claude/dimensions.json`.
+
+### Python scripts
+**Decision:** Dropped. CC reads/writes files directly. No script-based mutations. Format consistency via skill instructions and optional validation hooks.
+
+### Worktree spawning
+**Decision:** Always user-initiated. CC never auto-spawns worktrees. Use `helm-start -w`.
+
+### Plan protection
+**Decision:** Plans are freely editable during review loop. Locked after approval (`approved: true` in frontmatter). `helm-go` refuses unapproved plans.
+
+### Concurrent merge safety
+**Decision:** Lock file on parent branch (`_helm/scratch/merge.lock`). Lock acquisition resolves parent branch to filesystem path via `git worktree list --porcelain`.
+
+### Worktree naming convention
+**Decision:** Configurable via `_helm/config.yaml` with `branch-template: "{prefix}/{parent-slug}/{slug}"`. Prefix is user-specific (e.g. `hanf`). No distinction between hotfix/feature/experiment — just slugs.
+
+### _helm/ directory structure
+**Decision:** Single `_helm/` directory, partially tracked:
+```
+_helm/
+  knowledge/              ← tracked. knowledge entries
+  changelog.md            ← tracked. completed task log
+  config.yaml             ← tracked. worktree config + GitHub Projects metadata
+  scratch/                ← gitignored (entire directory)
+    plans/                ← implementation plans
+    briefs/               ← handoff documents
+    reviews/              ← review prompts and results
+    status.md             ← worktree status for helm-status
+    merge.lock            ← merge locking
+```
+
+`.gitignore` entry: `_helm/scratch/`
+
+### helm-go is always autonomous
+**Decision:** `helm-go` only executes approved plans. It never runs discuss phases or asks clarifying questions. In new worktrees, the user runs `helm-start` (not `helm-go`) to discuss and plan. `helm-go` is called after plan approval.
+
+### Codeguide update ordering
+**Decision:** Codeguide-update runs BEFORE commit in helm-go, not after. Sequence: implement → verify → code-review → codeguide-update → commit.
+
+### Dimension config vs auto-detection
+**Decision:** `.claude/dimensions.json` defines which dimensions are active for the repo. Auto-detection (based on diff content) selects which of the active dimensions to check for a given change. Config sets the pool, auto-detection picks from it.
+
+### helm-setup skill
+**Decision:** Fully specified in kanban.md "Setup" section with exact GraphQL queries, step-by-step flow, and config.yaml format.
+
+### Knowledge file naming
+**Decision:** `<worktree-slug>-<timestamp>-<topic>.md`. Worktree-slug prefix prevents collisions on merge.
+
+### Receiving-review as standalone skill
+**Decision:** Standalone skill at `plugins/helm/skills/helm-receiving-review/SKILL.md`. Must be invoked via Skill tool BEFORE reading reviewer findings.
+
+### Cross-platform notifications
+**Decision:** Windows (BurntToast), macOS (osascript), Linux (notify-send). Detect platform. Specified in notifications.md.
+
+## Still Open
+
+### Notification channel config location
+Where to store Slack webhook/channel config? Currently proposed: `~/.claude/helm.json` (global). Alternative: per-repo `.claude/helm.json`. Global makes sense for personal notifications, per-repo for team-shared config.
+
+### helm-go context budget
+For very large tasks, should `helm-go` detect context window pressure and suggest splitting? Or trust the plan review to catch oversized plans? Plan review is probably sufficient — if the plan has 15 steps, the reviewer should flag it.
+
+### Changelog format
+Carry over Taskmill's changelog format? Use `_helm/changelog.md`? Or rely on GitHub issue comments as the changelog? A tracked changelog is useful for commit history and PR descriptions. Lean toward keeping it.
+
+### Format protection for tracked files
+`_helm/config.yaml` stores GitHub Projects IDs — a bad write breaks all kanban operations. Options: (A) validation hook that checks format on commit, (B) lightweight script for config.yaml only. Knowledge files and changelog are lower risk. Needs a decision.

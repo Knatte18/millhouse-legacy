@@ -14,7 +14,8 @@ Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `p
 |-----------|--------|-------------|
 | `plugins/taskmill/` | taskmill | Task management and workflow orchestration |
 | `plugins/codeguide/` | codeguide | Navigation-first documentation system for AI-assisted codebases |
-| `plugins/orchestration/` | orchestration | Skill coordination, conversation style, and LLM context rules |
+| `plugins/conduct/` | conduct | Response style, behavior rules, skill routing, language detection |
+| `plugins/helm/` | helm | Worktree-based task orchestration (in design — see `plugins/helm/doc/`) |
 | `plugins/code/` | code | Code quality, CLI, linting, and testing standards |
 | `plugins/git/` | git | Git workflow rules |
 | `plugins/python/` | python | Python build, comments, and testing conventions |
