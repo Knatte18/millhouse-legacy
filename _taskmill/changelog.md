@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-01 **Added mill-review skill**
+- New `mill-review` skill spawns a fresh Sonnet agent (no conversation context) to review a plan
+- Agent reads `_codeguide/Overview.md` first, then evaluates plan concreteness, file references, missing steps, scope, and alignment
+- Report written to `.llm/reviews/` and linked on the backlog task via `review:` sub-bullet
+- Manually invoked (not part of finalize)
+
 ## 2026-04-01 **Cleaned up plugin installation**
 - All 7 plugins now install globally via `./install-local.sh` (no --scope project)
 - Deactivated codeguide enforcement hooks (hooks.json emptied, source files preserved)
