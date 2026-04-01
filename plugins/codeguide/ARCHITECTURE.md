@@ -2,17 +2,9 @@
 
 ## Prerequisites
 
-Add to `.claude/settings.json` in any folder where codeguide should be active:
+Installed globally via `./install-local.sh` or `claude plugin install codeguide@millhouse`.
 
-```json
-{
-  "enabledPlugins": {
-    "codeguide@millhouse": true
-  }
-}
-```
-
-This is done via `claude plugin install codeguide@millhouse --scope project`.
+Per-repo setup via `/codeguide-setup` to create the `_codeguide/` skeleton.
 
 ---
 
@@ -40,7 +32,9 @@ This is done via `claude plugin install codeguide@millhouse --scope project`.
 
 ---
 
-## Hooks
+## Hooks (deactivated by default)
+
+Hook scripts are included but not active. To re-enable, restore `hooks.json` from the source files (`hooks-base.json`, `hooks-enforcement.json`, `hooks-violation-logging.json`) using `_merge_hooks.py`.
 
 | Hook | Event | Purpose |
 |---|---|---|
@@ -51,8 +45,6 @@ This is done via `claude plugin install codeguide@millhouse --scope project`.
 | `enforce_stop.py` | Stop | Clean up session state, log parity issues |
 | `audit_track_task.py` | PreToolUse (Agent) | Count subagent spawns |
 | `audit_track_subagent.py` | SubagentStart | Count subagent injections |
-
-Enforcement hooks require `enforcement: true` in config.yaml. Audit hooks require `violation_logging: true`. Toggle by editing config.yaml directly.
 
 ---
 
@@ -84,16 +76,14 @@ Enforcement hooks require `enforcement: true` in config.yaml. Audit hooks requir
 ## Typical workflows
 
 **First-time setup:**
-1. `claude plugin install codeguide@millhouse --scope project`
-2. `/codeguide-init .py`
-3. `/codeguide-generate`
+1. `/codeguide-setup .py`
+2. `/codeguide-generate`
 
 **Subfolder activation:**
-1. `claude plugin install codeguide@millhouse --scope project` (from subfolder)
-2. `/codeguide-setup`
+1. `/codeguide-setup` (from subfolder)
 
 **Plugin update:**
-1. `claude plugin install codeguide@millhouse --scope project` (refreshes cache)
+1. Run `./install-local.sh` (refreshes cache)
 2. `/codeguide-setup` (refreshes plugin-owned files)
 
 **Routine maintenance:**

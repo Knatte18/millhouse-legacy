@@ -2,9 +2,9 @@
 
 Navigation-first documentation system for AI-assisted codebases.
 
-Provides routing guides (`_codeguide/`) that direct Claude Code to the right source files before reading them, with enforcement hooks that block blind searching and log violations for guide improvement.
+Provides routing guides (`_codeguide/`) that direct Claude Code to the right source files before reading them.
 
-Installed as a Claude Code plugin. Per-repo setup via `/codeguide-setup`.
+Installed globally as part of the millhouse marketplace. Per-repo setup via `/codeguide-setup`.
 
 ## Install
 
@@ -32,14 +32,6 @@ After install and setup:
 | `/codeguide-update` | Generate + maintain for recently changed files (light, commit-time) |
 | `/review-navigation` | Review violation logs for guide improvement |
 
-### How enforcement works
-
-1. Every prompt injects "read Overview.md first" instructions
-2. Session state tracks whether `_codeguide/` has been read
-3. After 3 search tool calls without reading Overview, the tool is blocked
-4. Claude must read `_codeguide/Overview.md` to unblock
-5. Violations are logged for later review via `/review-navigation`
-
 ### Local rules
 
 `_codeguide/local-rules.md` holds repo-specific documentation rules. These are applied on top of the generic DocumentationGuide.md by the skills.
@@ -60,10 +52,4 @@ After install and setup:
 
 ## Updating
 
-Re-install the plugin to refresh the cache:
-
-```
-claude plugin install codeguide@millhouse --scope project
-```
-
-Then run `/codeguide-setup` to update plugin-owned files.
+Re-install via `./install-local.sh`, then run `/codeguide-setup` to update plugin-owned files.

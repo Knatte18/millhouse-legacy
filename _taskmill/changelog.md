@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-04-01 **Cleaned up plugin installation**
+- All 7 plugins now install globally via `./install-local.sh` (no --scope project)
+- Deactivated codeguide enforcement hooks (hooks.json emptied, source files preserved)
+- Updated codeguide INSTALL.md, ARCHITECTURE.md, README.md to reflect global install via millhouse
+- Updated root INSTALL.md with full plugin table and per-repo setup note for codeguide
+
+## 2026-03-31 **Split taskmill into focused plugins**
+- Extracted orchestration, code, git, python, and csharp skills into separate plugins mirroring Motlin's structure
+- Taskmill retains task management skills (mill-add, mill-do, mill-commit, etc.) with mill- prefix
+- New plugin skills drop the prefix; plugin name scopes them (e.g. `@code:cli`, `@git:git-workflow`)
+- Updated all cross-references, marketplace, install script, and CLAUDE.md
+
 ## 2026-03-27 **Added codeguide sync and ruff to mill-commit**
 - Added pre-commit step: run `ruff check --fix` on changed `.py` files
 - Added pre-commit step: detect stale codeguide docs via `codeguide_stale.py`, run scoped `codeguide-sync` on each

@@ -1,5 +1,6 @@
 # Claude Code Files
 **/.llm/
+**/_codeguide/runtime/
 *.local.*
 nul
 
