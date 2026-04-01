@@ -97,15 +97,15 @@ gh api graphql -f query='
   }'
 ```
 
-For org-owned repos, use `organization` instead of `user`.
+Detect owner type first: `gh api users/<owner> --jq '.type'` returns `"User"` or `"Organization"`. Use `user()` or `organization()` accordingly.
 
 ### Step 6: Create directory structure and config
 
 ```bash
-mkdir -p _helm/knowledge _helm/scratch/plans _helm/scratch/briefs _helm/scratch/reviews
+mkdir -p _helm/knowledge _helm/scratch/plans _helm/scratch/briefs
 ```
 
-Write `_helm/config.yaml`:
+Write `_helm/config.yaml` (this is the canonical config template — all config lives here):
 
 ```yaml
 worktree:
@@ -127,6 +127,20 @@ github:
     reviewing: "<OPTION_ID>"
     blocked: "<OPTION_ID>"
     done: "<OPTION_ID>"
+
+models:
+  session: opus
+  plan-review: sonnet
+  code-review: sonnet
+  explore: haiku
+
+notifications:
+  slack:
+    enabled: false
+    webhook: ""
+    channel: ""
+  toast:
+    enabled: true
 ```
 
 ### Step 7: Update .gitignore

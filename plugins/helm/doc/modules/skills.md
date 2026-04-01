@@ -8,13 +8,14 @@ Interactive. Pick a task and design the solution.
 
 ### Flow
 
-1. **Select task.** Read tasks from GitHub Projects board (`gh project item-list`).
+0. **Check for handoff brief.** If `_helm/scratch/briefs/handoff.md` exists, read it. The brief's `## Issue` identifies the task — select it directly (skip step 1). The brief's `## Discussion Summary` is prior context — incorporate it, but still run your own explore phase and ask your own clarifying questions. The brief informs but does not constrain.
+1. **Select task.** Read tasks from GitHub Projects board (`gh project item-list`). Filter to Backlog column: `gh project item-list <number> --owner <owner> --format json | jq '[.items[] | select(.status == "Backlog")]'`.
    - If one task: select it.
    - If multiple: list them numbered. User picks one.
 2. **Worktree decision.** User decides: worktree or in-place?
    - `-w` flag: create worktree immediately (see [worktrees.md](worktrees.md)), write brief, open VS Code. Stop. User runs `helm-start` in the new window to continue discussion there.
    - No flag: discuss in current context. Continue below.
-3. **Explore first.** Before asking a single question, explore the relevant parts of the codebase. Use the codeguide navigation pattern: Overview → module doc → Source section → code (see [codeguide.md](codeguide.md)). Check recent commits related to the task. Don't ask questions you can answer from the codebase.
+3. **Explore first.** Before asking a single question, explore the relevant parts of the codebase. If `_codeguide/Overview.md` exists, use the codeguide navigation pattern: Overview → module doc → Source section → code (see [codeguide.md](codeguide.md)). Otherwise, explore using file structure, git log, and grep. Check recent commits related to the task. Don't ask questions you can answer from the codebase.
 4. **Clarifying questions.** Ask questions **one at a time**. Cover:
    - Scope — what's in, what's out?
    - Constraints — performance, compatibility, existing patterns to follow?
@@ -31,7 +32,7 @@ Interactive. Pick a task and design the solution.
    - Quality & testing strategy: which modules are TDD candidates, key test scenarios per step (happy path AND error paths AND edge cases), security boundaries.
    - For each step: `Creates:`, `Modifies:`, `Requirements:`, `Explore:`, `TDD:`, `Key test scenarios:`, `Commit:` (see [plans.md](plans.md)).
 7. **Plan review loop** (see [reviews.md](reviews.md)): spawn plan-reviewer Agent, evaluate feedback via receiving-review protocol, update plan. Max 3 rounds.
-8. **Plan approved** → lock plan (set `approved: true` in frontmatter). Task is ready for `helm-go`.
+8. **Plan approved** → lock plan (set `approved: true` in frontmatter). Write plan path to `_helm/scratch/status.md` as `plan:` field. Task is ready for `helm-go`.
 
 ### Discussion principles
 
@@ -94,8 +95,9 @@ During implementation, if a test failure matches the baseline (pre-existing), do
 
 ### Execution flow per task
 
-1. Read plan. Read all files in `## Files`. Staleness check (`git log --since=<started>` against listed files). If files changed: classify severity. Minor changes (formatting, unrelated files) → log warning, proceed. Major changes (files restructured, APIs changed, interfaces modified) → halt execution, move task to **Discussing** on kanban, notify user to re-run `helm-start`.
-2. Explore relevant code (codeguide-assisted, following plan's `Explore:` targets). Read accumulated knowledge from `_helm/knowledge/`. Read codeguide Overview — this is passed to the code-reviewer Agent later so it can check for utility duplication.
+0. Record `PLAN_START_HASH=$(git rev-parse HEAD)`. Store in `_helm/scratch/status.md` as `plan_start_hash:`. This is the baseline for code review diff. On resume, read from status.md instead of recomputing.
+1. Read plan (path from `_helm/scratch/status.md` `plan:` field). Read all files in `## Files`. Staleness check (`git log --since=<started>` against listed files). If files changed: classify severity. Minor changes (formatting, unrelated files) → log warning, proceed. Major changes (files restructured, APIs changed, interfaces modified) → halt execution, move task to **Discussing** on kanban, notify user to re-run `helm-start`.
+2. Explore relevant code (following plan's `Explore:` targets). Read accumulated knowledge from `_helm/knowledge/`. If `_codeguide/Overview.md` exists: read it and use the navigation pattern. Pass the Overview to the code-reviewer Agent later for utility duplication checking.
 3. For each step:
    - Update `_helm/scratch/status.md` with current step number and phase.
    - **If TDD-marked:** write test → run test suite → confirm the new test FAILS (RED). If it passes, stop — the test is wrong, it's not testing what you think. → implement minimum to make it pass (GREEN) → refactor, keeping tests green (REFACTOR).
@@ -104,22 +106,29 @@ During implementation, if a test failure matches the baseline (pre-existing), do
    - On failure after 3 retries: classify failure (see [failures.md](failures.md)) and route accordingly.
    - **Commit after each step** with the step's `Commit:` message. This enables resume on crash.
 4. After all steps: full verification (lint, type-check, build, test).
-5. Spawn `code-reviewer` Agent with the diff (since plan start, not just last step), approved plan, and codeguide Overview. When the reviewer returns: **FIRST** invoke `helm-receiving-review` skill via the Skill tool. **THEN** read and evaluate the reviewer's findings using the loaded protocol. Fix accepted issues, re-verify, re-review. Max 3 rounds. (See [reviews.md](reviews.md)). Verify the reviewer's APPROVE is substantiated — the output must contain per-file observations. A bare "APPROVE" with no specifics is treated as a failed review and re-spawned.
+5. Spawn `code-reviewer` Agent with `git diff $PLAN_START_HASH..HEAD`, approved plan, and codeguide Overview. When the reviewer returns: **FIRST** invoke `helm-receiving-review` skill via the Skill tool. **THEN** read and evaluate the reviewer's findings using the loaded protocol. Fix accepted issues, re-verify, re-review. Max 3 rounds. (See [reviews.md](reviews.md)). Verify the reviewer's APPROVE is substantiated — the output must contain per-file observations. A bare "APPROVE" with no specifics is treated as a failed review and re-spawned.
 6. Codeguide update: run `codeguide-update` on the diff.
 7. Write knowledge entry (see [knowledge.md](knowledge.md)).
 8. Record architectural decisions made during implementation to `_helm/knowledge/decisions.md` (see [knowledge.md](knowledge.md)).
-9. Update `_helm/scratch/status.md`: phase = complete.
-10. Update GitHub issue: mark task complete, post summary comment.
-11. If accumulated knowledge exceeds 5 entries: synthesize into `_helm/knowledge/summary.md` (see [knowledge.md](knowledge.md)).
-12. If more planned tasks: pick next, repeat from step 1.
+9. Commit post-review changes: `chore: post-review cleanup for <task-title>`. This covers code review fixes, codeguide updates, knowledge entries, and decisions.
+10. Update `_helm/scratch/status.md`: phase = complete.
+11. Update GitHub issue: mark task complete, post summary comment.
+12. If accumulated knowledge exceeds 5 entries: synthesize into `_helm/knowledge/summary.md` (see [knowledge.md](knowledge.md)).
+13. If more planned tasks: pick next, repeat from step 1.
+
+### Completion
+
+When no more planned tasks remain:
+1. Set `_helm/scratch/status.md` phase to `ready-to-merge`.
+2. Post comment on GitHub issue: "All tasks complete. Worktree ready to merge."
+3. Send info notification: "[helm] <worktree> ready to merge — all tasks complete."
 
 ### Stops when
 
-- All tasks complete (success)
+- All tasks complete → completion flow above
 - Test failure after 3 retries (notify user)
 - Code reviewer blocks after 3 rounds with unresolvable issues (notify user)
 - Permission/config error (notify user immediately, no retries)
-- No more tasks
 
 ### Kanban updates
 

@@ -99,18 +99,27 @@ Never cleanup on failure — preserve the worktree for investigation.
 
 ## Status Tracking
 
-Each worktree writes `_helm/scratch/status.md`:
+Each worktree writes `_helm/scratch/status.md`, updated after every step (not just on errors). Canonical format defined in [notifications.md](notifications.md). Key fields:
 
 ```markdown
 parent: feature/auth
 phase: implementing
 issue: #57
+plan: _helm/scratch/plans/2026-04-01-120000-oauth.md
+plan_start_hash: abc123
+current_step: 3
+current_step_name: Add callback endpoint
 tasks_total: 3
 tasks_done: 1
+steps_total: 5
+steps_done: 2
 blocked: false
+retries:
+  step_3: 1
+last_updated: 2026-04-01T14:30:00Z
 ```
 
-`helm-status` reads these files via paths from `git worktree list`. See [notifications.md](notifications.md) for the notification system.
+`helm-status` reads these files via paths from `git worktree list`. `helm-go` uses `plan:` and `plan_start_hash:` for resume.
 
 ## Environment Setup
 
