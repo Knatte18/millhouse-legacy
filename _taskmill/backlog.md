@@ -1,8 +1,7 @@
 # Backlog
 
-- [ ] **Refactor the taskmill to use worktrees**
-  We split tasks into large parts and small parts. Large parts are called something separate, e.g. "feature", and smaller tasks are called something smaller e.g. "task". A feature results in a new worktree, AND VS Code is automatically launched in there.
+- [ ] **Plugin for bypassing Claude's URL refusal**
+  Plugin to tweak Claude into reading web pages that it otherwise refuses to read for unclear reasons.
 
-- [1] **Investigate Tran's Autoboard**
-  Willie Tran has created an "autoboard" plugin that seems very handy. Investigate if some of his work can be used in MILLHOUSE - https://github.com/willietran/autoboard
-  - started: 2026-04-01-055612
+- [ ] **Implement Helm plugin**
+  Build the Helm plugin from the design docs in plugins/helm/doc/. See review-04-result.md for implementation order.
