@@ -76,6 +76,26 @@
       },
       "source": "./plugins/conduct",
       "category": "productivity"
+    },
+    {
+      "name": "helm",
+      "description": "Worktree-based task orchestration for Claude Code",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/helm",
+      "category": "productivity"
+    },
+    {
+      "name": "weblens",
+      "description": "Fetch blocked/restricted web pages and output readable markdown",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/weblens",
+      "category": "productivity"
     }
   ]
 }

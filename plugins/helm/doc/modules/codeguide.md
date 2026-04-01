@@ -55,9 +55,9 @@ Fast and non-intrusive. Only touches docs for files in scope.
 
 Do NOT run `codeguide-maintain` here — `update` is sufficient. `maintain` is heavy and reserved for guide/rule changes (see below).
 
-### helm-commit (ad-hoc commits)
+### git-commit (ad-hoc commits)
 
-**Run `codeguide-update`** with default scope (current diff). Same as helm-go's post-implementation call.
+`@git:git-commit` runs `codeguide-update` with default scope (current diff) as a pre-commit step. Same codeguide integration as helm-go.
 
 ## When to Use Each Skill
 

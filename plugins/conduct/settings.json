@@ -6,7 +6,9 @@
       "Skill(git:*)",
       "Skill(python:*)",
       "Skill(csharp:*)",
-      "Skill(codeguide:*)"
+      "Skill(codeguide:*)",
+      "WebFetch",
+      "WebSearch"
     ]
   }
 }

@@ -32,20 +32,22 @@ Worktree branches follow a configurable template. Configured in `_helm/config.ya
 
 ```yaml
 worktree:
-  prefix: "hanf"
-  branch-template: "{prefix}/{parent-slug}/{slug}"
-  path-template: "../{slug}"
+  branch-template: "hanf/{parent-slug}/{slug}"
+  path-template: "../{parent-slug}-{slug}"
 ```
 
-The `{parent-slug}` is the parent branch's slug (last segment of the branch name). This makes the worktree hierarchy visible in branch names:
+Available placeholders:
+- `{slug}` — derived from task title (kebab-case, max 30 chars), or user-provided
+- `{parent-slug}` — last segment of the parent branch name
 
-| Context | Task slug | Resulting branch |
-|---------|-----------|-----------------|
-| Working from `hanf/main` | `auth` | `hanf/main/auth` |
-| Working from `hanf/main/auth` | `oauth` | `hanf/main/auth/oauth` |
-| Working from `hanf/main` | `login-bug` | `hanf/main/login-bug` |
+Examples by template:
 
-The slug is derived from the task title (kebab-case, max 30 chars), or user-provided.
+| Template | Context | Slug | Result |
+|----------|---------|------|--------|
+| `"hanf/{parent-slug}/{slug}"` | parent: `main` | `auth` | `hanf/main/auth` |
+| `"hanf/{parent-slug}/{slug}"` | parent: `hanf/main/auth` | `oauth` | `hanf/auth/oauth` |
+| `"{slug}"` | any | `auth` | `auth` |
+| `"henrik/{slug}"` | any | `auth` | `henrik/auth` |
 
 The `path-template` controls where the worktree directory is created on disk. `../` places worktrees as sibling directories to the repo root (e.g. repo at `C:\Code\myproject` → worktree at `C:\Code\auth`), not inside the repo.
 
@@ -71,8 +73,8 @@ When `helm-start -w` is called:
 1. `git worktree add <path> -b <branch-name> <parent-branch>`
 2. Symlink gitignored environment files: `for f in .env*; do [ -f "$f" ] && ln -sf "$(pwd)/$f" <worktree-path>/"$f"; done`
 3. Create `_helm/` directory structure in worktree (tracked: `knowledge/`, `changelog.md`, `config.yaml`; ignored: `scratch/`)
-4. Write `_helm/scratch/briefs/handoff.md` in the child worktree (see [plans.md](plans.md) Handoff Brief Format). If no discussion has happened, populate Discussion Summary from the GitHub issue body.
-5. Add one issue to the GitHub Projects board (or reference existing issue) with worktree metadata
+4. Write `_helm/scratch/briefs/handoff.md` in the child worktree (see [plans.md](plans.md) Handoff Brief Format). If no discussion has happened, populate Discussion Summary from the task title.
+5. Ensure the task exists in `.kanban.md` (it should already be there from `helm-add`)
 6. `code <worktree-path>` — open VS Code in the new worktree
 7. Parent session continues with other work
 

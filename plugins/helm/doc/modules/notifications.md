@@ -4,15 +4,16 @@
 
 A worktree sends a notification when it needs user attention:
 
-| Event | Urgency |
-|-------|---------|
-| Test failure after 3 retries | High |
-| Code reviewer blocks after 3 rounds | High |
-| Permission/config error | High — immediate, no retries |
-| Coherence audit blocking issues unresolvable | High |
-| Merge conflict unresolvable | High |
-| All tasks complete | Info |
-| Worktree ready to merge | Info |
+| Event | Source skill | Urgency |
+|-------|-------------|---------|
+| Test failure after 3 retries | helm-go | High |
+| Code reviewer blocks after 3 rounds | helm-go | High |
+| Permission/config error | helm-go | High — immediate, no retries |
+| Plan stale — files changed since plan was written | helm-go | High |
+| Merge conflict unresolvable | helm-merge | High |
+| Merge verification failure after 3 attempts | helm-merge | High |
+| All tasks complete, ready to merge | helm-go | Info |
+| Merge successful | helm-merge | Info |
 
 ## Channels
 
@@ -85,7 +86,7 @@ needs_input: true
 
 ## Configuration
 
-Notification config lives in `_helm/config.yaml` (per-repo, alongside worktree and GitHub Projects config):
+Notification config lives in `_helm/config.yaml` (per-repo, alongside worktree and kanban config):
 
 ```yaml
 notifications:
@@ -99,8 +100,12 @@ notifications:
 
 Status file is always written regardless of config.
 
+## Integration
+
+Notifications are NOT a separate skill. They are inline procedure calls within `helm-go` and `helm-merge`. Each skill contains a **Notification Procedure** section describing the exact steps: update status file, fire toast, post to Slack. The procedure reads `_helm/config.yaml` for channel configuration and detects the platform for toast commands.
+
 ## Design Decisions
 
 - **Slack is notification-only.** CC cannot poll Slack for replies. The interaction happens in VS Code where the CC session is running.
 - **Multiple channels fire simultaneously.** Slack + toast + status file all update on the same event. Redundancy is intentional — you might miss one.
-- **Info notifications are status-file only.** "All tasks complete" doesn't need a Slack ping. Check `helm-status` when ready.
+- **Info notifications are toast + status-file only.** "All tasks complete" and "Merge successful" don't need a Slack ping. Check `helm-status` when ready.

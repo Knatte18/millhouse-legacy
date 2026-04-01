@@ -8,6 +8,7 @@ Helm does NOT use Autoboard's multi-agent coherence audit system. Instead, codeb
 2. **Code reviewer** — explicitly checks for utility duplication (greps codebase for similar functions) and pattern consistency (new code follows existing conventions). Reimplementation of existing utilities is BLOCKING.
 3. **Knowledge curation** — captures patterns established by prior tasks, so subsequent tasks follow them.
 4. **Decisions register** — records *why* architectural choices were made, preventing contradictory decisions.
+5. **Constraints** — repo-level hard invariants in `CONSTRAINTS.md` (repo root). Injected in all agents and reviewers, always blocking. Covers domain rules that code must never violate (e.g. coordinate system boundaries, type restrictions). See [constraints.md](constraints.md).
 
 ## Why Not Multi-Agent Coherence Audits
 

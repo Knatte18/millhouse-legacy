@@ -1,8 +1,14 @@
 # Claude Code Files
 **/.llm/
 **/_codeguide/runtime/
+_helm/scratch/
+.scratch/
 *.local.*
 nul
+
+# Node
+**/node_modules/
+**/ca-bundle.pem
 
 # Python
 __pycache__/

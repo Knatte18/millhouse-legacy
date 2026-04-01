@@ -3,7 +3,7 @@
 ## Resolved
 
 ### Backlog format
-**Decision:** GitHub Projects V2 is the backlog. No local backlog files. Issues are cards on a kanban board.
+**Decision:** `.kanban.md` is the backlog. Tasks are `###` headings under `##` column headings. The kanban.md VS Code extension renders the board. GitHub sync is on-demand via `helm-sync`.
 
 ### Backlog inheritance on merge
 **Decision:** Yes. Child worktree's changelog entries propagate to parent on merge (they're tracked and travel with the merge). Knowledge files also propagate via `_helm/knowledge/`.
@@ -27,7 +27,7 @@
 **Decision:** Lock file on parent branch (`_helm/scratch/merge.lock`). Lock acquisition resolves parent branch to filesystem path via `git worktree list --porcelain`.
 
 ### Worktree naming convention
-**Decision:** Configurable via `_helm/config.yaml` with `branch-template: "{prefix}/{parent-slug}/{slug}"`. Prefix is user-specific (e.g. `hanf`). No distinction between hotfix/feature/experiment — just slugs.
+**Decision:** Configurable via `_helm/config.yaml` with `branch-template`. No separate prefix field — the prefix is part of the template string. Examples: `"hanf/{parent-slug}/{slug}"` (team), `"{slug}"` (solo). No distinction between hotfix/feature/experiment — just slugs.
 
 ### _helm/ directory structure
 **Decision:** Single `_helm/` directory, partially tracked:
@@ -36,7 +36,7 @@ _helm/
   knowledge/              ← tracked. knowledge entries
   knowledge/decisions.md  ← tracked. architectural decisions register (append-only)
   changelog.md            ← tracked. completed task log
-  config.yaml             ← tracked. worktree config + GitHub Projects metadata
+  config.yaml             ← tracked. worktree config + model/notification settings
   scratch/                ← gitignored (entire directory)
     plans/                ← implementation plans
     briefs/               ← handoff documents
@@ -53,11 +53,14 @@ _helm/
 ### Codeguide update ordering
 **Decision:** Codeguide-update runs BEFORE commit in helm-go, not after. Sequence: implement → verify → code-review → codeguide-update → commit.
 
+### Repository constraints
+**Decision:** `CONSTRAINTS.md` in repo root. Plain markdown (headings + prose rules, no frontmatter). Always global — all constraints apply everywhere, no path-scoping. Always blocking — if it's not blocking, it's not a constraint. Opt-in — helm-setup does not create the file; user creates it when needed. Injected at three levels: session agent (helm-go setup), plan reviewer (helm-start), code reviewer (helm-go). Path resolved via `git rev-parse --show-toplevel`. Worktree inheritance is automatic via git. Distinct from CLAUDE.md (process/workflow vs domain invariants) and from Autoboard dimensions (simpler, no coherence audits, no parallel dimension agents). See [constraints.md](modules/constraints.md).
+
 ### Dimensions and coherence audits
 **Decision:** Not used. Helm relies on existing always-on skills (`code:code-quality`, `code:testing`, `code:linting`) plus a strengthened code reviewer that checks for utility duplication and pattern consistency using codeguide context. See [coherence.md](coherence.md).
 
 ### helm-setup skill
-**Decision:** Fully specified in kanban.md "Setup" section with exact GraphQL queries, step-by-step flow, and config.yaml format.
+**Decision:** Fully specified in kanban.md "Setup" section. Creates `.kanban.md` with Helm columns and `_helm/` directory structure.
 
 ### Knowledge file naming
 **Decision:** `<worktree-slug>-<timestamp>-<topic>.md`. Worktree-slug prefix prevents collisions on merge.
@@ -69,7 +72,7 @@ _helm/
 **Decision:** Windows (BurntToast), macOS (osascript), Linux (notify-send). Detect platform. Specified in notifications.md.
 
 ### Notification config location
-**Decision:** Per-repo in `_helm/config.yaml` alongside worktree and GitHub Projects config. Not global.
+**Decision:** Per-repo in `_helm/config.yaml` alongside worktree and kanban config. Not global.
 
 ### helm-go context budget
 **Decision:** No hard limit on step count. Plan reviewer is responsible for flagging oversized plans. If a plan is too large for one context window, the reviewer should suggest splitting into sub-tasks or child worktrees.
@@ -100,4 +103,4 @@ models:
 Carry over Taskmill's changelog format? Use `_helm/changelog.md`? Or rely on GitHub issue comments as the changelog? A tracked changelog is useful for commit history and PR descriptions. Lean toward keeping it.
 
 ### Format protection for tracked files
-`_helm/config.yaml` stores GitHub Projects IDs — a bad write breaks all kanban operations. Options: (A) validation hook that checks format on commit, (B) lightweight script for config.yaml only. Knowledge files and changelog are lower risk. Needs a decision.
+`.kanban.md` is the kanban board — a bad write breaks task tracking. Options: (A) validation hook that checks format on commit, (B) rely on kanban.md extension to enforce format. Knowledge files and changelog are lower risk. Needs a decision.
