@@ -17,9 +17,6 @@ started: 2026-04-01-120000
 ## Context
 Summary of discussion and key design decisions.
 
-## Quality dimensions
-security, api-design, test-quality
-
 ## Files
 - src/auth/oauth-client.ts
 - src/auth/oauth-client.test.ts

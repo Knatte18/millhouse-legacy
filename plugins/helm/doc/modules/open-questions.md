@@ -12,7 +12,7 @@
 **Decision:** One board per repo. Sub-tasks within a worktree are checkboxes on the parent issue, not separate board items (unless large enough for their own worktree/issue).
 
 ### Dimension templates
-**Decision:** Ship defaults with the plugin (like Autoboard). Per-repo override via `_helm/dimensions.json`.
+**Decision:** Not used. Codebase consistency is handled by code reviewer (with codeguide context) and existing always-on skills. See [coherence.md](coherence.md).
 
 ### Python scripts
 **Decision:** Dropped. CC reads/writes files directly. No script-based mutations. Format consistency via skill instructions and optional validation hooks.
@@ -37,7 +37,6 @@ _helm/
   knowledge/decisions.md  ← tracked. architectural decisions register (append-only)
   changelog.md            ← tracked. completed task log
   config.yaml             ← tracked. worktree config + GitHub Projects metadata
-  dimensions.json         ← tracked. active quality dimensions for this repo
   scratch/                ← gitignored (entire directory)
     plans/                ← implementation plans
     briefs/               ← handoff documents
@@ -54,8 +53,8 @@ _helm/
 ### Codeguide update ordering
 **Decision:** Codeguide-update runs BEFORE commit in helm-go, not after. Sequence: implement → verify → code-review → codeguide-update → commit.
 
-### Dimension config vs auto-detection
-**Decision:** `_helm/dimensions.json` defines which dimensions are active for the repo. Auto-detection (based on diff content) selects which of the active dimensions to check for a given change. Config sets the pool, auto-detection picks from it.
+### Dimensions and coherence audits
+**Decision:** Not used. Helm relies on existing always-on skills (`code:code-quality`, `code:testing`, `code:linting`) plus a strengthened code reviewer that checks for utility duplication and pattern consistency using codeguide context. See [coherence.md](coherence.md).
 
 ### helm-setup skill
 **Decision:** Fully specified in kanban.md "Setup" section with exact GraphQL queries, step-by-step flow, and config.yaml format.
@@ -83,7 +82,6 @@ _helm/
 | `helm-go` (session agent) | opus | Full reasoning needed for implementation |
 | Plan reviewer | sonnet | Reasoning for review, but no implementation |
 | Code reviewer | sonnet | Same — review, not implementation |
-| Coherence audit dimension agents | haiku | Breadth over depth — scanning, not reasoning |
 | Explore subagents | haiku | Fast codebase scanning |
 
 Configurable in `_helm/config.yaml`:
@@ -93,7 +91,6 @@ models:
   session: opus
   plan-review: sonnet
   code-review: sonnet
-  audit: haiku
   explore: haiku
 ```
 

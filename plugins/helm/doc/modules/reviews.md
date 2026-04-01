@@ -20,7 +20,7 @@ Plan review happens exclusively during `helm-start`. `helm-go` requires an alrea
 3. CC spawns `code-reviewer` Agent with:
    - The full diff (`git diff`)
    - The approved plan
-   - Active quality dimensions
+   - Codeguide Overview (for utility duplication checking)
    - Knowledge from prior tasks in this worktree
 4. CC evaluates reviewer feedback via receiving-review protocol.
 5. CC fixes accepted issues, re-runs full verification, re-submits to reviewer.
@@ -104,7 +104,9 @@ Output: BLOCKING issues (must fix) and NITs (nice-to-have). Overall APPROVE or R
 
 Use `sonnet` model (configured in `_helm/config.yaml` under `models.code-review`).
 
-Read-only review agent. Evaluates:
+Read-only review agent. Receives: the diff, the approved plan, and the codeguide Overview (if it exists).
+
+Evaluates:
 - Plan alignment — does the code match the plan?
 - Correctness — bugs, logic errors?
 - Dead code — unused exports, unimported files?
@@ -113,7 +115,8 @@ Read-only review agent. Evaluates:
   - Implementation-mirroring tests (testing internal state instead of observable behavior) → BLOCKING.
   - Shallow assertions (`assert result`, `assert result is not None`) → BLOCKING.
   - TDD-marked steps where diff shows implementation committed without a preceding failing test → BLOCKING.
-- Existing pattern reuse — rebuilds of existing utilities flagged
-- Quality dimension criteria (if dimensions specified in plan)
+- **Utility duplication** (BLOCKING): For every new function, helper, or utility in the diff, grep the codebase for existing implementations with similar names or purposes. Use the codeguide Overview to identify which modules to check. If an existing utility covers the same functionality, flag the reimplementation as BLOCKING with a pointer to the existing implementation. Common patterns: math/comparison helpers, string formatting, validation logic, error handling wrappers, API client utilities.
+- **Pattern consistency**: Check that new code follows the same patterns as existing code in the same area — naming conventions, error handling style, authentication patterns on endpoints.
+- Codebase consistency — does the code follow existing patterns?
 
-Output: per-dimension findings with BLOCKING/NIT severity. Overall APPROVE or REQUEST CHANGES.
+Output: findings with BLOCKING/NIT severity. Overall APPROVE or REQUEST CHANGES.

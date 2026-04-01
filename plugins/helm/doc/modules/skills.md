@@ -95,24 +95,23 @@ During implementation, if a test failure matches the baseline (pre-existing), do
 ### Execution flow per task
 
 1. Read plan. Read all files in `## Files`. Staleness check (`git log --since=<started>` against listed files). If files changed: classify severity. Minor changes (formatting, unrelated files) → log warning, proceed. Major changes (files restructured, APIs changed, interfaces modified) → halt execution, move task to **Discussing** on kanban, notify user to re-run `helm-start`.
-2. Load quality dimensions: read `## Quality dimensions` from plan, load dimension templates from plugin defaults (or repo overrides at `_helm/dimensions.json`). These are passed to the code-reviewer Agent in step 6.
-3. Explore relevant code (codeguide-assisted, following plan's `Explore:` targets). Read accumulated knowledge from `_helm/knowledge/`.
-4. For each step:
+2. Explore relevant code (codeguide-assisted, following plan's `Explore:` targets). Read accumulated knowledge from `_helm/knowledge/`. Read codeguide Overview — this is passed to the code-reviewer Agent later so it can check for utility duplication.
+3. For each step:
    - Update `_helm/scratch/status.md` with current step number and phase.
    - **If TDD-marked:** write test → run test suite → confirm the new test FAILS (RED). If it passes, stop — the test is wrong, it's not testing what you think. → implement minimum to make it pass (GREEN) → refactor, keeping tests green (REFACTOR).
    - **If not TDD:** implement → run tests.
    - On test failure: invoke systematic debugging (see [failures.md](failures.md) "Systematic Debugging Protocol") before retrying. Max 3 retries per step. Update retry count in `_helm/scratch/status.md` after each attempt.
    - On failure after 3 retries: classify failure (see [failures.md](failures.md)) and route accordingly.
    - **Commit after each step** with the step's `Commit:` message. This enables resume on crash.
-5. After all steps: full verification (lint, type-check, build, test).
-6. Spawn `code-reviewer` Agent with the diff (since plan start, not just last step), approved plan, and active quality dimensions. When the reviewer returns: **FIRST** invoke `helm-receiving-review` skill via the Skill tool. **THEN** read and evaluate the reviewer's findings using the loaded protocol. Fix accepted issues, re-verify, re-review. Max 3 rounds. (See [reviews.md](reviews.md)). Verify the reviewer's APPROVE is substantiated — the output must contain per-file observations. A bare "APPROVE" with no specifics is treated as a failed review and re-spawned.
-7. Codeguide update: run `codeguide-update` on the diff.
-8. Write knowledge entry (see [knowledge.md](knowledge.md)).
-9. Record architectural decisions made during implementation to `_helm/knowledge/decisions.md` (see [knowledge.md](knowledge.md)).
-10. Update `_helm/scratch/status.md`: phase = complete.
-11. Update GitHub issue: mark task complete, post summary comment.
-12. If accumulated knowledge exceeds 5 entries: synthesize into `_helm/knowledge/summary.md` (see [knowledge.md](knowledge.md)).
-13. If more planned tasks: pick next, repeat from step 1.
+4. After all steps: full verification (lint, type-check, build, test).
+5. Spawn `code-reviewer` Agent with the diff (since plan start, not just last step), approved plan, and codeguide Overview. When the reviewer returns: **FIRST** invoke `helm-receiving-review` skill via the Skill tool. **THEN** read and evaluate the reviewer's findings using the loaded protocol. Fix accepted issues, re-verify, re-review. Max 3 rounds. (See [reviews.md](reviews.md)). Verify the reviewer's APPROVE is substantiated — the output must contain per-file observations. A bare "APPROVE" with no specifics is treated as a failed review and re-spawned.
+6. Codeguide update: run `codeguide-update` on the diff.
+7. Write knowledge entry (see [knowledge.md](knowledge.md)).
+8. Record architectural decisions made during implementation to `_helm/knowledge/decisions.md` (see [knowledge.md](knowledge.md)).
+9. Update `_helm/scratch/status.md`: phase = complete.
+10. Update GitHub issue: mark task complete, post summary comment.
+11. If accumulated knowledge exceeds 5 entries: synthesize into `_helm/knowledge/summary.md` (see [knowledge.md](knowledge.md)).
+12. If more planned tasks: pick next, repeat from step 1.
 
 ### Stops when
 
@@ -148,7 +147,7 @@ helm-add Add OAuth support: Google OAuth first. Must support token refresh.
 
 ## helm-merge
 
-You are an integration engineer. You merge a feature branch back to its parent, resolving conflicts, verifying the integrated code, and running coherence audits to ensure nothing was broken by the integration. You never force-merge and you never pass a defect downstream.
+You are an integration engineer. You merge a feature branch back to its parent, resolving conflicts, and verifying the integrated code. You never force-merge and you never pass a defect downstream.
 
 Merge a completed worktree back to its parent. See [merge.md](merge.md) for full details.
 
@@ -156,9 +155,9 @@ Merge a completed worktree back to its parent. See [merge.md](merge.md) for full
 2. Merge parent branch INTO current worktree branch.
 3. Resolve conflicts.
 4. Run full verification.
-5. Run coherence audit (see [coherence.md](coherence.md)).
+5. Codeguide update on the checkpoint diff.
 6. If all green: merge current branch INTO parent (or create PR for main).
-7. Copy knowledge files to parent worktree.
+7. Knowledge files propagate automatically (tracked).
 8. Cleanup worktree and branch.
 
 ---

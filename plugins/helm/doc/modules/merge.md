@@ -31,15 +31,7 @@ Run full verification (lint, type-check, build, test). The merged code must pass
 
 If verification fails: diagnose and fix. Max 3 attempts. If unresolvable, reset to checkpoint and escalate to user.
 
-### 4. Coherence audit (main branch only)
-
-**Only runs when merging to `main` (or the configured protected branch).** Worktree-to-worktree merges skip this step — they are internal workflow, not shipping code.
-
-Run coherence audit on the diff between parent HEAD and worktree HEAD (see [coherence.md](coherence.md)). This catches inconsistencies between the feature code and the rest of the codebase.
-
-If BLOCKING issues: fix, re-verify, re-audit. Max 3 cycles. If unresolvable, escalate to user.
-
-### 5. Merge worktree into parent
+### 4. Merge worktree into parent
 
 Two paths:
 
@@ -58,19 +50,17 @@ PR description generated from:
 - Knowledge files (`_helm/knowledge/`)
 - Changelog entries
 - Plan context
-- Coherence audit results (clean / issues found and fixed)
+Human team member reviews the PR. Should be straightforward because CC already did code-review per task.
 
-Human team member reviews the PR. Should be straightforward because CC already did code-review and coherence audit.
-
-### 6. Knowledge propagation
+### 5. Knowledge propagation
 
 Copy `_helm/knowledge/` from worktree to parent. Since `_helm/` is tracked, this happens automatically with the merge. If the parent is another worktree, its next `helm-go` task will read the accumulated knowledge.
 
-### 7. Codeguide update
+### 6. Codeguide update
 
-Run `codeguide-update` with scope `git diff helm-checkpoint-<worktree-name>..HEAD`. This captures all changes introduced by the worktree, including conflict resolutions. Must run BEFORE the final merge to parent (between steps 4 and 5), when the diff is still meaningful.
+Run `codeguide-update` with scope `git diff helm-checkpoint-<worktree-name>..HEAD`. This captures all changes introduced by the worktree, including conflict resolutions. Must run BEFORE the final merge to parent (between steps 3 and 4), when the diff is still meaningful.
 
-### 8. Cleanup
+### 7. Cleanup
 
 After successful merge (or PR approval + merge):
 
@@ -82,7 +72,7 @@ git branch -D helm-checkpoint-<worktree-name>
 
 Never cleanup on failure. Preserve worktree for investigation.
 
-### 9. Kanban update
+### 8. Kanban update
 
 Move the issue to **Done**. Post a merge summary comment.
 
