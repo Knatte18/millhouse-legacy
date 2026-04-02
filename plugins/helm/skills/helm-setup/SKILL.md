@@ -81,33 +81,7 @@ notifications:
     enabled: true
 ```
 
-If `gh` is authenticated and the repo has a remote, also set up the `github:` section (needed for `helm-sync`):
-
-1. Check for existing projects: `gh project list --owner <OWNER> --format json`
-2. Ask user which to use or create new.
-3. Get the Status field ID: `gh project field-list <NUMBER> --owner <OWNER> --format json`
-4. Configure Helm columns via GraphQL mutation (Backlog, Discussing, Planned, Implementing, Reviewing, Blocked, Done).
-5. Get the Project Node ID via GraphQL query.
-6. Write all IDs to `_helm/config.yaml`:
-
-```yaml
-github:
-  owner: "<OWNER>"
-  repo: "<REPO>"
-  project-number: <NUMBER>
-  project-node-id: "<PROJECT_NODE_ID>"
-  status-field-id: "<STATUS_FIELD_ID>"
-  columns:
-    backlog: "<OPTION_ID>"
-    discussing: "<OPTION_ID>"
-    planned: "<OPTION_ID>"
-    implementing: "<OPTION_ID>"
-    reviewing: "<OPTION_ID>"
-    blocked: "<OPTION_ID>"
-    done: "<OPTION_ID>"
-```
-
-The `github:` section is optional. Helm works fully offline without it. It is only required for `helm-sync`.
+No `github:` section by default. GitHub integration is optional --- run `helm-sync` to set it up when needed.
 
 ### Step 4: Update .gitignore
 

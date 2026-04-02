@@ -5,13 +5,11 @@ description: Sync local kanbn board state to GitHub Projects and issues.
 
 # helm-sync
 
-On-demand sync from local `.kanbn/index.md` to GitHub Projects board. This skill is optional --- Helm works fully offline without it.
+On-demand sync from local `.kanbn/index.md` to GitHub Projects board. Optional --- Helm works fully offline without it.
 
 ---
 
 ## Entry
-
-Read `_helm/config.yaml`. The `github:` section must exist with `owner`, `repo`, `project-number`, `project-node-id`, `status-field-id`, and `columns`. If missing, stop: "GitHub config incomplete. Run `helm-setup` with `gh` authenticated to provision GitHub fields."
 
 Check GitHub CLI is authenticated:
 
@@ -21,15 +19,48 @@ gh auth status
 
 If not authenticated, stop and tell the user to run `gh auth login`.
 
+Read `_helm/config.yaml`.
+
 ---
 
 ## Steps
 
-### Step 1: Read local board
+### Step 1: Ensure GitHub config
+
+If `_helm/config.yaml` has no `github:` section (or it is incomplete), set it up now:
+
+1. Detect repo: `gh repo view --json owner,name`
+2. Check for existing projects: `gh project list --owner <owner> --format json`
+3. Ask user which to use or create new.
+4. Get the Status field ID: `gh project field-list <number> --owner <owner> --format json`
+5. Configure Helm columns via GraphQL mutation (Backlog, Discussing, Planned, Implementing, Reviewing, Blocked, Done).
+6. Get the Project Node ID via GraphQL query.
+7. Write all IDs to `_helm/config.yaml` under `github:`:
+
+```yaml
+github:
+  owner: "<OWNER>"
+  repo: "<REPO>"
+  project-number: <NUMBER>
+  project-node-id: "<PROJECT_NODE_ID>"
+  status-field-id: "<STATUS_FIELD_ID>"
+  columns:
+    backlog: "<OPTION_ID>"
+    discussing: "<OPTION_ID>"
+    planned: "<OPTION_ID>"
+    implementing: "<OPTION_ID>"
+    reviewing: "<OPTION_ID>"
+    blocked: "<OPTION_ID>"
+    done: "<OPTION_ID>"
+```
+
+If `github:` section already exists and is complete, skip this step.
+
+### Step 2: Read local board
 
 Read `.kanbn/index.md`. Parse all tasks and their current columns.
 
-### Step 2: Sync tasks
+### Step 3: Sync tasks
 
 For each task in `.kanbn/index.md`:
 
@@ -53,7 +84,7 @@ For each task in `.kanbn/index.md`:
    gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <column-option-id>
    ```
 
-### Step 3: Report
+### Step 4: Report
 
 ```
 Synced to GitHub:
