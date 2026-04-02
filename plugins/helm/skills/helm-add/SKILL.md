@@ -39,12 +39,14 @@ Slugify the title: lowercase, replace spaces with hyphens, remove special charac
 
 ### Step 4: Create task file
 
+Run `python ${CLAUDE_SKILL_DIR}/../../scripts/utcnow.py --iso` to get the current UTC timestamp. **Do not guess or fabricate a timestamp.**
+
 Write `.kanbn/tasks/<task-id>.md`:
 
 ```markdown
 ---
-created: <ISO timestamp>
-updated: <ISO timestamp>
+created: <current UTC ISO timestamp>
+updated: <current UTC ISO timestamp>
 assigned: ""
 tags: []
 ---
