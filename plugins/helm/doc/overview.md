@@ -65,6 +65,7 @@ Details in [skills.md](skills.md).
 | [modules/plans.md](modules/plans.md) | Plan format, locking, staleness detection |
 | [modules/reviews.md](modules/reviews.md) | Plan review, code review, receiving-review protocol |
 | [modules/kanban.md](modules/kanban.md) | Local kanbn board integration |
+| [modules/kanbn-format.md](modules/kanbn-format.md) | kanbn file format reference (index.md + task files) |
 | [modules/knowledge.md](modules/knowledge.md) | Knowledge curation between tasks |
 | [modules/coherence.md](modules/coherence.md) | Coherence audits and quality dimensions |
 | [modules/merge.md](modules/merge.md) | Merge strategy, checkpoints, locking, PR workflow |

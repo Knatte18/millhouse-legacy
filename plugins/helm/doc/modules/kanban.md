@@ -2,6 +2,8 @@
 
 `.kanbn/index.md` is the single source of truth for task tracking. The [kanbn VS Code extension](https://marketplace.visualstudio.com/items?itemName=gordonlarrigan.kanbn) renders it as a visual board. GitHub sync is available on demand via `helm-sync`.
 
+For the full kanbn file format specification, see [kanbn-format.md](kanbn-format.md).
+
 ## Why Local kanbn
 
 - Zero network dependency — kanban operations work offline.
@@ -24,47 +26,9 @@ One `.kanbn/index.md` per repo (or per worktree). Columns:
 | **Blocked** | Needs user input or upstream fix |
 | **Done** | Completed and committed (or merged) |
 
-## File Format
-
-`.kanbn/index.md` uses the kanbn markdown format:
-
-```markdown
----
-startedColumns:
-  - Implementing
-completedColumns:
-  - Done
----
-
-# Millhouse
-
-## Backlog
-
-- Task title one
-- Task title two
-
-## Discussing
-
-## Planned
-
-- Task with plan ready
-
-## Implementing
-
-## Reviewing
-
-## Blocked
-
-## Done
-
-- Completed task
-```
-
-Tasks are markdown list items (`- Task title`) under column headings. Task descriptions and metadata can optionally live in `.kanbn/tasks/<task-id>.md` files (managed by the kanbn extension), but Helm reads and writes task entries directly in `index.md`.
-
 ## Setup (helm-setup skill)
 
-One-time per repo. Run `helm-setup` to create `.kanbn/index.md` with Helm columns and `_helm/` directory structure.
+One-time per repo. Run `helm-setup` to create `.kanbn/index.md` with Helm columns, `.kanbn/tasks/` directory, and `_helm/` directory structure.
 
 ## Task Lifecycle
 
@@ -72,27 +36,27 @@ One-time per repo. Run `helm-setup` to create `.kanbn/index.md` with Helm column
 
 Via `helm-add`:
 1. Parse title and body from the argument.
-2. Add `- <title>` under `## Backlog` in `.kanbn/index.md`.
+2. Generate task ID slug from title (lowercase, hyphens, no special chars).
+3. Create `.kanbn/tasks/<task-id>.md` with frontmatter (`created`, `updated`) and `# Title`.
+4. Add `- [task-id](tasks/task-id.md)` under `## Backlog` in `.kanbn/index.md`.
 
 ### Reading tasks
 
-`helm-start` reads `.kanbn/index.md`, finds all list items under `## Backlog`. Lists them numbered for user selection.
+`helm-start` reads `.kanbn/index.md`, finds all task links under `## Backlog`. For each link, reads the corresponding task file to get title and description. Lists them numbered for user selection.
 
 ### Moving tasks between columns
 
 At each phase transition, CC edits `.kanbn/index.md`:
-1. Remove the `- <task>` line from its current column.
-2. Add the `- <task>` line under the target column heading.
-
-This is a simple text edit — read the file, find the task line, move it.
+1. Remove the `- [task-id](tasks/task-id.md)` line from its current column.
+2. Add the same line under the target column heading.
 
 ### Task identity
 
-Tasks are identified by their title text in `index.md`. When a task is selected by `helm-start`, its title is stored in `_helm/scratch/status.md` as `task:` for subsequent skills to reference.
+Tasks are identified by their ID (the filename slug). When a task is selected by `helm-start`, its ID is stored in `_helm/scratch/status.md` as `task:` for subsequent skills to reference.
 
 ## Sub-tasks
 
-Tasks within a worktree that are too small for their own board entry can be tracked as a checklist in the plan file. For sub-tasks large enough to warrant independent tracking: add them as separate entries in `.kanbn/index.md`.
+Tasks within a worktree that are too small for their own board entry can be tracked as a `## Sub-tasks` checklist inside the task's `.md` file. For sub-tasks large enough to warrant independent tracking: create a new task file and add it to `.kanbn/index.md`.
 
 ## GitHub Sync (helm-sync)
 
@@ -100,6 +64,5 @@ Tasks within a worktree that are too small for their own board entry can be trac
 1. Reads `.kanbn/index.md` to get current task states.
 2. Creates/updates GitHub issues for tasks that don't have one yet.
 3. Updates GitHub Projects board to match local column positions.
-4. Posts plan summaries and progress comments on linked issues.
 
 GitHub sync is optional. Helm works fully offline using only `.kanbn/index.md`.
