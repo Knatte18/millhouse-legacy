@@ -87,12 +87,7 @@ Build order based on dependencies. Each phase produces a testable artifact. Do n
 
 ## Phase 4: Commit and lifecycle (depends on Phase 3)
 
-### 4.1 helm-commit
-- No hard dependencies (can be built anytime)
-- Mirrors mill-commit: lint, codeguide-update, explicit staging, push
-- Useful for ad-hoc commits outside helm-go
-
-### 4.2 helm-status
+### 4.1 helm-status
 - Depends on: status.md format being stable (Phase 3)
 - Read-only: `git worktree list` + read each status.md + query kanban board
 
@@ -144,6 +139,6 @@ Build order based on dependencies. Each phase produces a testable artifact. Do n
 
 **Phase 1 + 2 + 3 + 4.1** = full design → execute → commit cycle without worktrees.
 
-Skills: `helm-setup`, `helm-add`, `helm-start`, `helm-receiving-review`, `helm-go`, `helm-commit`.
+Skills: `helm-setup`, `helm-add`, `helm-start`, `helm-receiving-review`, `helm-go` + `git:git-commit` (already exists).
 
 This is enough to replace Taskmill for single-stream work. Worktrees (Phase 5) add parallelism but aren't required.

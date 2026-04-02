@@ -206,14 +206,6 @@ Never auto-abandon. Always require user confirmation after warnings.
 
 ---
 
-## helm-commit
+## Commit
 
-Standalone commit for ad-hoc use outside `helm-go`. Same rules as taskmill's `mill-commit`:
-
-1. Lint changed files (language-specific).
-2. Codeguide update (if `_codeguide/` exists).
-3. Stage files explicitly — never `git add .` or `git add -A`.
-4. Commit with title + bullet-point format.
-5. Push. Set upstream if needed.
-6. Never force-push. Never `--no-verify`.
-7. If on `main`/`master`: refuse unless `--onmain` flag.
+For ad-hoc commits outside `helm-go`, use `@git:git-commit`. Not a Helm skill — it's a general git skill available in all contexts.
