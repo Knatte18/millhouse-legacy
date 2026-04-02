@@ -13,14 +13,14 @@ helm-start proceeds through named phases. Report the current phase to the user a
 #### Phase: Select
 
 0. **Check for handoff brief.** If `_helm/scratch/briefs/handoff.md` exists, read it. The brief's `## Issue` identifies the task — select it directly (skip step 1). The brief's `## Discussion Summary` is prior context — incorporate it, but still run your own explore and discuss phases. The brief informs but does not constrain.
-1. **Select task.** Read tasks from `.kanbn/index.md`. Find all list items under `## Backlog`.
+1. **Select task.** Read tasks from `.kanban.md`. Find all `###` headings under `## Backlog`.
    - If one task: select it.
    - If multiple: list them numbered. User picks one.
 2. **Worktree decision.** User decides: worktree or in-place?
    - `-w` flag: create worktree immediately (see [worktrees.md](worktrees.md)), write brief, open VS Code. Stop. User runs `helm-start` in the new window to continue discussion there.
    - No flag: discuss in current context. Continue below.
 
-Kanban: move task to **Discussing** in `.kanbn/index.md`.
+Kanban: move task to **In Progress** in `.kanban.md`, set `- phase: discussing`.
 
 #### Phase: Explore
 
@@ -60,7 +60,7 @@ Kanban: move task to **Discussing** in `.kanbn/index.md`.
 #### Phase: Approve
 
 8. Present final plan to user for approval.
-9. **Plan approved** → lock plan (set `approved: true` in frontmatter). Write plan path to `_helm/scratch/status.md` as `plan:` field. Kanban: move task to **Planned**. Task is ready for `helm-go`.
+9. **Plan approved** → lock plan (set `approved: true` in frontmatter). Write plan path to `_helm/scratch/status.md` as `plan:` field. Kanban: set `- phase: planned` (stays in In Progress). Task is ready for `helm-go`.
 
 ### Discussion principles
 
@@ -80,8 +80,8 @@ If you're discussing without a worktree and decide you want one, call `helm-star
 
 ### Kanban updates
 
-- Task selected → move to **Discussing** column, set `phase: discussing`
-- Plan approved → set `phase: planned` (stays in Discussing column)
+- Task selected → move to **In Progress** column, set `- phase: discussing`
+- Plan approved → set `- phase: planned` (stays in In Progress column)
 
 ---
 
@@ -129,7 +129,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 0. Record `PLAN_START_HASH=$(git rev-parse HEAD)`. Store in `_helm/scratch/status.md` as `plan_start_hash:`. On resume, read from status.md.
 1. Read plan (path from `_helm/scratch/status.md` `plan:` field). Read all files in `## Files`.
-2. Staleness check (`git log --since=<started>` against listed files). If files changed: classify severity. Minor changes (formatting, unrelated files) → log warning, proceed. Major changes (files restructured, APIs changed, interfaces modified) → halt, move task to **Discussing** in `.kanbn/index.md`, notify user to re-run `helm-start`.
+2. Staleness check (`git log --since=<started>` against listed files). If files changed: classify severity. Minor changes (formatting, unrelated files) → log warning, proceed. Major changes (files restructured, APIs changed, interfaces modified) → halt, move task back to **Backlog** in `.kanban.md`, notify user to re-run `helm-start`.
 3. Explore relevant code (following plan's `Explore:` targets). Read accumulated knowledge from `_helm/knowledge/`. If `_codeguide/Overview.md` exists: read it and use the navigation pattern.
 
 #### Phase: Implement
@@ -165,7 +165,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 9. Record architectural decisions to `_helm/knowledge/decisions.md` (see [knowledge.md](knowledge.md)).
 10. Commit post-review changes: `chore: post-review cleanup for <task-title>`.
 11. Update `_helm/scratch/status.md`: phase = complete.
-12. Move task to **Done** in `.kanbn/index.md`.
+12. Move task to **Done** in `.kanban.md`.
 13. If accumulated knowledge exceeds 5 entries: synthesize into `_helm/knowledge/summary.md`.
 14. If more planned tasks: pick next, repeat from Phase: Setup.
 
@@ -185,12 +185,12 @@ When no more planned tasks remain:
 ### Kanban updates
 
 Column moves:
-- Execution starts → Discussing → **Implementing**
-- Task complete → Implementing → **Done**
+- Execution starts → task should be in **In Progress** (already moved by helm-start)
+- Task complete → In Progress → **Done**
 
-Phase updates (task frontmatter only):
+Phase updates (`- phase:` metadata in task block):
 - `implementing` → `testing` → `reviewing` → `complete`
-- Any failure → `blocked`
+- Any failure → `blocked` (move to **Blocked** column)
 
 ---
 
@@ -203,7 +203,7 @@ helm-add Add OAuth support: Google OAuth first. Must support token refresh.
 ```
 
 1. Parse: text before colon = title, text after = body. No colon = title only.
-2. Add `- <title>` under `## Backlog` in `.kanbn/index.md`.
+2. Add `### <title>` with metadata under `## Backlog` in `.kanban.md`.
 3. Report: "Added: <title>"
 
 ---
@@ -229,7 +229,7 @@ Merge a completed worktree back to its parent. See [merge.md](merge.md) for full
 
 Dashboard. Read-only.
 
-Shows all active worktrees and their state by reading `git worktree list`, each worktree's `_helm/scratch/status.md`, and `.kanbn/index.md`.
+Shows all active worktrees and their state by reading `git worktree list`, each worktree's `_helm/scratch/status.md`, and `.kanban.md`.
 
 ```
 Worktrees:
@@ -250,7 +250,7 @@ Discard a worktree. Moves the task back to Backlog.
 3. User confirms.
 4. `git worktree remove <path>`
 5. `git branch -D <branch-name>`
-6. Move task to **Backlog** in `.kanbn/index.md`.
+6. Move task to **Backlog** in `.kanban.md`.
 7. If checkpoint branch exists: `git branch -D helm-checkpoint-<name>`
 
 Never auto-abandon. Always require user confirmation after warnings.
@@ -259,13 +259,13 @@ Never auto-abandon. Always require user confirmation after warnings.
 
 ## helm-sync
 
-On-demand GitHub sync. Pushes local kanbn state to GitHub Projects and issues.
+On-demand GitHub sync. Pushes local kanban state to GitHub Projects and issues.
 
 1. Read `_helm/config.yaml` for GitHub config. If `github` section is missing, stop — tell the user to configure GitHub settings first.
-2. Read `.kanbn/index.md` to get all tasks and their columns.
+2. Read `.kanban.md` to get all tasks and their columns.
 3. For each task:
    - If no linked GitHub issue exists: create one via `gh issue create`.
-   - Update the GitHub Projects board column to match the local kanbn column.
+   - Update the GitHub Projects board column to match the local kanban column.
    - Post any pending plan summaries or progress comments on the issue.
 4. Report sync results.
 

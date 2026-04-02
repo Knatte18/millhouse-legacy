@@ -1,11 +1,11 @@
 ---
 name: helm-sync
-description: Sync local kanbn board state to GitHub Projects and issues.
+description: Sync local kanban board state to GitHub Projects and issues.
 ---
 
 # helm-sync
 
-On-demand sync from local `.kanbn/index.md` to GitHub Projects board. Optional --- Helm works fully offline without it.
+On-demand sync from local `.kanban.md` to GitHub Projects board. Optional --- Helm works fully offline without it.
 
 ---
 
@@ -33,7 +33,7 @@ If `_helm/config.yaml` has no `github:` section (or it is incomplete), set it up
 2. Check for existing projects: `gh project list --owner <owner> --format json`
 3. Ask user which to use or create new.
 4. Get the Status field ID: `gh project field-list <number> --owner <owner> --format json`
-5. Configure Helm columns via GraphQL mutation (Backlog, Discussing, Planned, Implementing, Reviewing, Blocked, Done).
+5. Configure Helm columns via GraphQL mutation (Backlog, In Progress, Done, Blocked).
 6. Get the Project Node ID via GraphQL query.
 7. Write all IDs to `_helm/config.yaml` under `github:`:
 
@@ -46,23 +46,20 @@ github:
   status-field-id: "<STATUS_FIELD_ID>"
   columns:
     backlog: "<OPTION_ID>"
-    discussing: "<OPTION_ID>"
-    planned: "<OPTION_ID>"
-    implementing: "<OPTION_ID>"
-    reviewing: "<OPTION_ID>"
-    blocked: "<OPTION_ID>"
+    in-progress: "<OPTION_ID>"
     done: "<OPTION_ID>"
+    blocked: "<OPTION_ID>"
 ```
 
 If `github:` section already exists and is complete, skip this step.
 
 ### Step 2: Read local board
 
-Read `.kanbn/index.md`. Parse all tasks and their current columns.
+Read `.kanban.md`. Parse all tasks and their current columns.
 
 ### Step 3: Sync tasks
 
-For each task in `.kanbn/index.md`:
+For each task in `.kanban.md`:
 
 1. **Find or create GitHub issue.** Search for an existing issue with matching title:
    ```bash
@@ -79,7 +76,7 @@ For each task in `.kanbn/index.md`:
    gh project item-add <project-number> --owner <owner> --url <issue-url> --format json
    ```
 
-3. **Set column** to match local kanbn column:
+3. **Set column** to match local kanban column:
    ```bash
    gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <column-option-id>
    ```

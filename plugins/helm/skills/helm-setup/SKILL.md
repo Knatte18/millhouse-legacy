@@ -1,13 +1,13 @@
 ---
 name: helm-setup
-description: Initialize Helm for a repository. Creates local kanbn board, config, and directory structure.
+description: Initialize Helm for a repository. Creates .kanban.md board, config, and directory structure.
 ---
 
 # helm-setup
 
-One-time initialization per repo. Creates the `.kanbn/` board with Helm columns, `.kanbn/tasks/` directory, and writes `_helm/config.yaml`.
+One-time initialization per repo. Creates the `.kanban.md` board with Helm columns and writes `_helm/config.yaml`.
 
-For kanbn file format details, see `plugins/helm/doc/modules/kanbn-format.md`.
+For kanban.md file format details, see `plugins/helm/doc/modules/kanban-format.md`.
 
 ---
 
@@ -18,39 +18,26 @@ Run these steps in order. Stop on any failure and report the error.
 ### Step 1: Create directory structure
 
 ```bash
-mkdir -p _helm/knowledge _helm/scratch/plans _helm/scratch/briefs .kanbn/tasks
+mkdir -p _helm/knowledge _helm/scratch/plans _helm/scratch/briefs
 ```
 
-### Step 2: Create kanbn board
+### Step 2: Create kanban board
 
-If `.kanbn/index.md` does not exist, create it:
+If `.kanban.md` does not exist, create it:
 
 ```markdown
----
-startedColumns:
-  - Implementing
-completedColumns:
-  - Done
----
-
 # <REPO_NAME>
 
 ## Backlog
 
-## Discussing
-
-## Planned
-
-## Implementing
-
-## Reviewing
-
-## Blocked
+## In Progress
 
 ## Done
+
+## Blocked
 ```
 
-If `.kanbn/index.md` already exists, check that it has all Helm columns (Backlog, Discussing, Planned, Implementing, Reviewing, Blocked, Done). Add any missing columns.
+If `.kanban.md` already exists, check that it has all Helm columns (Backlog, In Progress, Done, Blocked). Add any missing columns.
 
 ### Step 3: Write config
 
@@ -101,9 +88,9 @@ Update `worktree.branch-template` in `_helm/config.yaml` with the user's answer.
 
 ```
 Helm initialized:
-  Board: .kanbn/index.md
+  Board: .kanban.md
   Config: _helm/config.yaml
 
-Open the kanbn panel in VS Code to see the board.
+Open the kanban.md panel in VS Code to see the board.
 Run helm-add to create your first task.
 ```

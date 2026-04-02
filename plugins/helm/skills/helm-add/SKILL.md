@@ -1,13 +1,13 @@
 ---
 name: helm-add
-description: Create a new task on the local kanbn board.
+description: Create a new task on the local kanban board.
 ---
 
 # helm-add
 
-One-shot. Add a task to the kanbn board under Backlog.
+One-shot. Add a task to the `.kanban.md` board under Backlog.
 
-For kanbn file format details, see `plugins/helm/doc/modules/kanbn-format.md`.
+For kanban.md file format details, see `plugins/helm/doc/modules/kanban-format.md`.
 
 ---
 
@@ -24,7 +24,7 @@ Text before the first colon is the title. Text after is the body. No colon means
 
 ### Step 1: Check board exists
 
-If `.kanbn/index.md` does not exist, stop and tell the user to run `helm-setup` first.
+If `.kanban.md` does not exist, stop and tell the user to run `helm-setup` first.
 
 ### Step 2: Parse input
 
@@ -33,35 +33,21 @@ Split the argument on the first `:` character.
 - Left side (trimmed) → task title
 - Right side (trimmed) → task description (may be empty)
 
-### Step 3: Generate task ID
+### Step 3: Add task to board
 
-Slugify the title: lowercase, replace spaces with hyphens, remove special characters. Example: "Add OAuth Support" → `add-oauth-support`.
+Run `date -u +%Y-%m-%d` to get the current UTC date. **Do not guess or fabricate a date.**
 
-### Step 4: Create task file
-
-Run `date -u +%Y-%m-%dT%H:%M:%S.000Z` to get the current UTC timestamp. **Do not guess or fabricate a timestamp.**
-
-Write `.kanbn/tasks/<task-id>.md`:
+Read `.kanban.md`. Add a new task block under the `## Backlog` heading (before the next `##` heading or end of file):
 
 ```markdown
----
-created: <current UTC ISO timestamp>
-updated: <current UTC ISO timestamp>
-assigned: ""
-tags: []
----
-
-# <Title>
+### <Title>
+- created: <current UTC date>
 
 <Description, if provided>
 ```
 
-### Step 5: Add to board
-
-Read `.kanbn/index.md`. Add `- [<task-id>](tasks/<task-id>.md)` as a new list item under the `## Backlog` heading (before the next `##` heading or end of file).
-
-### Step 6: Report
+### Step 4: Report
 
 ```
-Added: <title> (<task-id>)
+Added: <title>
 ```

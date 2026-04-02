@@ -9,7 +9,7 @@ You are a collaborative solution designer. Your job is to help the user understa
 
 Interactive. Pick a task and design the solution.
 
-For kanbn file format details, see `plugins/helm/doc/modules/kanbn-format.md`.
+For kanban.md file format details, see `plugins/helm/doc/modules/kanban-format.md`.
 
 ---
 
@@ -17,7 +17,7 @@ For kanbn file format details, see `plugins/helm/doc/modules/kanbn-format.md`.
 
 Read `_helm/config.yaml`. If it does not exist, stop and tell the user to run `helm-setup` first.
 
-Read `.kanbn/index.md`. If it does not exist, stop and tell the user to run `helm-setup` first.
+Read `.kanban.md`. If it does not exist, stop and tell the user to run `helm-setup` first.
 
 ---
 
@@ -29,7 +29,7 @@ helm-start proceeds through named phases. Report the current phase to the user a
 
 0. **Check for handoff brief.** If `_helm/scratch/briefs/handoff.md` exists, read it. The brief's `## Issue` identifies the task --- select it directly (skip step 1). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain.
 
-1. **Select task.** Read `.kanbn/index.md`. Find all task links under the `## Backlog` heading (format: `- [task-id](tasks/task-id.md)`). For each link, read the corresponding `.kanbn/tasks/<task-id>.md` to get the task title (the `# heading`) and description.
+1. **Select task.** Read `.kanban.md`. Find all `###` headings under the `## Backlog` column (everything between `## Backlog` and the next `##` heading). Each `###` heading is a task title.
 
    - If zero tasks: report "No tasks in Backlog. Run helm-add to create one." Stop.
    - If one task: select it. Show the title and ask user to confirm.
@@ -39,7 +39,7 @@ helm-start proceeds through named phases. Report the current phase to the user a
    - `-w` flag or user chooses worktree: tell the user worktree mode is not yet implemented (Phase 5). Continue in-place.
    - No flag / in-place: continue below.
 
-3. **Move to Discussing.** Edit `.kanbn/index.md`: remove the `- [task-id](tasks/task-id.md)` line from `## Backlog` and add it under `## Discussing`. Set `phase: discussing` in the task file's frontmatter.
+3. **Move to In Progress.** Edit `.kanban.md`: cut the entire task block (from `### Title` to just before the next `###` or `##`) from `## Backlog` and paste it under `## In Progress`. Set `- phase: discussing` in the task's metadata lines.
 
 ### Phase: Explore
 
@@ -198,10 +198,10 @@ helm-start proceeds through named phases. Report the current phase to the user a
     ```
     plan: _helm/scratch/plans/<filename>.md
     phase: planned
-    task: <task-id>
+    task: <task-title>
     ```
 
-    c. Set `phase: planned` in the task file's frontmatter. Task stays in `## Discussing` column (no move in index.md).
+    c. Update `- phase: planned` in the task block in `.kanban.md`. Task stays in `## In Progress` column (no move).
 
     d. Report: "Plan approved. Task ready for `helm-go`."
 
@@ -226,5 +226,5 @@ Not implemented in this phase. If the user requests a worktree mid-discussion, i
 
 ## Kanban Updates
 
-- Task selected -> move to **Discussing** column, set `phase: discussing`
-- Plan approved -> set `phase: planned` (stays in Discussing column)
+- Task selected -> move to **In Progress** column, set `phase: discussing`
+- Plan approved -> set `phase: planned` (stays in In Progress column)

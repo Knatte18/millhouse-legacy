@@ -8,3 +8,9 @@
 
 - [ ] **Remove taskmill plugin**
   When Helm is operational. Keep as reference until then.
+
+- [ ] **Helm: lokal kanban med on-demand GitHub sync**
+  Kanban-oppdateringer mot GitHub API er trege. Ha en lokal kanban-tilstand som oppdateres umiddelbart, og sync til/fra GitHub kun når brukeren eksplisitt ber om det. Folk kan legge inn items på nett, og de hentes inn ved sync.
+
+- [ ] **Reddit reader for Claude Code**
+  MCP-server eller script som leser Reddit-tråder via Reddit API (OAuth, gratis tier). Så CC kan hente innhold fra Reddit-URLer.

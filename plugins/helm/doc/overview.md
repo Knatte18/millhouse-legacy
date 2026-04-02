@@ -26,7 +26,7 @@ All work happens in git worktrees. The repo root stays on `main` and serves as h
 
 ### Task Tracking
 
-`.kanbn/index.md` is the single source of truth for tasks. The kanbn VS Code extension renders it as a visual board. Tasks are list items under column headings, moved between columns as work progresses. GitHub sync is available on demand via `helm-sync`. Details in [kanban.md](kanban.md).
+`.kanban.md` is the single source of truth for tasks. The kanban.md VS Code extension renders it as a visual board. Tasks are `###` headings under `##` column headings, moved between columns as work progresses. GitHub sync is available on demand via `helm-sync`. Details in [kanban.md](kanban.md).
 
 ### Execution Model
 
@@ -46,11 +46,11 @@ The user controls the transition. `helm-go` never asks for input during normal o
 | `helm-start` | Pick task, discuss, plan, review plan | Interactive |
 | `helm-start -w` | Same, but spawns worktree + VS Code first | Interactive |
 | `helm-go` | Implement, test, code-review, commit | Autonomous |
-| `helm-add` | Create a new task on the kanbn board | One-shot |
+| `helm-add` | Create a new task on the kanban board | One-shot |
 | `helm-merge` | Merge worktree back to parent | Semi-autonomous |
 | `helm-status` | Dashboard of all worktrees | Read-only |
 | `helm-abandon` | Discard a worktree, move task back to Backlog | Interactive |
-| `helm-sync` | Sync local kanbn board to GitHub Projects | One-shot |
+| `helm-sync` | Sync local kanban board to GitHub Projects | One-shot |
 | `git:git-commit` | Ad-hoc commit (general git skill, not Helm-specific) | One-shot |
 
 Details in [skills.md](skills.md).
@@ -64,12 +64,12 @@ Details in [skills.md](skills.md).
 | [modules/skills.md](modules/skills.md) | All skill definitions and flows |
 | [modules/plans.md](modules/plans.md) | Plan format, locking, staleness detection |
 | [modules/reviews.md](modules/reviews.md) | Plan review, code review, receiving-review protocol |
-| [modules/kanban.md](modules/kanban.md) | Local kanbn board integration |
-| [modules/kanbn-format.md](modules/kanbn-format.md) | kanbn file format reference (index.md + task files) |
+| [modules/kanban.md](modules/kanban.md) | Local kanban board integration |
+| [modules/kanban-format.md](modules/kanban-format.md) | kanban.md file format reference |
 | [modules/knowledge.md](modules/knowledge.md) | Knowledge curation between tasks |
 | [modules/coherence.md](modules/coherence.md) | Coherence audits and quality dimensions |
 | [modules/merge.md](modules/merge.md) | Merge strategy, checkpoints, locking, PR workflow |
 | [modules/notifications.md](modules/notifications.md) | Slack, toast, status files |
 | [modules/codeguide.md](modules/codeguide.md) | Codeguide integration points |
 | [modules/failures.md](modules/failures.md) | Failure classification and escalation |
-| [modules/open-questions.md](modules/open-questions.md) | Resolved and open design decisions |
+| [decisions.md](decisions.md) | Design decisions and open questions |

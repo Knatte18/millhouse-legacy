@@ -1,49 +1,49 @@
-# Kanban — Local kanbn Board
+# Kanban — Local Board
 
-`.kanbn/index.md` is the single source of truth for task tracking. The [kanbn VS Code extension](https://marketplace.visualstudio.com/items?itemName=gordonlarrigan.kanbn) renders it as a visual board. GitHub sync is available on demand via `helm-sync`.
+`.kanban.md` is the single source of truth for task tracking. The [kanban.md VS Code extension](https://marketplace.visualstudio.com/items?itemName=wguilherme.kanban-md) renders it as a visual board. GitHub sync is available on demand via `helm-sync`.
 
-For the full kanbn file format specification, see [kanbn-format.md](kanbn-format.md).
-For the VS Code extension user guide, see [kanbn-user-guide.md](../kanbn-user-guide.md).
+For the full file format specification, see [kanban-format.md](kanban-format.md).
 
-## Why Local kanbn
+## Why .kanban.md
 
 - Zero network dependency — kanban operations work offline.
-- VS Code integration — visual board in the editor via the kanbn extension.
+- VS Code integration — visual board in the editor via the kanban.md extension.
 - Plain markdown — readable and editable without tooling.
-- Git-tracked — board state follows the branch. Each worktree gets its own board state.
+- Single file — no directory structure, no separate task files. One `.kanban.md` at the repo root.
+- Git-tracked — board state follows the branch.
 - GitHub sync is decoupled — `helm-sync` pushes state to GitHub Projects when needed.
 
 ## Board Columns
 
-4 columns in `.kanbn/index.md`:
+4 columns in `.kanban.md`:
 
 | Column | Meaning |
 |--------|---------|
 | **Backlog** | Task exists, not started |
-| **Discussing** | `helm-start` claimed the task, discussion/planning in progress |
-| **Implementing** | `helm-go` is executing (covers planning, coding, reviewing) |
+| **In Progress** | Active work (discussing, planning, implementing, testing, reviewing) |
 | **Done** | Completed and committed (or merged) |
+| **Blocked** | Needs user input or upstream fix |
 
 ## Phase Metadata
 
-Helm's workflow has more granular phases than the 4 board columns. The detailed phase is stored as a `phase` custom field in each task's frontmatter:
+Helm's workflow has more granular phases than the 4 board columns. The detailed phase is stored as a `- phase:` metadata line in each task block:
 
 | Phase value | Board column | Meaning |
 |-------------|-------------|---------|
 | *(not set)* | Backlog | Task exists, not started |
-| `discussing` | Discussing | Discussion in progress |
-| `planned` | Discussing | Plan approved, ready for `helm-go` |
-| `implementing` | Implementing | Code being written |
-| `testing` | Implementing | Full verification running |
-| `reviewing` | Implementing | Code review in progress |
-| `blocked` | Implementing | Needs user input or upstream fix |
+| `discussing` | In Progress | Discussion in progress |
+| `planned` | In Progress | Plan approved, ready for `helm-go` |
+| `implementing` | In Progress | Code being written |
+| `testing` | In Progress | Full verification running |
+| `reviewing` | In Progress | Code review in progress |
+| `blocked` | Blocked | Needs user input or upstream fix |
 | `complete` | Done | Task finished |
 
-Skills update both the board column (move the link in index.md) and the `phase` field in the task file at each transition. The kanbn board can be filtered by phase (e.g. `phase:reviewing`).
+Skills update both the board column (move the task block between `##` sections) and the `- phase:` metadata at each transition.
 
 ## Setup (helm-setup skill)
 
-One-time per repo. Run `helm-setup` to create `.kanbn/index.md` with Helm columns, `.kanbn/tasks/` directory, and `_helm/` directory structure.
+One-time per repo. Run `helm-setup` to create `.kanban.md` with Helm columns and `_helm/` directory structure.
 
 ## Task Lifecycle
 
@@ -51,35 +51,43 @@ One-time per repo. Run `helm-setup` to create `.kanbn/index.md` with Helm column
 
 Via `helm-add`:
 1. Parse title and body from the argument.
-2. Generate task ID slug from title (lowercase, hyphens, no special chars).
-3. Create `.kanbn/tasks/<task-id>.md` with frontmatter (`created`, `updated`) and `# Title`.
-4. Add `- [task-id](tasks/task-id.md)` under `## Backlog` in `.kanbn/index.md`.
+2. Add a `### Title` block with metadata under `## Backlog` in `.kanban.md`.
 
 ### Reading tasks
 
-`helm-start` reads `.kanbn/index.md`, finds all task links under `## Backlog`. For each link, reads the corresponding task file to get title and description. Lists them numbered for user selection.
+`helm-start` reads `.kanban.md`, finds all `###` headings under `## Backlog`. Each heading is a task title. Lists them numbered for user selection.
 
 ### Moving tasks between columns
 
-At each phase transition, CC:
-1. Updates `phase` in the task file's frontmatter.
-2. If the column changes: removes the `- [task-id](tasks/task-id.md)` line from the old column, adds it under the new column heading in index.md.
+At each phase transition:
+1. Updates `- phase:` in the task block's metadata.
+2. If the column changes: cuts the entire task block (from `###` heading to just before the next `###` or `##`) and pastes it under the target column heading.
 
-Not every phase change moves the column — e.g. `planned` → `implementing` moves from Discussing to Implementing, but `implementing` → `reviewing` stays in Implementing (only the phase field changes).
+Not every phase change moves the column — e.g. `planned` → `implementing` stays in In Progress (only the phase metadata changes).
 
 ### Task identity
 
-Tasks are identified by their ID (the filename slug). When a task is selected by `helm-start`, its ID is stored in `_helm/scratch/status.md` as `task:` for subsequent skills to reference.
+Tasks are identified by their `###` heading text. When a task is selected by `helm-start`, its title is stored in `_helm/scratch/status.md` as `task:` for subsequent skills to reference.
 
 ## Sub-tasks
 
-Tasks within a worktree that are too small for their own board entry can be tracked as a `## Sub-tasks` checklist inside the task's `.md` file. For sub-tasks large enough to warrant independent tracking: create a new task file and add it to `.kanbn/index.md`.
+Sub-tasks within a task block are tracked as checkbox lists:
+
+```markdown
+### My Task
+- phase: implementing
+
+- [ ] First sub-task
+- [x] Completed sub-task
+```
+
+For sub-tasks large enough to warrant independent tracking: create a new `###` entry in `.kanban.md`.
 
 ## GitHub Sync (helm-sync)
 
 `helm-sync` is a separate on-demand skill that:
-1. Reads `.kanbn/index.md` to get current task states.
+1. Reads `.kanban.md` to get current task states.
 2. Creates/updates GitHub issues for tasks that don't have one yet.
 3. Updates GitHub Projects board to match local column positions.
 
-GitHub sync is optional. Helm works fully offline using only `.kanbn/index.md`.
+GitHub sync is optional. Helm works fully offline using only `.kanban.md`.
