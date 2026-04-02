@@ -1,243 +1,105 @@
-# Kanban — GitHub Projects V2
+# Kanban — Local kanbn Board
 
-GitHub Projects V2 is the single source of truth for task tracking. No local backlog files.
+`.kanbn/index.md` is the single source of truth for task tracking. The [kanbn VS Code extension](https://marketplace.visualstudio.com/items?itemName=gordonlarrigan.kanbn) renders it as a visual board. GitHub sync is available on demand via `helm-sync`.
 
-## Why GitHub Projects
+## Why Local kanbn
 
-- Built into GitHub (not 3rd party). Free for all plans.
-- Team visibility — non-CC team members see progress without terminal access.
-- Issues support rich markdown bodies — title + any amount of context.
-- Managed via `gh` CLI — CC can read and update programmatically.
+- Zero network dependency — kanban operations work offline.
+- VS Code integration — visual board in the editor via the kanbn extension.
+- Plain markdown — readable and editable without tooling.
+- Git-tracked — board state follows the branch. Each worktree gets its own board state.
+- GitHub sync is decoupled — `helm-sync` pushes state to GitHub Projects when needed.
 
 ## Board Structure
 
-One board per repo. Columns:
+One `.kanbn/index.md` per repo (or per worktree). Columns:
 
 | Column | Meaning |
 |--------|---------|
 | **Backlog** | Task exists, not started |
-| **Discussing** | `helm-start` claimed the task, discuss in progress |
+| **Discussing** | `helm-start` claimed the task, discussion in progress |
 | **Planned** | Plan approved, ready for `helm-go` |
 | **Implementing** | `helm-go` is executing |
 | **Reviewing** | Code review in progress |
 | **Blocked** | Needs user input or upstream fix |
 | **Done** | Completed and committed (or merged) |
 
+## File Format
+
+`.kanbn/index.md` uses the kanbn markdown format:
+
+```markdown
+---
+startedColumns:
+  - Implementing
+completedColumns:
+  - Done
+---
+
+# Millhouse
+
+## Backlog
+
+- Task title one
+- Task title two
+
+## Discussing
+
+## Planned
+
+- Task with plan ready
+
+## Implementing
+
+## Reviewing
+
+## Blocked
+
+## Done
+
+- Completed task
+```
+
+Tasks are markdown list items (`- Task title`) under column headings. Task descriptions and metadata can optionally live in `.kanbn/tasks/<task-id>.md` files (managed by the kanbn extension), but Helm reads and writes task entries directly in `index.md`.
+
 ## Setup (helm-setup skill)
 
-One-time per repo. Run `helm-setup` to automate.
-
-### Step 1: Prerequisites
-
-```bash
-gh auth status
-```
-
-If not authenticated, stop and tell the user to run `gh auth login`.
-
-### Step 2: Create or link project
-
-Check for existing projects first:
-
-```bash
-gh project list --owner <owner> --format json
-```
-
-If projects exist, list them and ask the user which to use (or create new). If the user picks an existing project, use its number and skip creation.
-
-If creating new:
-
-```bash
-gh project create --title "<repo-name>" --owner <owner> --format json
-```
-
-Parse the JSON output to get the project `number`. Then link to the repo:
-
-```bash
-gh project link <number> --owner <owner> --repo <owner>/<repo>
-```
-
-### Step 3: Get the Status field ID
-
-```bash
-gh project field-list <number> --owner <owner> --format json | jq '.fields[] | select(.name == "Status") | .id'
-```
-
-### Step 4: Configure Status columns
-
-Replace the default columns (Todo/In Progress/Done) with Helm phases via GraphQL:
-
-```bash
-gh api graphql -f query='
-  mutation {
-    updateProjectV2Field(input: {
-      fieldId: "<STATUS_FIELD_ID>"
-      singleSelectOptions: [
-        {name: "Backlog", color: GRAY, description: ""},
-        {name: "Discussing", color: BLUE, description: ""},
-        {name: "Planned", color: PURPLE, description: ""},
-        {name: "Implementing", color: YELLOW, description: ""},
-        {name: "Reviewing", color: ORANGE, description: ""},
-        {name: "Blocked", color: RED, description: ""},
-        {name: "Done", color: GREEN, description: ""}
-      ]
-    }) {
-      projectV2Field {
-        ... on ProjectV2SingleSelectField {
-          id
-          options { id name color }
-        }
-      }
-    }
-  }'
-```
-
-Parse the response to get option IDs for each column.
-
-### Step 5: Get the Project Node ID
-
-```bash
-gh api graphql -f query='
-  query {
-    user(login: "<owner>") {
-      projectV2(number: <number>) {
-        id
-      }
-    }
-  }'
-```
-
-Detect owner type first: `gh api users/<owner> --jq '.type'` returns `"User"` or `"Organization"`. Use `user()` or `organization()` accordingly.
-
-### Step 6: Create directory structure and config
-
-```bash
-mkdir -p _helm/knowledge _helm/scratch/plans _helm/scratch/briefs
-```
-
-Write `_helm/config.yaml` (this is the canonical config template — all config lives here):
-
-```yaml
-worktree:
-  branch-template: "myusername/{parent-slug}/{slug}"
-  path-template: "../{parent-slug}-{slug}"
-
-github:
-  owner: "<owner>"
-  repo: "<repo>"
-  project-number: <number>
-  project-node-id: "<PROJECT_NODE_ID>"
-  status-field-id: "<STATUS_FIELD_ID>"
-  columns:
-    backlog: "<OPTION_ID>"
-    discussing: "<OPTION_ID>"
-    planned: "<OPTION_ID>"
-    implementing: "<OPTION_ID>"
-    reviewing: "<OPTION_ID>"
-    blocked: "<OPTION_ID>"
-    done: "<OPTION_ID>"
-
-models:
-  session: opus
-  plan-review: sonnet
-  code-review: sonnet
-  explore: haiku
-
-notifications:
-  slack:
-    enabled: false
-    webhook: ""
-    channel: ""
-  toast:
-    enabled: true
-```
-
-### Step 7: Update .gitignore
-
-Add `_helm/scratch/` if not already present.
-
-### Step 8: Ask for branch template
-
-Ask the user: "Branch naming template? Examples: `hanf/{parent-slug}/{slug}` (team repo), `{slug}` (solo repo)"
-
-Store in `_helm/config.yaml` under `worktree.branch-template`.
-
-### Step 9: Report
-
-```
-Helm initialized:
-  Project: <repo-name> (#<number>)
-  Board: <url>
-  Config: _helm/config.yaml
-  Prefix: <prefix>
-
-Switch to Board layout in GitHub (click layout dropdown) to see kanban columns.
-Run helm-add to create your first task.
-```
+One-time per repo. Run `helm-setup` to create `.kanbn/index.md` with Helm columns and `_helm/` directory structure.
 
 ## Task Lifecycle
 
 ### Creating tasks
 
 Via `helm-add`:
-```bash
-gh issue create --title "Add OAuth support" --body "Google OAuth first. Must support token refresh."
-gh project item-add <project-id> --url <issue-url>
-```
-
-Or manually in GitHub UI — CC reads from the board regardless of how tasks were created.
+1. Parse title and body from the argument.
+2. Add `- <title>` under `## Backlog` in `.kanbn/index.md`.
 
 ### Reading tasks
 
-`helm-start` reads from the board:
-```bash
-gh project item-list <number> --owner <owner> --format json
-```
+`helm-start` reads `.kanbn/index.md`, finds all list items under `## Backlog`. Lists them numbered for user selection.
 
-Filters to Backlog column (or user-specified column). Lists them numbered for user selection.
+### Moving tasks between columns
 
-### Updating status
+At each phase transition, CC edits `.kanbn/index.md`:
+1. Remove the `- <task>` line from its current column.
+2. Add the `- <task>` line under the target column heading.
 
-At each phase transition, CC moves the card:
-```bash
-gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <option-id>
-```
+This is a simple text edit — read the file, find the task line, move it.
 
-### Commenting
+### Task identity
 
-CC posts progress comments on the issue:
-```bash
-gh issue comment <number> --repo <repo> --body "Plan approved. Starting implementation."
-```
-
-Useful for: plan approval, implementation progress, review results, blockers, completion summary.
-
-### Worktree metadata
-
-When a task spawns a worktree, CC posts a comment:
-```
-Worktree: feature/auth-oauth
-Parent: feature/auth
-Branch: feature/auth-oauth
-```
-
-This links the GitHub issue to the physical worktree for `helm-status` cross-referencing.
+Tasks are identified by their title text in `index.md`. When a task is selected by `helm-start`, its title is stored in `_helm/scratch/status.md` as `task:` for subsequent skills to reference.
 
 ## Sub-tasks
 
-Tasks within a worktree that are too small for their own GitHub issue can be tracked as a checklist in the parent issue body:
+Tasks within a worktree that are too small for their own board entry can be tracked as a checklist in the plan file. For sub-tasks large enough to warrant independent tracking: add them as separate entries in `.kanbn/index.md`.
 
-```markdown
-## Sub-tasks
-- [x] Create OAuth client wrapper
-- [ ] Add callback endpoint
-- [ ] Write integration tests
-```
+## GitHub Sync (helm-sync)
 
-CC updates these checkboxes via `gh issue edit` as steps complete. GitHub renders the progress bar automatically.
+`helm-sync` is a separate on-demand skill that:
+1. Reads `.kanbn/index.md` to get current task states.
+2. Creates/updates GitHub issues for tasks that don't have one yet.
+3. Updates GitHub Projects board to match local column positions.
+4. Posts plan summaries and progress comments on linked issues.
 
-For sub-tasks large enough to warrant their own worktree: create a new issue, link it to the parent with "Part of #57", and spawn the worktree.
-
-## Offline Consideration
-
-CC requires network access anyway. If GitHub is unreachable, `helm-add` and kanban updates fail gracefully — tasks are not lost (they exist as issues already), and CC can retry when connectivity returns.
+GitHub sync is optional. Helm works fully offline using only `.kanbn/index.md`.
