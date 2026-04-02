@@ -109,7 +109,7 @@ Write `_helm/config.yaml` (this is the canonical config template — all config 
 
 ```yaml
 worktree:
-  branch-template: "<user-provided, e.g. hanf/{parent-slug}/{slug} or just {slug}>"
+  branch-template: "{slug}"
   path-template: "../{slug}"
 
 github:
