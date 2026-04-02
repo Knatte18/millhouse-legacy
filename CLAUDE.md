@@ -16,7 +16,7 @@ Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `p
 | `plugins/codeguide/` | codeguide | Navigation-first documentation system for AI-assisted codebases |
 | `plugins/conduct/` | conduct | Response style, behavior rules, skill routing, language detection |
 | `plugins/helm/` | helm | Worktree-based task orchestration (in design — see `plugins/helm/doc/`) |
-| `plugins/webfetch/` | webfetch | Fetch web pages and output readable markdown |
+| `plugins/weblens/` | weblens | Fetch blocked/restricted web pages and output readable markdown |
 | `plugins/code/` | code | Code quality, CLI, linting, and testing standards |
 | `plugins/git/` | git | Git workflow rules |
 | `plugins/python/` | python | Python build, comments, and testing conventions |

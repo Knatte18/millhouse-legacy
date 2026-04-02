@@ -88,13 +88,13 @@
       "category": "productivity"
     },
     {
-      "name": "webfetch",
-      "description": "Fetch web pages and output readable markdown for Claude Code",
+      "name": "weblens",
+      "description": "Fetch blocked/restricted web pages and output readable markdown",
       "version": "1.0.0",
       "author": {
         "name": "Knatte18"
       },
-      "source": "./plugins/webfetch",
+      "source": "./plugins/weblens",
       "category": "productivity"
     }
   ]

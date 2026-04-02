@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Skill(webfetch:*)",
+      "Skill(weblens:*)",
       "Bash(node *)"
     ]
   }
