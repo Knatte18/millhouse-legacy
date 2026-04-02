@@ -9,6 +9,8 @@ completedColumns:
 
 ## Backlog
 
+- [test-lokal-kanbn](tasks/test-lokal-kanbn.md)
+
 ## Discussing
 
 ## Planned

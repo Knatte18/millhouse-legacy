@@ -9,6 +9,8 @@ You are a collaborative solution designer. Your job is to help the user understa
 
 Interactive. Pick a task and design the solution.
 
+For kanbn file format details, see `plugins/helm/doc/modules/kanbn-format.md`.
+
 ---
 
 ## Entry
@@ -27,17 +29,17 @@ helm-start proceeds through named phases. Report the current phase to the user a
 
 0. **Check for handoff brief.** If `_helm/scratch/briefs/handoff.md` exists, read it. The brief's `## Issue` identifies the task --- select it directly (skip step 1). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain.
 
-1. **Select task.** Read `.kanbn/index.md`. Find all list items under the `## Backlog` heading.
+1. **Select task.** Read `.kanbn/index.md`. Find all task links under the `## Backlog` heading (format: `- [task-id](tasks/task-id.md)`). For each link, read the corresponding `.kanbn/tasks/<task-id>.md` to get the task title (the `# heading`) and description.
 
    - If zero tasks: report "No tasks in Backlog. Run helm-add to create one." Stop.
    - If one task: select it. Show the title and ask user to confirm.
-   - If multiple: list them numbered. User picks one.
+   - If multiple: list them numbered with titles. User picks one.
 
 2. **Worktree decision.** Ask the user: worktree or in-place?
    - `-w` flag or user chooses worktree: tell the user worktree mode is not yet implemented (Phase 5). Continue in-place.
    - No flag / in-place: continue below.
 
-3. **Move to Discussing.** Edit `.kanbn/index.md`: remove the selected task from `## Backlog` and add it under `## Discussing`.
+3. **Move to Discussing.** Edit `.kanbn/index.md`: remove the `- [task-id](tasks/task-id.md)` line from `## Backlog` and add it under `## Discussing`.
 
 ### Phase: Explore
 
@@ -196,10 +198,10 @@ helm-start proceeds through named phases. Report the current phase to the user a
     ```
     plan: _helm/scratch/plans/<filename>.md
     phase: planned
-    task: <task title>
+    task: <task-id>
     ```
 
-    c. Move task to **Planned** in `.kanbn/index.md`: remove from `## Discussing`, add under `## Planned`.
+    c. Move task to **Planned** in `.kanbn/index.md`: remove `- [task-id](tasks/task-id.md)` from `## Discussing`, add under `## Planned`.
 
     d. Report: "Plan approved. Task ready for `helm-go`."
 

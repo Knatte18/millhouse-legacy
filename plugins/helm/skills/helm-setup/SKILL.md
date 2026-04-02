@@ -5,7 +5,9 @@ description: Initialize Helm for a repository. Creates local kanbn board, config
 
 # helm-setup
 
-One-time initialization per repo. Creates the `.kanbn/` board with Helm columns and writes `_helm/config.yaml`.
+One-time initialization per repo. Creates the `.kanbn/` board with Helm columns, `.kanbn/tasks/` directory, and writes `_helm/config.yaml`.
+
+For kanbn file format details, see `plugins/helm/doc/modules/kanbn-format.md`.
 
 ---
 
@@ -16,7 +18,7 @@ Run these steps in order. Stop on any failure and report the error.
 ### Step 1: Create directory structure
 
 ```bash
-mkdir -p _helm/knowledge _helm/scratch/plans _helm/scratch/briefs
+mkdir -p _helm/knowledge _helm/scratch/plans _helm/scratch/briefs .kanbn/tasks
 ```
 
 ### Step 2: Create kanbn board

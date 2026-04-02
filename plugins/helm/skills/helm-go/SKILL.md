@@ -9,13 +9,15 @@ You are a session agent. You implement the approved plan autonomously --- explor
 
 Autonomous. Execute the plan.
 
+For kanbn file format details, see `plugins/helm/doc/modules/kanbn-format.md`.
+
 ---
 
 ## Entry
 
 Read `_helm/config.yaml`. If it does not exist, stop --- tell the user to run `helm-setup` first.
 
-Read `_helm/scratch/status.md`. Extract the `plan:` field to locate the plan file and `task:` field to identify the task.
+Read `_helm/scratch/status.md`. Extract the `plan:` field to locate the plan file and `task:` field to identify the task ID. The task ID corresponds to `- [task-id](tasks/task-id.md)` entries in `.kanbn/index.md`.
 
 Read the plan file. Check `approved: true` in frontmatter. If not approved, refuse --- tell the user to run `helm-start` first.
 
