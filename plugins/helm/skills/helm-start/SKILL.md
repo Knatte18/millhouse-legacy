@@ -144,41 +144,70 @@ helm-start proceeds through named phases. Report the current phase to the user a
 
 8. **Plan review loop:**
 
-   a. Spawn a plan-reviewer Agent using the `sonnet` model. Report to user: **"Plan Review --- round 1/3"**
+   a. Report to user: **"Plan Review --- round 1/3"**
 
-      The agent prompt must include:
-      - The full plan content
-      - Relevant codebase context (key files the plan touches)
-      - The task description from the GitHub issue
+   b. Spawn the plan-reviewer agent using the Agent tool with `model: sonnet`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, `<TASK_BODY>`, and `<ISSUE_NUMBER>`:
 
-      Agent role prompt:
+      ---
+      You are an independent plan reviewer. Evaluate the submitted implementation plan for production readiness before any code is written. You have no shared context with the planning conversation --- you see only the plan, the task description, and the codebase. Be thorough, critical, and constructive.
 
-      > You are an independent plan reviewer. Evaluate the submitted implementation plan for production readiness before any code is written. Be thorough, critical, and constructive.
-      >
-      > Evaluate:
-      > - Alignment with task requirements
-      > - Completeness --- missing steps, unaddressed requirements
-      > - Sequencing --- are steps in the right order?
-      > - Edge cases and risks
-      > - Over-engineering
-      > - Codebase consistency --- follows existing patterns?
-      > - Test coverage --- key test scenarios cover error paths, not just happy paths?
-      > - Explore targets --- purpose-driven, not generic?
-      > - Step granularity --- each step should be small and reviewable
-      >
-      > Output format:
-      > For each finding, state severity: BLOCKING (must fix) or NIT (nice-to-have).
-      > End with overall verdict: APPROVE or REQUEST CHANGES.
+      **FIRST ACTION --- mandatory before anything else:**
+      Read `_codeguide/Overview.md` if it exists. Use its module table and routing hints to navigate to relevant source files. If it does not exist, proceed without it.
 
-   b. Before reading the reviewer's findings, invoke the `helm-receiving-review` skill via the Skill tool. This is **mandatory** --- it loads the decision tree into context before evaluation begins.
+      **Then do the following in order:**
 
-   c. Evaluate each finding through the receiving-review decision tree. Update the plan with accepted changes.
+      1. Read the task description:
+         - Issue: #<ISSUE_NUMBER> --- <TASK_TITLE>
+         - Body: <TASK_BODY>
 
-   d. If reviewer approves: proceed to Phase: Approve.
+      2. Read the plan:
+         <PLAN_CONTENT>
 
-   e. If reviewer requests changes: update the plan file, re-spawn reviewer. Report: **"Plan Review --- round 2/3"**
+      3. Read all source files referenced in the plan's `## Files` section. For each file, verify it exists and note its current state.
 
-   f. Max 3 rounds. If unresolved after 3: present remaining issues to user for decision.
+      4. Read accumulated knowledge from `_helm/knowledge/` if the directory exists.
+
+      **Evaluate the plan against these criteria:**
+
+      - **Alignment:** Does the plan address all requirements from the task description? Are there requirements in the task that the plan ignores?
+      - **Completeness:** Are there missing steps or unaddressed requirements? Does each step have Creates/Modifies, Requirements, and Commit fields?
+      - **Sequencing:** Are steps in the right order? Does any step depend on output from a later step?
+      - **Edge cases and risks:** Does the plan account for failure modes, empty states, and boundary conditions?
+      - **Over-engineering:** Does the plan introduce unnecessary abstractions, premature generalization, or features not requested in the task?
+      - **Codebase consistency:** Does the plan follow existing patterns in the codebase? Check naming conventions, file organization, error handling style.
+      - **Test coverage:** Do key test scenarios cover error paths and edge cases, not just happy paths? Are TDD-marked steps appropriate?
+      - **Explore targets:** Are they purpose-driven (what to explore AND why), not generic ("look at the codebase")?
+      - **Step granularity:** Each step should touch a small, reviewable scope. Flag steps that bundle unrelated file operations or are too broad to review meaningfully.
+
+      **Output format:**
+
+      For each finding:
+      - State the step or section it applies to
+      - State severity: **BLOCKING** (must fix before implementation) or **NIT** (nice-to-have improvement)
+      - Describe the issue and suggest a fix
+
+      End with an overall verdict: **APPROVE** or **REQUEST CHANGES**.
+      - APPROVE means: no BLOCKING issues remain. NITs are noted but do not block.
+      - REQUEST CHANGES means: one or more BLOCKING issues must be addressed.
+
+      Return only the review report. No preamble, no closing remarks.
+      ---
+
+   c. **Before reading the reviewer's findings**, invoke the `helm-receiving-review` skill via the Skill tool. This is **mandatory** --- it loads the decision tree into context before evaluation begins. Loading it after reading findings is useless; you will have already formed rationalizations.
+
+   d. Now read the reviewer's findings. Evaluate each finding through the receiving-review decision tree. For each finding, state:
+      1. The finding
+      2. Your VERIFY assessment (accurate / inaccurate / uncertain)
+      3. Your HARM CHECK result (which harm category, if any)
+      4. Your action: FIX or PUSH BACK (with cited evidence)
+
+   e. Update the plan file with accepted changes.
+
+   f. If reviewer approved (no BLOCKING issues): proceed to Phase: Approve.
+
+   g. If reviewer requested changes: update the plan file, re-spawn the reviewer agent with the updated plan content. Report: **"Plan Review --- round 2/3"**
+
+   h. Max 3 rounds. If unresolved BLOCKING issues remain after 3 rounds: present the remaining issues to the user for decision. The user may override, accept, or request further changes.
 
 ### Phase: Approve
 
