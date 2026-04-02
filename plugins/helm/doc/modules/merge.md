@@ -67,6 +67,7 @@ After successful merge (or PR approval + merge):
 ```bash
 git worktree remove <path>
 git branch -D <branch-name>
+git push origin --delete <branch-name>
 git branch -D helm-checkpoint-<worktree-name>
 ```
 
