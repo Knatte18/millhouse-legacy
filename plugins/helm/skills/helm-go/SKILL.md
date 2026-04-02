@@ -66,9 +66,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 2. **Staleness check.** Run `git log --since=<started> -- <file1> <file2> ...` using the `started:` timestamp from plan frontmatter and files from `## Files`.
    - No changes: proceed.
    - Minor changes (formatting, comments, unrelated areas): log warning in status.md, proceed.
-   - Major changes (files restructured, APIs changed, interfaces modified): halt. Update `- phase: discussing` in the task block in `.kanban.md`, move task block back to `## Backlog`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Tell the user to re-run `helm-start`.
+   - Major changes (files restructured, APIs changed, interfaces modified): halt. Update `- phase: discussing` in the task block in `.kanban.md`, move task block back to `## Backlog`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `helm-start`.
 
-3. **Explore.** Read code following each step's `Explore:` targets. Read accumulated knowledge from `_helm/knowledge/` if the directory has entries. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
+3. **Explore.** Read code following each step's `Explore:` targets. Read accumulated knowledge from `_helm/knowledge/` if the directory has entries — if `_helm/knowledge/summary.md` exists, read only the summary (not individual entries); otherwise read all entries. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
 
 4. **Move to In Progress.** Ensure task block is under `## In Progress` in `.kanban.md` (it should already be there from helm-start). Set `- phase: implementing` in the task's metadata.
 
@@ -111,6 +111,8 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
       - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
       - Commit: `git commit -m "<commit message from step>"`
       - This enables resume on crash.
+
+   On any block (after 3 retries, permission error, upstream dependency): after updating status.md and kanban, run the **Notification Procedure** with the appropriate BLOCKED event.
 
 ### Phase: Test
 
@@ -211,7 +213,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 15. Re-spawn code-reviewer Agent with the updated diff (`git diff <plan_start_hash>..HEAD`). Report: **"Review --- round N/3"**
 
-16. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Set `- phase: blocked` in task metadata. Move task block to `## Blocked` in `.kanban.md`. Report both sides to user:
+16. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Set `- phase: blocked` in task metadata. Move task block to `## Blocked` in `.kanban.md`. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after 3 rounds`. Report both sides to user:
     ```
     Code reviewer flagged: "<finding>"
     Implementing agent's position: "<reasoning>"
@@ -281,7 +283,8 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 When no more planned tasks remain:
 
 1. Set `_helm/scratch/status.md` phase to `ready-to-merge`.
-2. Report to user: `[helm] ready to merge --- all tasks complete.`
+2. Run the **Notification Procedure** with `COMPLETE: All tasks done, ready to merge` (info-level — toast + status only, skip Slack).
+3. Report to user: `[helm] ready to merge --- all tasks complete.`
 
 ---
 
@@ -306,6 +309,74 @@ Column moves (edit `.kanban.md`):
 Phase updates (edit `- phase:` in task block, no column move):
 - `implementing` -> `testing` -> `reviewing` -> `complete`
 - Any failure -> `blocked`
+
+---
+
+## Notification Procedure
+
+When the skill says "notify user", follow this procedure. Notifications are NOT a separate skill — they are inline calls made at specific points in helm-go (and helm-merge).
+
+### Step 1: Update status file (always)
+
+Write the event to `_helm/scratch/status.md`. This happens regardless of config — the status file is the most reliable channel.
+
+For blocking events, ensure `blocked: true` and `blocked_reason:` are set (already handled by Post-Failure State above).
+
+For completion events, ensure `phase: ready-to-merge`.
+
+### Step 2: Read notification config
+
+Read `_helm/config.yaml`. Extract `notifications.slack` and `notifications.toast` settings.
+
+### Step 3: Toast notification (if enabled)
+
+If `notifications.toast.enabled` is `true`, detect the platform and fire a desktop notification:
+
+```bash
+# Detect platform
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*|Windows_NT)
+    # Windows — requires BurntToast PowerShell module
+    powershell -Command "New-BurntToastNotification -Text '[helm] <branch> <EVENT>', '<detail>'"
+    ;;
+  Darwin)
+    # macOS
+    osascript -e 'display notification "<detail>" with title "[helm] <branch> <EVENT>"'
+    ;;
+  Linux)
+    # Linux — requires libnotify
+    notify-send "[helm] <branch> <EVENT>" "<detail>"
+    ;;
+esac
+```
+
+Replace `<branch>` with the current branch name, `<EVENT>` with `BLOCKED` or `COMPLETE`, and `<detail>` with the reason (e.g. "Test failure after 3 retries in step 3").
+
+If the toast command fails (module not installed, no display), log a warning and continue — toast is best-effort.
+
+### Step 4: Slack notification (if enabled)
+
+If `notifications.slack.enabled` is `true` and `notifications.slack.webhook` is non-empty, post to the webhook:
+
+```bash
+curl -s -X POST "<webhook-url>" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "[helm] <branch> <EVENT>\n<detail>\nWorktree: <worktree-path>"}'
+```
+
+If the webhook call fails, log a warning and continue — Slack is notification-only and non-blocking.
+
+### When to notify
+
+| Call site | Event | Urgency |
+|-----------|-------|---------|
+| Phase: Implement — step failure after 3 retries | `BLOCKED: Test failure in step N after 3 retries` | High |
+| Phase: Resolve — reviewer blocks after 3 rounds | `BLOCKED: Code reviewer dispute after 3 rounds` | High |
+| Phase: Implement — permission/config error | `BLOCKED: Permission/config error (no retries)` | High |
+| Phase: Setup — plan stale | `BLOCKED: Plan stale — files changed` | High |
+| Completion — all tasks done | `COMPLETE: All tasks done, ready to merge` | Info (toast + status only, skip Slack) |
+
+**Info-level events** (completion) fire toast and status file only — no Slack ping. Check `helm-status` when ready.
 
 ---
 
@@ -383,4 +454,5 @@ On any failure that blocks progress:
 1. Update `_helm/scratch/status.md` with `blocked: true` and `blocked_reason:`.
 2. Set `- phase: blocked` in task metadata. Move task block to `## Blocked` in `.kanban.md`.
 3. Preserve all state --- do not clean up, do not rollback automatically.
-4. Report the blocker to the user.
+4. Run the **Notification Procedure** (see section above) with the BLOCKED event.
+5. Report the blocker to the user.

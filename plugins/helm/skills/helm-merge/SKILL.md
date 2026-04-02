@@ -118,11 +118,15 @@ PR description generated from:
 
 Report the PR URL to the user. Do NOT proceed to cleanup — wait for PR approval.
 
-### 7. Kanban update
+### 7. Notify
+
+Run the **Notification Procedure** (same as helm-go — see below) with `COMPLETE: Merge successful for <branch>` (info-level — toast + status only, skip Slack).
+
+### 8. Kanban update
 
 Read `.kanban.md` **from the main repo** (never from the worktree). Move the task block to `## Done`. Set `- phase: complete`.
 
-### 8. Cleanup
+### 9. Cleanup
 
 After successful direct merge (or after user confirms PR was merged):
 
@@ -137,7 +141,7 @@ If the branch was pushed to remote:
 git push origin --delete <worktree-branch>
 ```
 
-### 9. Release merge lock
+### 10. Release merge lock
 
 Delete `<parent-path>/_helm/scratch/merge.lock`.
 
@@ -153,7 +157,34 @@ If any step fails after checkpoint creation:
 git reset --hard helm-checkpoint-<name>
 ```
 
-Then release the merge lock and report the failure to the user. Do NOT delete the checkpoint branch on failure — preserve it for investigation.
+Then release the merge lock. Run the **Notification Procedure** with `BLOCKED: Merge failed for <branch> — rolled back to checkpoint`. Report the failure to the user. Do NOT delete the checkpoint branch on failure — preserve it for investigation.
+
+---
+
+## Notification Procedure
+
+Same procedure as documented in `helm-go`. Read `_helm/config.yaml` for `notifications.slack` and `notifications.toast` settings.
+
+1. **Status file** (always): update `_helm/scratch/status.md` with the event.
+2. **Toast** (if `notifications.toast.enabled`): detect platform and fire desktop notification.
+
+   ```bash
+   case "$(uname -s)" in
+     MINGW*|MSYS*|CYGWIN*|Windows_NT)
+       powershell -Command "New-BurntToastNotification -Text '[helm] <branch> <EVENT>', '<detail>'"
+       ;;
+     Darwin)
+       osascript -e 'display notification "<detail>" with title "[helm] <branch> <EVENT>"'
+       ;;
+     Linux)
+       notify-send "[helm] <branch> <EVENT>" "<detail>"
+       ;;
+   esac
+   ```
+
+3. **Slack** (if `notifications.slack.enabled` and high-urgency only): POST to webhook URL.
+
+Merge completion is info-level (toast + status only). Merge failure/rollback is high-urgency (all channels).
 
 ---
 

@@ -173,14 +173,18 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 When no more planned tasks remain:
 1. Set `_helm/scratch/status.md` phase to `ready-to-merge`.
-2. Report to user: `[helm] ready to merge — all tasks complete.`
+2. Run the Notification Procedure (info-level — toast + status only, skip Slack).
+3. Report to user: `[helm] ready to merge — all tasks complete.`
 
 ### Stops when
 
 - All tasks complete → completion flow above
-- Test failure after 3 retries (notify user)
-- Code reviewer blocks after 3 rounds with unresolvable issues (notify user)
-- Permission/config error (notify user immediately, no retries)
+- Test failure after 3 retries → Notification Procedure (high)
+- Code reviewer blocks after 3 rounds → Notification Procedure (high)
+- Permission/config error → Notification Procedure (high, immediate, no retries)
+- Plan stale → Notification Procedure (high)
+
+Notifications are inline procedure calls, not a separate skill. See [notifications.md](notifications.md) for channels and config.
 
 ### Kanban updates
 
