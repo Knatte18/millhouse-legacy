@@ -32,20 +32,22 @@ Worktree branches follow a configurable template. Configured in `_helm/config.ya
 
 ```yaml
 worktree:
-  prefix: "hanf"
-  branch-template: "{prefix}/{parent-slug}/{slug}"
+  branch-template: "hanf/{parent-slug}/{slug}"
   path-template: "../{slug}"
 ```
 
-The `{parent-slug}` is the parent branch's slug (last segment of the branch name). This makes the worktree hierarchy visible in branch names:
+Available placeholders:
+- `{slug}` — derived from task title (kebab-case, max 30 chars), or user-provided
+- `{parent-slug}` — last segment of the parent branch name
 
-| Context | Task slug | Resulting branch |
-|---------|-----------|-----------------|
-| Working from `hanf/main` | `auth` | `hanf/main/auth` |
-| Working from `hanf/main/auth` | `oauth` | `hanf/main/auth/oauth` |
-| Working from `hanf/main` | `login-bug` | `hanf/main/login-bug` |
+Examples by template:
 
-The slug is derived from the task title (kebab-case, max 30 chars), or user-provided.
+| Template | Context | Slug | Result |
+|----------|---------|------|--------|
+| `"hanf/{parent-slug}/{slug}"` | parent: `main` | `auth` | `hanf/main/auth` |
+| `"hanf/{parent-slug}/{slug}"` | parent: `hanf/main/auth` | `oauth` | `hanf/auth/oauth` |
+| `"{slug}"` | any | `auth` | `auth` |
+| `"henrik/{slug}"` | any | `auth` | `henrik/auth` |
 
 The `path-template` controls where the worktree directory is created on disk. `../` places worktrees as sibling directories to the repo root (e.g. repo at `C:\Code\myproject` → worktree at `C:\Code\auth`), not inside the repo.
 

@@ -109,8 +109,7 @@ Write `_helm/config.yaml` (this is the canonical config template — all config 
 
 ```yaml
 worktree:
-  prefix: "<user-provided>"
-  branch-template: "{prefix}/{parent-slug}/{slug}"
+  branch-template: "<user-provided, e.g. hanf/{parent-slug}/{slug} or just {slug}>"
   path-template: "../{slug}"
 
 github:
@@ -147,11 +146,11 @@ notifications:
 
 Add `_helm/scratch/` if not already present.
 
-### Step 8: Ask for worktree prefix
+### Step 8: Ask for branch template
 
-Ask the user: "What prefix for your branches? (e.g. your username: `hanf`)"
+Ask the user: "Branch naming template? Examples: `hanf/{parent-slug}/{slug}` (team repo), `{slug}` (solo repo)"
 
-Store in `_helm/config.yaml` under `worktree.prefix`.
+Store in `_helm/config.yaml` under `worktree.branch-template`.
 
 ### Step 9: Report
 
