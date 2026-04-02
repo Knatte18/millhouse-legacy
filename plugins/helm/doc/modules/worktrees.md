@@ -33,7 +33,7 @@ Worktree branches follow a configurable template. Configured in `_helm/config.ya
 ```yaml
 worktree:
   branch-template: "hanf/{parent-slug}/{slug}"
-  path-template: "../{slug}"
+  path-template: "../{parent-slug}-{slug}"
 ```
 
 Available placeholders:

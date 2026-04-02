@@ -1,6 +1,7 @@
 # Claude Code Files
 **/.llm/
 **/_codeguide/runtime/
+_helm/scratch/
 *.local.*
 nul
 
