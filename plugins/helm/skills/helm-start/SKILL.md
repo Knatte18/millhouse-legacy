@@ -164,7 +164,9 @@ When the user chooses `-w` (worktree mode):
 
    a. Report to user: **"Plan Review --- round 1/3"**
 
-   b. Spawn the plan-reviewer agent using the Agent tool with `model: sonnet`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, and `<TASK_BODY>`:
+   b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
+
+   c. Spawn the plan-reviewer agent using the Agent tool with `model: sonnet`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, `<TASK_BODY>`, and `<CONSTRAINTS_CONTENT>`:
 
       ---
       You are an independent plan reviewer. Evaluate the submitted implementation plan for production readiness before any code is written. You have no shared context with the planning conversation --- you see only the plan, the task description, and the codebase. Be thorough, critical, and constructive.
@@ -181,12 +183,16 @@ When the user chooses `-w` (worktree mode):
       2. Read the plan:
          <PLAN_CONTENT>
 
-      3. Read all source files referenced in the plan's `## Files` section. For each file, verify it exists and note its current state.
+      3. Repository constraints (if available):
+         <CONSTRAINTS_CONTENT>
 
-      4. Read accumulated knowledge from `_helm/knowledge/` if the directory exists.
+      4. Read all source files referenced in the plan's `## Files` section. For each file, verify it exists and note its current state.
+
+      5. Read accumulated knowledge from `_helm/knowledge/` if the directory exists.
 
       **Evaluate the plan against these criteria:**
 
+      - **Constraint violations** (BLOCKING): Check every constraint in the constraints section. If any plan step would require violating a constraint, flag as BLOCKING with the constraint heading and the problematic step.
       - **Alignment:** Does the plan address all requirements from the task description? Are there requirements in the task that the plan ignores?
       - **Completeness:** Are there missing steps or unaddressed requirements? Does each step have Creates/Modifies, Requirements, and Commit fields?
       - **Sequencing:** Are steps in the right order? Does any step depend on output from a later step?
@@ -211,21 +217,21 @@ When the user chooses `-w` (worktree mode):
       Return only the review report. No preamble, no closing remarks.
       ---
 
-   c. **Before reading the reviewer's findings**, invoke the `helm-receiving-review` skill via the Skill tool. This is **mandatory** --- it loads the decision tree into context before evaluation begins. Loading it after reading findings is useless; you will have already formed rationalizations.
+   d. **Before reading the reviewer's findings**, invoke the `helm-receiving-review` skill via the Skill tool. This is **mandatory** --- it loads the decision tree into context before evaluation begins. Loading it after reading findings is useless; you will have already formed rationalizations.
 
-   d. Now read the reviewer's findings. Evaluate each finding through the receiving-review decision tree. For each finding, state:
+   e. Now read the reviewer's findings. Evaluate each finding through the receiving-review decision tree. For each finding, state:
       1. The finding
       2. Your VERIFY assessment (accurate / inaccurate / uncertain)
       3. Your HARM CHECK result (which harm category, if any)
       4. Your action: FIX or PUSH BACK (with cited evidence)
 
-   e. Update the plan file with accepted changes.
+   f. Update the plan file with accepted changes.
 
-   f. If reviewer approved (no BLOCKING issues): proceed to Phase: Approve.
+   g. If reviewer approved (no BLOCKING issues): proceed to Phase: Approve.
 
-   g. If reviewer requested changes: update the plan file, re-spawn the reviewer agent with the updated plan content. Report: **"Plan Review --- round 2/3"**
+   h. If reviewer requested changes: update the plan file, re-spawn the reviewer agent with the updated plan content. Report: **"Plan Review --- round 2/3"**
 
-   h. Max 3 rounds. If unresolved BLOCKING issues remain after 3 rounds: present the remaining issues to the user for decision. The user may override, accept, or request further changes.
+   i. Max 3 rounds. If unresolved BLOCKING issues remain after 3 rounds: present the remaining issues to the user for decision. The user may override, accept, or request further changes.
 
 ### Phase: Approve
 

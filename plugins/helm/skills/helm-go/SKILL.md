@@ -70,7 +70,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 3. **Explore.** Read code following each step's `Explore:` targets. Read accumulated knowledge from `_helm/knowledge/` if the directory has entries — if `_helm/knowledge/summary.md` exists, read only the summary (not individual entries); otherwise read all entries. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
 
-4. **Move to In Progress.** Ensure task block is under `## In Progress` in `.kanban.md` (it should already be there from helm-start). Set `- phase: implementing` in the task's metadata.
+4. **Read constraints.** Resolve repo root: `git rev-parse --show-toplevel`. Read `CONSTRAINTS.md` from repo root if it exists. These are hard invariants — never write code that violates them. If the file does not exist, proceed without it.
+
+5. **Move to In Progress.** Ensure task block is under `## In Progress` in `.kanban.md` (it should already be there from helm-start). Set `- phase: implementing` in the task's metadata.
 
    Update `_helm/scratch/status.md`:
    ```
@@ -141,9 +143,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
    Compute the diff: `git diff <plan_start_hash>..HEAD`
 
-   Read `_codeguide/Overview.md` if it exists (pass content to reviewer). Read `_helm/knowledge/` entries if they exist (pass content to reviewer).
+   Read `_codeguide/Overview.md` if it exists (pass content to reviewer). Read `_helm/knowledge/` entries if they exist (pass content to reviewer). Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
 
-   Pass the following prompt verbatim, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, and `<KNOWLEDGE_CONTENT>`:
+   Pass the following prompt verbatim, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, `<KNOWLEDGE_CONTENT>`, and `<CONSTRAINTS_CONTENT>`:
 
    ---
    You are an independent code reviewer. Evaluate the submitted diff for production readiness. You have no shared context with the implementing agent --- you see only the diff, the plan, and the quality standards. Be thorough, critical, and constructive.
@@ -162,7 +164,10 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
    3. Knowledge from prior tasks (if available):
    <KNOWLEDGE_CONTENT>
 
-   4. The diff to review:
+   4. Repository constraints (if available):
+   <CONSTRAINTS_CONTENT>
+
+   5. The diff to review:
    <DIFF>
 
    **Evaluate the diff against these criteria:**
@@ -176,6 +181,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
      - Shallow assertions (`assert result`, `assert result is not None`) -> BLOCKING.
      - TDD-marked steps where diff shows implementation committed without a preceding failing test -> BLOCKING.
    - **Utility duplication** (BLOCKING): For every new function, helper, or utility in the diff, grep the codebase for existing implementations with similar names or purposes. Use the codeguide Overview to identify which modules to check. If an existing utility covers the same functionality, flag the reimplementation as BLOCKING with a pointer to the existing implementation.
+   - **Constraint violations** (BLOCKING): Check every constraint in the constraints section. If the diff introduces code that violates any constraint, flag as BLOCKING with the constraint heading and the violating code.
    - **Pattern consistency:** Check that new code follows the same patterns as existing code in the same area --- naming conventions, error handling style, authentication patterns on endpoints.
    - **Codebase consistency:** Does the code follow existing patterns in the codebase?
 

@@ -53,6 +53,9 @@ _helm/
 ### Codeguide update ordering
 **Decision:** Codeguide-update runs BEFORE commit in helm-go, not after. Sequence: implement → verify → code-review → codeguide-update → commit.
 
+### Repository constraints
+**Decision:** `CONSTRAINTS.md` in repo root. Plain markdown (headings + prose rules, no frontmatter). Always global — all constraints apply everywhere, no path-scoping. Always blocking — if it's not blocking, it's not a constraint. Opt-in — helm-setup does not create the file; user creates it when needed. Injected at three levels: session agent (helm-go setup), plan reviewer (helm-start), code reviewer (helm-go). Path resolved via `git rev-parse --show-toplevel`. Worktree inheritance is automatic via git. Distinct from CLAUDE.md (process/workflow vs domain invariants) and from Autoboard dimensions (simpler, no coherence audits, no parallel dimension agents). See [constraints.md](modules/constraints.md).
+
 ### Dimensions and coherence audits
 **Decision:** Not used. Helm relies on existing always-on skills (`code:code-quality`, `code:testing`, `code:linting`) plus a strengthened code reviewer that checks for utility duplication and pattern consistency using codeguide context. See [coherence.md](coherence.md).
 
