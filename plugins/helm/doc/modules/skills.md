@@ -13,14 +13,14 @@ helm-start proceeds through named phases. Report the current phase to the user a
 #### Phase: Select
 
 0. **Check for handoff brief.** If `_helm/scratch/briefs/handoff.md` exists, read it. The brief's `## Issue` identifies the task — select it directly (skip step 1). The brief's `## Discussion Summary` is prior context — incorporate it, but still run your own explore and discuss phases. The brief informs but does not constrain.
-1. **Select task.** Read tasks from GitHub Projects board (`gh project item-list`). Filter to Backlog column: `gh project item-list <number> --owner <owner> --format json | jq '[.items[] | select(.status == "Backlog")]'`.
+1. **Select task.** Read tasks from `.kanbn/index.md`. Find all list items under `## Backlog`.
    - If one task: select it.
    - If multiple: list them numbered. User picks one.
 2. **Worktree decision.** User decides: worktree or in-place?
    - `-w` flag: create worktree immediately (see [worktrees.md](worktrees.md)), write brief, open VS Code. Stop. User runs `helm-start` in the new window to continue discussion there.
    - No flag: discuss in current context. Continue below.
 
-Kanban: move task to **Discussing**.
+Kanban: move task to **Discussing** in `.kanbn/index.md`.
 
 #### Phase: Explore
 
@@ -129,7 +129,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 0. Record `PLAN_START_HASH=$(git rev-parse HEAD)`. Store in `_helm/scratch/status.md` as `plan_start_hash:`. On resume, read from status.md.
 1. Read plan (path from `_helm/scratch/status.md` `plan:` field). Read all files in `## Files`.
-2. Staleness check (`git log --since=<started>` against listed files). If files changed: classify severity. Minor changes (formatting, unrelated files) → log warning, proceed. Major changes (files restructured, APIs changed, interfaces modified) → halt, move task to **Discussing** on kanban, notify user to re-run `helm-start`.
+2. Staleness check (`git log --since=<started>` against listed files). If files changed: classify severity. Minor changes (formatting, unrelated files) → log warning, proceed. Major changes (files restructured, APIs changed, interfaces modified) → halt, move task to **Discussing** in `.kanbn/index.md`, notify user to re-run `helm-start`.
 3. Explore relevant code (following plan's `Explore:` targets). Read accumulated knowledge from `_helm/knowledge/`. If `_codeguide/Overview.md` exists: read it and use the navigation pattern.
 
 #### Phase: Implement
@@ -165,7 +165,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 9. Record architectural decisions to `_helm/knowledge/decisions.md` (see [knowledge.md](knowledge.md)).
 10. Commit post-review changes: `chore: post-review cleanup for <task-title>`.
 11. Update `_helm/scratch/status.md`: phase = complete.
-12. Update GitHub issue: mark task complete, post summary comment.
+12. Move task to **Done** in `.kanbn/index.md`.
 13. If accumulated knowledge exceeds 5 entries: synthesize into `_helm/knowledge/summary.md`.
 14. If more planned tasks: pick next, repeat from Phase: Setup.
 
@@ -173,8 +173,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 When no more planned tasks remain:
 1. Set `_helm/scratch/status.md` phase to `ready-to-merge`.
-2. Post comment on GitHub issue: "All tasks complete. Worktree ready to merge."
-3. Send info notification: "[helm] <worktree> ready to merge — all tasks complete."
+2. Report to user: `[helm] ready to merge — all tasks complete.`
 
 ### Stops when
 
@@ -201,9 +200,8 @@ helm-add Add OAuth support: Google OAuth first. Must support token refresh.
 ```
 
 1. Parse: text before colon = title, text after = body. No colon = title only.
-2. `gh issue create --title "<title>" --body "<body>"`
-3. `gh project item-add <project-id> --url <issue-url>` (adds to Backlog column)
-4. Report: "Added: #57 Add OAuth support"
+2. Add `- <title>` under `## Backlog` in `.kanbn/index.md`.
+3. Report: "Added: <title>"
 
 ---
 
@@ -228,17 +226,15 @@ Merge a completed worktree back to its parent. See [merge.md](merge.md) for full
 
 Dashboard. Read-only.
 
-Shows all active worktrees and their state by reading `git worktree list` and each worktree's `_helm/scratch/status.md`.
+Shows all active worktrees and their state by reading `git worktree list`, each worktree's `_helm/scratch/status.md`, and `.kanbn/index.md`.
 
 ```
 Worktrees:
-  feature/auth        [implementing]  3/5 tasks    parent: main       #52
-  feature/auth-oauth  [reviewing]     needs input  parent: feature/auth #57
-  feature/csv-export  [planned]       0/3 tasks    parent: main       #61
-  hotfix/login-bug    [complete]      ready merge  parent: main       #63
+  feature/auth        [implementing]  3/5 tasks    parent: main
+  feature/auth-oauth  [reviewing]     needs input  parent: feature/auth
+  feature/csv-export  [planned]       0/3 tasks    parent: main
+  hotfix/login-bug    [complete]      ready merge  parent: main
 ```
-
-Also queries GitHub Projects board for kanban status.
 
 ---
 
@@ -251,11 +247,24 @@ Discard a worktree. Moves the task back to Backlog.
 3. User confirms.
 4. `git worktree remove <path>`
 5. `git branch -D <branch-name>`
-6. Move issue to **Backlog** on kanban.
-7. Post comment on issue: "Worktree abandoned. Reason: <user-provided or 'no reason given'>"
-8. If checkpoint branch exists: `git branch -D helm-checkpoint-<name>`
+6. Move task to **Backlog** in `.kanbn/index.md`.
+7. If checkpoint branch exists: `git branch -D helm-checkpoint-<name>`
 
 Never auto-abandon. Always require user confirmation after warnings.
+
+---
+
+## helm-sync
+
+On-demand GitHub sync. Pushes local kanbn state to GitHub Projects and issues.
+
+1. Read `_helm/config.yaml` for GitHub config. If `github` section is missing, stop — tell the user to configure GitHub settings first.
+2. Read `.kanbn/index.md` to get all tasks and their columns.
+3. For each task:
+   - If no linked GitHub issue exists: create one via `gh issue create`.
+   - Update the GitHub Projects board column to match the local kanbn column.
+   - Post any pending plan summaries or progress comments on the issue.
+4. Report sync results.
 
 ---
 
