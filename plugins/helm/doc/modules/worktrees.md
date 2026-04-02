@@ -73,8 +73,8 @@ When `helm-start -w` is called:
 1. `git worktree add <path> -b <branch-name> <parent-branch>`
 2. Symlink gitignored environment files: `for f in .env*; do [ -f "$f" ] && ln -sf "$(pwd)/$f" <worktree-path>/"$f"; done`
 3. Create `_helm/` directory structure in worktree (tracked: `knowledge/`, `changelog.md`, `config.yaml`; ignored: `scratch/`)
-4. Write `_helm/scratch/briefs/handoff.md` in the child worktree (see [plans.md](plans.md) Handoff Brief Format). If no discussion has happened, populate Discussion Summary from the GitHub issue body.
-5. Add one issue to the GitHub Projects board (or reference existing issue) with worktree metadata
+4. Write `_helm/scratch/briefs/handoff.md` in the child worktree (see [plans.md](plans.md) Handoff Brief Format). If no discussion has happened, populate Discussion Summary from the task title.
+5. Ensure the task exists in `.kanbn/index.md` (it should already be there from `helm-add`)
 6. `code <worktree-path>` — open VS Code in the new worktree
 7. Parent session continues with other work
 

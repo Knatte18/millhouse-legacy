@@ -26,7 +26,7 @@ All work happens in git worktrees. The repo root stays on `main` and serves as h
 
 ### Task Tracking
 
-GitHub Projects V2 is the single source of truth for tasks. No local backlog files. Issues are cards on a kanban board, moved between columns as work progresses. Details in [kanban.md](kanban.md).
+`.kanbn/index.md` is the single source of truth for tasks. The kanbn VS Code extension renders it as a visual board. Tasks are list items under column headings, moved between columns as work progresses. GitHub sync is available on demand via `helm-sync`. Details in [kanban.md](kanban.md).
 
 ### Execution Model
 
@@ -46,10 +46,11 @@ The user controls the transition. `helm-go` never asks for input during normal o
 | `helm-start` | Pick task, discuss, plan, review plan | Interactive |
 | `helm-start -w` | Same, but spawns worktree + VS Code first | Interactive |
 | `helm-go` | Implement, test, code-review, commit | Autonomous |
-| `helm-add` | Create a new task (GitHub issue + board) | One-shot |
+| `helm-add` | Create a new task on the kanbn board | One-shot |
 | `helm-merge` | Merge worktree back to parent | Semi-autonomous |
 | `helm-status` | Dashboard of all worktrees | Read-only |
 | `helm-abandon` | Discard a worktree, move task back to Backlog | Interactive |
+| `helm-sync` | Sync local kanbn board to GitHub Projects | One-shot |
 | `git:git-commit` | Ad-hoc commit (general git skill, not Helm-specific) | One-shot |
 
 Details in [skills.md](skills.md).
@@ -63,7 +64,7 @@ Details in [skills.md](skills.md).
 | [modules/skills.md](modules/skills.md) | All skill definitions and flows |
 | [modules/plans.md](modules/plans.md) | Plan format, locking, staleness detection |
 | [modules/reviews.md](modules/reviews.md) | Plan review, code review, receiving-review protocol |
-| [modules/kanban.md](modules/kanban.md) | GitHub Projects V2 integration |
+| [modules/kanban.md](modules/kanban.md) | Local kanbn board integration |
 | [modules/knowledge.md](modules/knowledge.md) | Knowledge curation between tasks |
 | [modules/coherence.md](modules/coherence.md) | Coherence audits and quality dimensions |
 | [modules/merge.md](modules/merge.md) | Merge strategy, checkpoints, locking, PR workflow |

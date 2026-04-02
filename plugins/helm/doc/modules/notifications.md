@@ -85,7 +85,7 @@ needs_input: true
 
 ## Configuration
 
-Notification config lives in `_helm/config.yaml` (per-repo, alongside worktree and GitHub Projects config):
+Notification config lives in `_helm/config.yaml` (per-repo, alongside worktree and kanban config):
 
 ```yaml
 notifications:
