@@ -1,6 +1,6 @@
 worktree:
-  branch-template: "{parent-slug}/{slug}"
-  path-template: "../{parent-slug}-{slug}"
+  branch-template: "{parent-branch}-wt-{slug}"
+  path-template: "../{repo-name}-worktrees/{slug}"
 
 models:
   session: opus

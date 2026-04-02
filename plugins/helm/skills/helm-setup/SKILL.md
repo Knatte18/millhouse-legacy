@@ -39,7 +39,15 @@ If `.kanban.md` does not exist, create it:
 
 If `.kanban.md` already exists, check that it has all Helm columns (Backlog, In Progress, Done, Blocked). Add any missing columns.
 
-### Step 3: Write config
+Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+
+### Step 3: Ask for branch template
+
+Ask the user:
+
+> Branch naming template? Examples: `{parent-branch}-wt-{slug}` (default), `{slug}` (solo repo). Variables: `{parent-branch}` (full branch name), `{repo-name}` (repo dir name), `{slug}` (task slug, max 20 chars).
+
+### Step 4: Write config
 
 Detect repo info:
 
@@ -48,12 +56,12 @@ OWNER=$(gh repo view --json owner --jq '.owner.login' 2>/dev/null || echo "")
 REPO=$(gh repo view --json name --jq '.name' 2>/dev/null || basename "$(pwd)")
 ```
 
-Write `_helm/config.yaml`:
+Write `_helm/config.yaml` using the branch template from step 3:
 
 ```yaml
 worktree:
-  branch-template: "{slug}"
-  path-template: "../{slug}"
+  branch-template: "<user's answer from step 3>"
+  path-template: "../{repo-name}-worktrees/{slug}"
 
 models:
   session: opus
@@ -72,17 +80,13 @@ notifications:
 
 No `github:` section by default. GitHub integration is optional --- run `helm-sync` to set it up when needed.
 
-### Step 4: Update .gitignore
+### Step 4b: Validate config
+
+Validate `_helm/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+
+### Step 5: Update .gitignore
 
 Add `_helm/scratch/` to `.gitignore` if not already present.
-
-### Step 5: Ask for branch template
-
-Ask the user:
-
-> Branch naming template? Examples: `hanf/{parent-slug}/{slug}` (team repo), `{slug}` (solo repo)
-
-Update `worktree.branch-template` in `_helm/config.yaml` with the user's answer.
 
 ### Step 6: Report
 

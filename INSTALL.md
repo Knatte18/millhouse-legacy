@@ -20,19 +20,25 @@ claude plugin install python@millhouse
 claude plugin install csharp@millhouse
 ```
 
-### Step 2: Symlink plugins to source
+### Step 2: Link plugins to source
 
-From the millhouse repo root:
+From the millhouse repo root (PowerShell):
 
-```bash
-bash install-plugins.sh
+```powershell
+.\symlink-plugins.ps1
 ```
 
-This replaces the plugin cache with symlinks to your local source. Edits in `plugins/` are live immediately — no deploy step needed.
+This replaces the plugin cache with junctions to your local source. Edits in `plugins/` are live immediately — no deploy step needed.
 
 Taskmill requires Python dependencies (will be removed when Helm replaces taskmill):
+```powershell
+pip install -r c:\Code\millhouse\plugins\taskmill\requirements.txt
 ```
-pip install -r c:/Code/millhouse/plugins/taskmill/requirements.txt
+
+Weblens requires Node.js dependencies:
+```powershell
+cd plugins\weblens
+npm install
 ```
 
 ## Per-repo setup
@@ -46,4 +52,4 @@ Run these inside the target repo after global install:
 
 Symlinks mean edits in `plugins/` are live immediately. No deploy needed.
 
-Re-run `bash install-plugins.sh` only if you add a new plugin or reinstall Claude Code.
+Re-run `.\symlink-plugins.ps1` only if you add a new plugin or reinstall Claude Code.

@@ -32,24 +32,25 @@ Worktree branches follow a configurable template. Configured in `_helm/config.ya
 
 ```yaml
 worktree:
-  branch-template: "hanf/{parent-slug}/{slug}"
-  path-template: "../{parent-slug}-{slug}"
+  branch-template: "{parent-branch}-wt-{slug}"
+  path-template: "../{repo-name}-worktrees/{slug}"
 ```
 
 Available placeholders:
-- `{slug}` — derived from task title (kebab-case, max 30 chars), or user-provided
-- `{parent-slug}` — last segment of the parent branch name
+- `{slug}` — derived from task title (kebab-case, max 20 chars), or user-provided
+- `{parent-branch}` — full current branch name (e.g. `hanf/main`)
+- `{repo-name}` — basename of the repo root directory (e.g. `py-hanf`)
 
-Examples by template:
+The `-wt-` separator avoids git ref conflicts — branches with `/` (like `hanf/main`) can't have sub-branches (`hanf/main/slug` would conflict).
+
+Examples:
 
 | Template | Context | Slug | Result |
 |----------|---------|------|--------|
-| `"hanf/{parent-slug}/{slug}"` | parent: `main` | `auth` | `hanf/main/auth` |
-| `"hanf/{parent-slug}/{slug}"` | parent: `hanf/main/auth` | `oauth` | `hanf/auth/oauth` |
-| `"{slug}"` | any | `auth` | `auth` |
-| `"henrik/{slug}"` | any | `auth` | `henrik/auth` |
+| `"{parent-branch}-wt-{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | branch: `hanf/main-wt-auth` |
+| `"../{repo-name}-worktrees/{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | path: `../py-hanf-worktrees/auth` |
 
-The `path-template` controls where the worktree directory is created on disk. `../` places worktrees as sibling directories to the repo root (e.g. repo at `C:\Code\myproject` → worktree at `C:\Code\auth`), not inside the repo.
+The `path-template` controls where the worktree directory is created on disk. Default places worktrees in a sibling directory named `<repo>-worktrees/` (e.g. repo at `C:\Code\py-hanf` → worktrees at `C:\Code\py-hanf-worktrees/auth`).
 
 ## When to Use a Worktree
 
@@ -84,7 +85,7 @@ User opens CC in the new VS Code window. Runs `helm-start`. CC reads the brief a
 
 ### Completion
 
-When all tasks are done, user runs `helm-merge` (see [merge.md](merge.md)):
+When all tasks are done, user runs `helm-merge`:
 1. Merge parent into worktree (catch up)
 2. Verify and audit
 3. Merge worktree into parent (or create PR)
@@ -101,7 +102,7 @@ Never cleanup on failure — preserve the worktree for investigation.
 
 ## Status Tracking
 
-Each worktree writes `_helm/scratch/status.md`, updated after every step (not just on errors). Canonical format defined in [notifications.md](notifications.md). Key fields:
+Each worktree writes `_helm/scratch/status.md`, updated after every step (not just on errors). Canonical format defined in `helm-go` SKILL.md. Key fields:
 
 ```markdown
 parent: feature/auth

@@ -35,18 +35,29 @@ Split the argument on the first `:` character.
 
 ### Step 3: Add task to board
 
-Run `date -u +%Y-%m-%d` to get the current UTC date. **Do not guess or fabricate a date.**
-
 Read `.kanban.md`. Add a new task block under the `## Backlog` heading (before the next `##` heading or end of file):
 
-```markdown
-### <Title>
-- created: <current UTC date>
+If no description:
 
-<Description, if provided>
+```markdown
+### <Title> [backlog]
 ```
 
-### Step 4: Report
+If description provided, use an indented ` ```md ` code block (plain text descriptions are not parsed by the kanban.md extension and are destroyed on drag-and-drop):
+
+```markdown
+### <Title> [backlog]
+
+    ```md
+    <Description>
+    ```
+```
+
+### Step 4: Validate
+
+Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+
+### Step 5: Report
 
 ```
 Added: <title>

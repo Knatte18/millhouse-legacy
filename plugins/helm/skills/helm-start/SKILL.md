@@ -39,23 +39,26 @@ helm-start proceeds through named phases. Report the current phase to the user a
    - `-w` flag or user chooses worktree → **Worktree spawn flow** (see below). After spawning, stop. The user continues in the new VS Code window.
    - No flag / in-place: continue below.
 
-3. **Move to In Progress.** Edit `.kanban.md`: cut the entire task block (from `### Title` to just before the next `###` or `##`) from `## Backlog` and paste it under `## In Progress`. Set `- phase: discussing` in the task's metadata lines.
+3. **Move to In Progress.** Edit `.kanban.md`: cut the entire task block (from `### Title` to just before the next `###` or `##`) from `## Backlog` and paste it under `## In Progress`. Update the `[phase]` in the `###` heading to `[discussing]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push the kanban change: `git add .kanban.md && git commit -m "kanban: move <task> to In Progress" && git push`.
 
 #### Worktree Spawn Flow
 
 When the user chooses `-w` (worktree mode):
 
-1. **Move to In Progress first.** Edit `.kanban.md`: move the task block to `## In Progress`, set `- phase: discussing`.
+1. **Move to In Progress first.** Edit `.kanban.md`: move the task block to `## In Progress`, update `[phase]` in the `###` heading to `[discussing]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to In Progress" && git push`.
 
 2. **Read config.** Read `_helm/config.yaml`. Extract `worktree.branch-template` and `worktree.path-template`.
 
-3. **Generate slug.** Derive slug from task title: lowercase, spaces to hyphens, remove special characters, max 30 chars. E.g. "Add OAuth Support" → `add-oauth-support`.
+3. **Generate slug.** Derive slug from task title: lowercase, spaces to hyphens, remove special characters, max 20 chars. E.g. "Add OAuth Support" → `add-oauth-support`.
 
-4. **Resolve parent-slug.** Get the current branch name (`git branch --show-current`). Extract the last `/`-delimited segment. E.g. `hanf/main/auth` → `auth`, `main` → `main`.
+4. **Resolve template variables.**
+   - `{slug}` — the task slug from step 3.
+   - `{parent-branch}` — full current branch name (`git branch --show-current`). E.g. `hanf/main`.
+   - `{repo-name}` — basename of the repo root directory (`basename $(git rev-parse --show-toplevel)`). E.g. `py-hanf`.
 
-5. **Generate branch and path.** Apply the templates:
-   - Replace `{slug}` with the task slug.
-   - Replace `{parent-slug}` with the parent slug.
+5. **Generate branch and path.** Apply the templates from config, replacing variables. E.g. with default templates:
+   - Branch: `hanf/main-wt-add-oauth-support`
+   - Path: `../py-hanf-wt-add-oauth-support`
    - `path-template` is relative to the repo root.
 
 6. **Create worktree.**
@@ -70,18 +73,39 @@ When the user chooses `-w` (worktree mode):
 
 8. **Create _helm structure in worktree.** Create `_helm/scratch/briefs/` in the worktree path.
 
-9. **Write handoff brief.** Write `<worktree-path>/_helm/scratch/briefs/handoff.md` using the Handoff Brief Format (see `plugins/helm/doc/modules/plans.md`). If no discussion has happened yet, populate `## Discussion Summary` with the task title and body from `.kanban.md`.
+   **Create `.vscode/settings.json`** in the worktree with a random title bar color so the user can visually distinguish worktree windows:
+   ```json
+   {
+     "workbench.colorCustomizations": {
+       "titleBar.activeBackground": "<random hex color>",
+       "titleBar.activeForeground": "#ffffff"
+     }
+   }
+   ```
+   Pick a color from this list (all readable with white text): `#2d7d46`, `#7d2d6b`, `#2d4f7d`, `#7d5c2d`, `#6b2d2d`, `#2d6b6b`, `#4a2d7d`, `#7d462d`. To avoid duplicates, check existing worktrees' `.vscode/settings.json` files (via `git worktree list`) and pick a color not already in use. If all colors are taken, cycle back to the first.
 
-10. **Open VS Code.**
-    ```bash
-    code <worktree-path>
+9. **Write worktree-local kanban board.** Write `<worktree-path>/.kanban.md` with only the spawned task under `## In Progress` (plus empty Backlog, Done, Blocked columns). This replaces the parent's full board — the worktree tracks only its own task. If the task has a description body in the parent board, preserve it using the indented ` ```md ` code block format (see `kanban-format.md`).
+
+10. **Write status.md in worktree.** Write `<worktree-path>/_helm/scratch/status.md`:
+    ```
+    parent: <parent-branch>
+    task: <task-title>
+    phase: discussing  # also reflected as [discussing] in .kanban.md heading
     ```
 
-11. **Report.** Tell the user:
+11. **Write handoff brief.** Write `<worktree-path>/_helm/scratch/briefs/handoff.md` using the Handoff Brief Format (see `plugins/helm/doc/modules/plans.md`). If no discussion has happened yet, populate `## Discussion Summary` with the task title and body from `.kanban.md`.
+
+12. **Open VS Code.** Use `code.cmd` (not `code` — the wrapper is broken on Node 24+):
+    ```bash
+    code.cmd "$(cd <worktree-path> && pwd -W)"
+    ```
+    If `code.cmd` is not in PATH, use the full path: `"/c/Users/<user>/AppData/Local/Programs/Microsoft VS Code/bin/code.cmd"`.
+
+13. **Report.** Tell the user:
     - Worktree created at `<path>` on branch `<branch>`
     - "Run `helm-start` in the new VS Code window to continue planning."
 
-12. **Stop.** Do not continue to Explore or Discuss phases. The parent session is done with this task.
+14. **Stop.** Do not continue to Explore or Discuss phases. The parent session is done with this task.
 
 ### Phase: Explore
 
@@ -235,7 +259,7 @@ When the user chooses `-w` (worktree mode):
 
 ### Phase: Approve
 
-9. Present the final plan to the user for approval. Show the complete plan content.
+9. Present the plan to the user: show the **file path** to the plan (e.g. `_helm/scratch/plans/<file>.md`) and a **brief summary** (step count, key files touched). Do NOT dump the full plan content in chat — the user reads it in the editor. Ask for approval.
 
 10. **Plan approved** --- lock the plan:
 
@@ -249,7 +273,7 @@ When the user chooses `-w` (worktree mode):
     task: <task-title>
     ```
 
-    c. Update `- phase: planned` in the task block in `.kanban.md`. Task stays in `## In Progress` column (no move).
+    c. Update `[phase]` in the task's `###` heading to `[planned]` in `.kanban.md`. Task stays in `## In Progress` column (no move). Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
     d. Report: "Plan approved. Task ready for `helm-go`."
 
@@ -272,7 +296,7 @@ If the user decides mid-discussion that they want a worktree:
 
 1. **Write handoff brief.** Write `_helm/scratch/briefs/handoff.md` summarizing the discussion so far — decisions made, approaches considered, relevant code explored.
 
-2. **Run the Worktree Spawn Flow** from Phase: Select (steps 2-12 above). The brief is written to the *new* worktree's `_helm/scratch/briefs/handoff.md` (not the parent's).
+2. **Run the Worktree Spawn Flow** from Phase: Select (steps 2-14 above). The brief is written to the *new* worktree's `_helm/scratch/briefs/handoff.md` (not the parent's).
 
 3. **Stop.** The user runs `helm-start` in the new VS Code window. The receiving session reads the brief and continues from Phase: Explore — it does not repeat the discussion, but it does run its own exploration and may ask follow-up questions.
 
@@ -280,5 +304,5 @@ If the user decides mid-discussion that they want a worktree:
 
 ## Kanban Updates
 
-- Task selected -> move to **In Progress** column, set `phase: discussing`
-- Plan approved -> set `phase: planned` (stays in In Progress column)
+- Task selected -> move to **In Progress** column, update `[discussing]` in heading
+- Plan approved -> update `[planned]` in heading (stays in In Progress column)

@@ -2,7 +2,7 @@
 
 Reference for the [kanban.md VS Code extension](https://marketplace.visualstudio.com/items?itemName=wguilherme.kanban-md) file format. Helm reads and writes `.kanban.md` directly.
 
-Source: [wguilherme/kanban.md](https://github.com/wguilherme/kanban.md)
+Source: [wguilherme/kanban.md](https://github.com/wguilherme/kanban.md) — verified against `src/markdownParser.ts` (2026-04-03).
 
 ## File Location
 
@@ -17,20 +17,18 @@ The file must use the `.kanban.md` extension to be recognized by the VS Code ext
 
 ## Column Name
 
-### Task Title
+### Task Title [phase]
 - priority: high
 - tags: [tag1, tag2]
-- due: 2026-04-02
 
-Description text here.
-
-- [ ] Sub-task 1
-- [x] Sub-task 2
+    ```md
+    Description text here.
+    ```
 ```
 
-- `#` — project title (one per file)
+- `#` — project title (one per file, must be line 1)
 - `##` — columns (Backlog, In Progress, Done, Blocked, etc.)
-- `###` — tasks within a column
+- `###` — tasks within a column, optionally with `[phase]` suffix
 
 ## Columns Helm Uses
 
@@ -41,68 +39,191 @@ Description text here.
 | **Done** | Completed |
 | **Blocked** | Needs user input or upstream fix |
 
+Columns can have an `[Archived]` suffix (e.g. `## Done [Archived]`) to collapse them in the VS Code panel.
+
+## Task Title and Phase
+
+Task titles use the format `### Title [phase]` where `[phase]` is optional:
+
+```markdown
+### Fix input validation [implementing]
+### Add retry logic [backlog]
+### Simple task
+```
+
+Valid phase values: `backlog`, `discussing`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `complete`.
+
+To update phase: edit the `[phase]` in the `###` heading directly. To remove phase: remove the `[...]` suffix.
+
+Task identity is the title text *without* the `[phase]` suffix. `### Fix input validation [implementing]` → title = `Fix input validation`, phase = `implementing`.
+
+Slug for branch names: derived from title (without phase), lowercase, spaces to hyphens, remove special characters. "Fix input validation" → `fix-input-validation`.
+
+## Task Header Format
+
+The extension supports two task formats, configurable in VS Code settings:
+
+- **Header format** (default): `### Task Title`
+- **List format**: `- Task Title`
+
+Helm always uses header format (`### `). Both are detected by the parser via `isTaskTitle()`.
+
+**Important:** In list format, a non-indented `- ` line that isn't a recognized property is treated as a new task title. This is why unknown metadata fields are dangerous — see "Unknown fields" below.
+
+## Metadata Fields
+
+Only use fields recognized by the extension parser. The parser matches this exact regex:
+
+```
+/^\s*- (due|tags|priority|workload|steps|defaultExpanded):\s*(.*)$/
+```
+
+### Supported fields
+
+| Field | Syntax | Values | Description |
+|-------|--------|--------|-------------|
+| `tags` | `- tags: [tag1, tag2]` | Comma-separated in brackets | Labels shown on card |
+| `priority` | `- priority: high` | `low`, `medium`, `high` | Colored left border (green/yellow/red) |
+| `workload` | `- workload: Hard` | `Easy`, `Normal`, `Hard`, `Extreme` | Case-sensitive. Effort indicator |
+| `due` | `- due: 2026-04-15` | `YYYY-MM-DD` | Deadline |
+| `defaultExpanded` | `- defaultExpanded: true` | `true`, `false` | Whether card starts expanded |
+| `steps` | `- steps:` | (triggers subtask mode) | Followed by indented checkboxes |
+
+### Inline hashtags
+
+Lines starting with `#` (not `##` or `###`) are parsed as tags via the regex `/#[\w\-@$%✓0-9]+/g`. These appear immediately after the task title:
+
+```markdown
+### Design Login Page
+#design #ui #frontend
+- priority: high
+```
+
+### Steps (subtasks)
+
+The `- steps:` field enables checkbox parsing. Subtasks must be indented 2+ spaces:
+
+```markdown
+### Implement Auth
+- steps:
+  - [ ] Setup JWT tokens
+  - [x] Add OAuth providers
+  - [ ] Write security tests
+```
+
+### Unknown fields
+
+**Do NOT use unrecognized field names** (e.g. `- created:`, `- phase:`, `- assignee:`). The parser behavior is:
+
+1. The unknown line does not match any property regex.
+2. The parser finalizes the current task (saves it without the unknown field).
+3. The line is re-processed from the top of the parse loop.
+4. If the line starts with non-indented `- ` → it becomes a **new task card** with the field text as its title (e.g. a task titled "created: 2024-01-01").
+5. If the line is indented → it is silently ignored.
+
+This is worse than just losing metadata — it corrupts the board structure. Phase is tracked in the `###` heading, not as a metadata field.
+
+## Descriptions
+
+**Descriptions must use indented ` ```md ` code blocks.** Plain text after metadata is NOT parsed as a description — the parser ignores or misinterprets it.
+
+### Correct format
+
+```markdown
+### Add OAuth Support [implementing]
+- priority: high
+- tags: [auth, backend]
+
+    ```md
+    Google OAuth first. Must support token refresh.
+    Multi-line descriptions work.
+    ```
+```
+
+The generator uses 4-space indentation for the code block. The parser accepts 1+ spaces (`/^\s+```md/`).
+
+### Why not plain text?
+
+A plain text line after metadata (or an empty line) does not match any property regex. The parser finalizes the task, then re-processes the line. The line either:
+- Becomes an accidental new task (if it starts with `- `)
+- Is silently discarded (any other content)
+
+**Drag-and-drop destroys plain text descriptions.** The extension regenerates the entire file via `generateMarkdown()`, which only outputs descriptions it successfully parsed (i.e. from ` ```md ` blocks).
+
+## Drag-and-Drop Behavior
+
+When a card is dragged between columns in the VS Code panel:
+
+1. The in-memory board model is updated (`moveTask()` splices the task between column arrays).
+2. `generateMarkdown()` regenerates the **entire file** from the board model.
+3. The new markdown is written to disk.
+
+### What this means
+
+- Any content the parser didn't capture is **permanently lost** (plain text descriptions, unknown fields, comments between tasks).
+- The file is normalized to the generator's format:
+  - Blank line after board title, after each column heading, and after each task block.
+  - Properties written without indentation, in order: tags → priority → workload → due → defaultExpanded → steps.
+  - Descriptions wrapped in `    ```md` blocks.
+- Task order within a column may change (the dragged card lands at the drop position).
+
+### Blank line requirements
+
+The parser skips empty lines unconditionally (`continue`). Blank lines are not required between headings and metadata — but the generator always adds them, so after any drag-and-drop the file will have blank lines everywhere.
+
 ## Task Format
 
 ### Minimal task (what helm-add creates)
 
 ```markdown
-### Add OAuth Support
-- created: 2026-04-02
-- phase: backlog
+### Add OAuth Support [backlog]
 ```
 
 ### Full task
 
 ```markdown
-### Add OAuth Support
+### Add OAuth Support [implementing]
 - priority: high
 - tags: [auth, backend]
 - due: 2026-04-15
-- phase: implementing
-- created: 2026-04-02
 
-Google OAuth first. Must support token refresh.
-
-- [ ] Create OAuth client
-- [x] Set up callback endpoint
+    ```md
+    Google OAuth first. Must support token refresh.
+    ```
 ```
 
-## Metadata Fields
+### Task with steps
 
-Metadata lines go directly under the `###` heading, one per line, `- key: value` format.
-
-| Field | Values | Description |
-|-------|--------|-------------|
-| `priority` | high, medium, low | Colored left border in VS Code |
-| `tags` | `[tag1, tag2]` | Labels for filtering |
-| `due` | `YYYY-MM-DD` | Deadline |
-| `phase` | discussing, planned, implementing, testing, reviewing, blocked, complete | Helm workflow phase (Helm-specific) |
-| `created` | `YYYY-MM-DD` | Creation date (Helm-specific) |
-| `workload` | Easy, Normal, Hard, Extreme | Effort estimate |
+```markdown
+### Implement Auth [implementing]
+- priority: high
+- steps:
+  - [x] Setup JWT tokens
+  - [ ] Add OAuth providers
+  - [ ] Write security tests
+```
 
 ## How Helm Uses .kanban.md
 
 | Operation | What Helm does |
 |-----------|---------------|
-| **Create task** (helm-add) | Add `### Title` with metadata under `## Backlog` |
+| **Create task** (helm-add) | Add `### Title [backlog]` under `## Backlog` |
 | **List tasks** (helm-start) | Read all `###` headings under target column |
 | **Move task** | Cut the entire task block (heading through all content until next `###` or `##`), paste under the target column |
-| **Update phase** | Edit the `- phase:` line in the task block |
+| **Update phase** | Edit the `[phase]` suffix in the `###` heading |
 | **Update task** | Edit content within the task block directly |
 
 ## Task Block Boundaries
 
-A task block starts at `### Title` and ends immediately before the next `###`, `##`, or end of file. When moving or reading tasks, capture the entire block.
-
-## Task Identity
-
-Tasks are identified by their `###` heading text. When `helm-start` selects a task, the title is stored in `_helm/scratch/status.md` as `task:` for subsequent skills to reference.
-
-Slug for branch names: lowercase, spaces to hyphens, remove special characters. "Add OAuth Support" → `add-oauth-support`.
+A task block starts at `### Title` (with or without `[phase]`) and ends immediately before the next `###`, `##`, or end of file. When moving or reading tasks, capture the entire block.
 
 ## Write Rules
 
-- `.kanban.md` lives in the repo root and is written **only from the main repo**, never from worktrees.
-- Each worktree works on one task. The task's column and phase are updated from the main repo.
-- Keep metadata lines in consistent order: priority, tags, due, phase, created.
-- Descriptions and sub-tasks go after the metadata lines, separated by a blank line.
+- `.kanban.md` is **worktree-local**. Each worktree has its own copy via git.
+  - **Parent worktree / main repo:** full board with all tasks.
+  - **Task worktree** (spawned by `helm-start -w`): board with only the spawned task (+ any sub-tasks created during work).
+- Each worktree updates its own `.kanban.md`. Never reach into another worktree's filesystem to edit its board.
+- On merge (`helm-merge`): `.kanban.md` will conflict — always keep the **parent's version** (`--theirs` during merge parent→worktree, parent's copy during merge worktree→parent). Then update the parent's board (move task to Done).
+- Only use extension-supported metadata fields (tags, priority, workload, due, defaultExpanded, steps).
+- Descriptions use indented ` ```md ` code blocks — never plain text.
+- **Never commit `.kanban.md` alone.** Stage kanban changes and include them in the next code commit. Kanban updates are not worth their own commit.

@@ -5,9 +5,9 @@ description: Dashboard showing all active worktrees and their state.
 
 # helm-status
 
-Dashboard. Read-only. No arguments.
+Dashboard. No arguments.
 
-Shows board summary, current status, and worktree overview.
+Shows board summary, current status, and worktree overview. Also cleans up stale worktrees.
 
 ---
 
@@ -19,10 +19,9 @@ Read `.kanban.md` from the repo root. If it does not exist, stop and tell the us
 
 Parse the file:
 - `##` headings are columns (e.g. Backlog, In Progress, Done, Blocked).
-- `###` headings are tasks within columns.
-- Each task may have `- phase: <value>` metadata.
+- `###` headings are tasks within columns. A task heading may include a `[phase]` suffix (e.g. `### Fix bug [implementing]`).
 
-Count tasks per column. For columns with tasks that have `- phase:` metadata, also count tasks per phase within that column.
+Count tasks per column. For columns with tasks that have a `[phase]` suffix in their heading, also count tasks per phase within that column.
 
 ### Step 2: Read current status
 
@@ -33,16 +32,25 @@ Read `_helm/scratch/status.md` if it exists. Extract:
 
 If a plan file path is present and the file exists, read the plan to count total steps (lines matching `### Step`) and completed steps (based on git log matching `Commit:` messages from the plan).
 
-### Step 3: Read worktrees
+### Step 3: Clean up stale worktrees
+
+Run `git worktree list --porcelain`. For each worktree (skip the main one):
+1. Check if the worktree's `_helm/scratch/status.md` has `phase: complete`.
+2. Check if the worktree directory is still open in VS Code: `test -f <worktree-path>/.vscode-server` or check if any process holds a lock. In practice, just try `git worktree remove <path>` — if it fails (directory locked), skip it silently.
+3. If phase is complete and removal succeeds: delete the local branch (`git branch -D <branch>`) and the remote branch (`git push origin --delete <branch>` if it was pushed). Report: `Cleaned up: <branch>`.
+
+Run `git worktree prune` to remove any remaining stale entries (directories deleted manually).
+
+### Step 4: Read worktrees
 
 Run `git worktree list`. Parse the output — each line has: `<path> <hash> [<branch>]`.
 
 Skip the main worktree (the first entry). For each additional worktree:
 1. Extract branch name from the `[branch]` part.
-2. Try to read `<worktree-path>/_helm/scratch/status.md` for that worktree's phase and step progress.
-3. Determine parent branch: read `_helm/config.yaml` `worktree.branch-template` to infer parent from branch name, or fall back to `main`.
+2. Try to read `<worktree-path>/_helm/scratch/status.md` for that worktree's phase, step progress, and `parent:` field.
+3. Determine parent branch from the `parent:` field in status.md. If not present, fall back to `main`.
 
-### Step 4: Display dashboard
+### Step 5: Display dashboard
 
 Print the dashboard. Use this exact format:
 
@@ -54,7 +62,7 @@ Board (.kanban.md):
   Blocked:       N tasks
 ```
 
-Only show columns that exist in the board. For In Progress, if tasks have phase metadata, show a parenthetical breakdown, e.g. `2 tasks (1 implementing, 1 reviewing)`.
+Only show columns that exist in the board. For In Progress, if tasks have `[phase]` suffixes in their headings, show a parenthetical breakdown, e.g. `2 tasks (1 implementing, 1 reviewing)`.
 
 If `_helm/scratch/status.md` exists and has a phase that is not `complete`:
 

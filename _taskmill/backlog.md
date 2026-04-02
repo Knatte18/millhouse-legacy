@@ -1,13 +1,7 @@
 # Backlog
 
-- [ ] **Implement Helm plugin**
-  Build the Helm plugin from the design docs in plugins/helm/doc/. See implementation-plan.md for phased build order.
+- [ ] **Helm notifications**
+  aktiver og test toast-varsler: Toast er enabled i _helm/config.yaml men aldri testet. Test BurntToast på Windows. Verifiser at helm-go og helm-merge faktisk trigger notifications korrekt.
 
-- [ ] **Plugin for bypassing Claude's URL refusal**
-  Plugin to tweak Claude into reading web pages that it otherwise refuses to read for unclear reasons.
-
-- [ ] **Remove taskmill plugin**
-  When Helm is operational. Keep as reference until then.
-
-- [ ] **Helm: lokal kanban med on-demand GitHub sync**
-  Kanban-oppdateringer mot GitHub API er trege. Ha en lokal kanban-tilstand som oppdateres umiddelbart, og sync til/fra GitHub kun når brukeren eksplisitt ber om det. Folk kan legge inn items på nett, og de hentes inn ved sync.
+- [ ] **git /issue skill — opprett issue på dette repoet**
+  En /issue skill i git-pluginen som oppretter GitHub issue på repoet du jobber i. Bruker gh issue create. Fallback til browser. Forskjell fra /feedback som alltid går til millhouse.

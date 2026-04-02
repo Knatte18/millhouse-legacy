@@ -32,7 +32,7 @@ Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `p
 ### Editing plugins
 
 - Each plugin directory is the source of truth. Edit skills and scripts there directly.
-- Plugins are linked via junctions/symlinks — edits are live immediately. Run `bash install-plugins.sh` if adding a new plugin.
+- Plugins are linked via junctions/symlinks — edits are live immediately. Run `.\symlink-plugins.ps1` if adding a new plugin.
 
 ## Git workflow
 

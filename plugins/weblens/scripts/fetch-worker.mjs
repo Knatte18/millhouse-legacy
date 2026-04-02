@@ -1,6 +1,8 @@
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import { fileURLToPath } from "url";
+import { existsSync } from "fs";
+import puppeteer from "puppeteer-core";
 
 const HEADERS = {
   "User-Agent":
@@ -84,7 +86,23 @@ async function fetchReddit(url) {
     return `# Error fetching ${url}\n\nHTTP ${response.status} ${response.statusText}`;
   }
 
-  const json = await response.json();
+  // Reddit search and some other pages return HTML even with .json suffix.
+  // Check Content-Type and try JSON parse with fallback to HTML extraction.
+  const contentType = response.headers.get("content-type") || "";
+  const body = await response.text();
+
+  if (!contentType.includes("json")) {
+    // Not JSON — fall through to normal HTML extraction
+    return null;
+  }
+
+  let json;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    // Malformed JSON — fall through to HTML extraction
+    return null;
+  }
 
   if (Array.isArray(json)) {
     const result = formatRedditPost(json);
@@ -113,9 +131,74 @@ function htmlToText(html) {
   return text;
 }
 
+function findChromeExecutable() {
+  const candidates = [
+    process.env.CHROME_PATH,
+    "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+  ].filter(Boolean);
+
+  for (const path of candidates) {
+    if (existsSync(path)) return path;
+  }
+  return null;
+}
+
+async function fetchWithBrowser(url) {
+  const chromePath = findChromeExecutable();
+  if (!chromePath) {
+    console.error("weblens: Chrome not found, skipping browser fallback");
+    return null;
+  }
+
+  console.error(`weblens: falling back to headless Chrome for ${url}`);
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      executablePath: chromePath,
+      headless: true,
+      args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+    });
+    const page = await browser.newPage();
+    await page.setUserAgent(HEADERS["User-Agent"]);
+    await page.goto(url, { waitUntil: "networkidle0", timeout: 30_000 });
+    const html = await page.content();
+
+    const { document } = parseHTML(html);
+    const reader = new Readability(document);
+    const article = reader.parse();
+
+    if (article) {
+      const text = htmlToText(article.content);
+      return `# ${article.title}\n\nSource: ${url}\n\n${text}`;
+    }
+
+    // Readability failed on rendered HTML — extract body text
+    const { document: fallbackDoc } = parseHTML(html);
+    for (const tag of fallbackDoc.querySelectorAll("script, style, noscript, nav, header, footer")) {
+      tag.remove();
+    }
+    const fallbackText = htmlToText(fallbackDoc.body?.innerHTML || "");
+    if (fallbackText.length > 100) {
+      return `# ${url}\n\n${fallbackText}`;
+    }
+    return null;
+  } catch (e) {
+    console.error(`weblens: browser fallback failed: ${e.message}`);
+    return null;
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
 async function fetchPage(url) {
   if (isRedditUrl(url)) {
-    return fetchReddit(url);
+    const redditResult = await fetchReddit(url);
+    if (redditResult !== null) return redditResult;
+    // JSON fallback failed (e.g. search pages) — continue with HTML extraction
   }
 
   let response;
@@ -153,10 +236,19 @@ async function fetchPage(url) {
     if (fallbackText.length > 100) {
       return `# ${url}\n\n${fallbackText}`;
     }
+
+    // Static fetch yielded no usable content — try headless browser
+    const browserResult = await fetchWithBrowser(url);
+    if (browserResult) return browserResult;
+
     return `# ${url}\n\nCould not extract readable content from this page.`;
   }
 
   const text = htmlToText(article.content);
+  if (text.length < 100) {
+    const browserResult = await fetchWithBrowser(url);
+    if (browserResult) return browserResult;
+  }
   return `# ${article.title}\n\nSource: ${url}\n\n${text}`;
 }
 
