@@ -229,7 +229,81 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
     Implementing agent's position: "<reasoning>"
     ```
 
-<!-- Phase: Finalize — implemented in Phase 3.3 -->
+### Phase: Finalize
+
+17. **Codeguide update.** If `_codeguide/Overview.md` exists, invoke the `codeguide:codeguide-update` skill (no arguments --- it defaults to the current git diff).
+
+18. **Write knowledge entry.** Create `_helm/knowledge/<worktree-slug>-<timestamp>-<topic>.md` where:
+    - `<worktree-slug>` is the current branch name slugified (e.g. `feature-auth-oauth`)
+    - `<timestamp>` is UTC `YYYYMMDD-HHMMSS`
+    - `<topic>` is a short slug for the task (e.g. `oauth-client`)
+
+    Content:
+    ```markdown
+    # Task: <title>
+
+    ## Shared utilities created
+    - (list any new shared utilities with file paths and signatures)
+
+    ## Patterns established
+    - (list any new conventions established)
+
+    ## Existing patterns discovered
+    - (list existing codebase patterns that weren't obvious)
+
+    ## Gotchas
+    - (list things that caused wasted time or were surprising)
+    ```
+
+    Include only categories that have content. If nothing was learned, skip this step.
+
+19. **Record architectural decisions.** If any steps involved architectural choices (where a future session might ask "why did they do it this way?"), append to `_helm/knowledge/decisions.md`:
+
+    ```markdown
+    ## [Step N] Decision title
+    **Why:** Reasoning behind the choice
+    **Trade-off:** What was traded off
+    **Alternatives rejected:** What else was considered and why not
+    ```
+
+    Create the file if it doesn't exist.
+
+20. **Post-review commit.** If any files changed during review fixes, codeguide update, or knowledge writing:
+    - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
+    - Commit: `chore: post-review cleanup for <task-title>`
+
+21. **Update status.md:**
+    ```
+    phase: complete
+    ```
+
+22. **Update GitHub issue.** Post a summary comment:
+    ```bash
+    gh issue comment <issue-number> --repo <owner>/<repo> --body "<completion summary>"
+    ```
+    The summary should include: steps completed, test results, review result, knowledge captured.
+
+23. **Move kanban to Done:**
+    ```bash
+    gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <done-option-id>
+    ```
+
+24. **Knowledge synthesis.** If `_helm/knowledge/` contains more than 5 entries (excluding `decisions.md` and `summary.md`):
+    1. Read all entries.
+    2. Deduplicate (multiple tasks may discover the same pattern).
+    3. Resolve conflicts (if tasks established contradictory patterns, pick the winner).
+    4. Write consolidated `_helm/knowledge/summary.md`.
+    5. Subsequent tasks read only the summary, not individual entries.
+
+---
+
+## Completion
+
+When no more planned tasks remain:
+
+1. Set `_helm/scratch/status.md` phase to `ready-to-merge`.
+2. Post comment on GitHub issue: "All tasks complete. Worktree ready to merge."
+3. Report to user: `[helm] ready to merge --- all tasks complete.`
 
 ---
 
