@@ -11,7 +11,7 @@ On-demand sync from local `.kanbn/index.md` to GitHub Projects board and issues.
 
 ## Entry
 
-Read `_helm/config.yaml`. The `github:` section must exist with `owner` and `repo`. If missing, stop: "GitHub config not set. Add `github:` section to `_helm/config.yaml` or re-run `helm-setup`."
+Read `_helm/config.yaml`. The `github:` section must exist with `owner`, `repo`, `project-number`, `project-node-id`, `status-field-id`, and `columns`. If missing, stop: "GitHub config not set. Add `github:` section to `_helm/config.yaml` or re-run `helm-setup`."
 
 Check GitHub CLI is authenticated:
 
