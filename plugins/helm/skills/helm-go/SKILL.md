@@ -135,7 +135,101 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
    phase: test
    ```
 
-<!-- Phase: Review, Resolve, Finalize — implemented in Phase 3.2 and 3.3 -->
+### Phase: Review (round N/3)
+
+7. Update `_helm/scratch/status.md`:
+   ```
+   phase: reviewing
+   ```
+
+   Move kanban to **Reviewing**:
+   ```bash
+   gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <reviewing-option-id>
+   ```
+
+8. **Spawn code-reviewer Agent.** Use the Agent tool with `model: sonnet`. Report to user: **"Review --- round 1/3"**
+
+   Compute the diff: `git diff <plan_start_hash>..HEAD`
+
+   Read `_codeguide/Overview.md` if it exists (pass content to reviewer). Read `_helm/knowledge/` entries if they exist (pass content to reviewer).
+
+   Pass the following prompt verbatim, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, and `<KNOWLEDGE_CONTENT>`:
+
+   ---
+   You are an independent code reviewer. Evaluate the submitted diff for production readiness. You have no shared context with the implementing agent --- you see only the diff, the plan, and the quality standards. Be thorough, critical, and constructive.
+
+   **FIRST ACTION --- mandatory before anything else:**
+   Read `_codeguide/Overview.md` if it exists. Use its module table and routing hints to navigate to relevant source files. If it does not exist, proceed without it.
+
+   **Context provided:**
+
+   1. The approved plan:
+   <PLAN_CONTENT>
+
+   2. Codeguide Overview (if available):
+   <OVERVIEW_CONTENT>
+
+   3. Knowledge from prior tasks (if available):
+   <KNOWLEDGE_CONTENT>
+
+   4. The diff to review:
+   <DIFF>
+
+   **Evaluate the diff against these criteria:**
+
+   - **Plan alignment:** Does the code match the plan? Are there steps in the plan that the diff doesn't implement, or code in the diff that the plan doesn't describe?
+   - **Correctness:** Bugs, logic errors, off-by-one errors, null/undefined handling?
+   - **Dead code:** Unused exports, unimported files, unreachable branches?
+   - **Test thoroughness** (enforce `@code:testing` rules):
+     - Happy-path-only tests -> BLOCKING. Error paths and edge cases from plan's `Key test scenarios` must be covered.
+     - Implementation-mirroring tests (testing internal state instead of observable behavior) -> BLOCKING.
+     - Shallow assertions (`assert result`, `assert result is not None`) -> BLOCKING.
+     - TDD-marked steps where diff shows implementation committed without a preceding failing test -> BLOCKING.
+   - **Utility duplication** (BLOCKING): For every new function, helper, or utility in the diff, grep the codebase for existing implementations with similar names or purposes. Use the codeguide Overview to identify which modules to check. If an existing utility covers the same functionality, flag the reimplementation as BLOCKING with a pointer to the existing implementation.
+   - **Pattern consistency:** Check that new code follows the same patterns as existing code in the same area --- naming conventions, error handling style, authentication patterns on endpoints.
+   - **Codebase consistency:** Does the code follow existing patterns in the codebase?
+
+   **Output format:**
+
+   For each finding:
+   - State the file and line(s) it applies to
+   - State severity: **BLOCKING** (must fix before merge) or **NIT** (nice-to-have improvement)
+   - Describe the issue and suggest a fix
+
+   End with per-file observations (one sentence per file changed) and an overall verdict: **APPROVE** or **REQUEST CHANGES**.
+   - APPROVE means: no BLOCKING issues remain. NITs are noted but do not block. Must include per-file observations --- a bare "APPROVE" without per-file analysis is invalid.
+   - REQUEST CHANGES means: one or more BLOCKING issues must be addressed.
+
+   Return only the review report. No preamble, no closing remarks.
+   ---
+
+9. **Before reading the reviewer's findings**, invoke the `helm-receiving-review` skill via the Skill tool. This is **mandatory** --- it loads the decision tree into context before evaluation begins. Loading it after reading findings is useless; you will have already formed rationalizations.
+
+10. Read the reviewer's findings. Verify the reviewer's verdict is substantiated --- output must contain per-file observations. A bare "APPROVE" without per-file analysis is treated as a failed review; re-spawn the reviewer.
+
+11. If reviewer **approves** (no BLOCKING issues): proceed to Phase: Finalize.
+
+### Phase: Resolve (round N/3)
+
+12. If reviewer **requests changes**: report **"Resolve --- round N/3"**
+
+13. Evaluate each finding through the receiving-review decision tree. For each finding, state:
+    1. The finding
+    2. Your VERIFY assessment (accurate / inaccurate / uncertain)
+    3. Your HARM CHECK result (which harm category, if any)
+    4. Your action: FIX or PUSH BACK (with cited evidence)
+
+14. Fix accepted issues. Re-run full verification (the verify command from plan frontmatter).
+
+15. Re-spawn code-reviewer Agent with the updated diff (`git diff <plan_start_hash>..HEAD`). Report: **"Review --- round N/3"**
+
+16. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Move kanban to **Blocked**. Post comment on GitHub issue with both sides:
+    ```
+    Code reviewer flagged: "<finding>"
+    Implementing agent's position: "<reasoning>"
+    ```
+
+<!-- Phase: Finalize — implemented in Phase 3.3 -->
 
 ---
 
