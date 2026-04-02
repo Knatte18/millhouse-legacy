@@ -13,9 +13,9 @@ Interactive. Pick a task and design the solution.
 
 ## Entry
 
-Read `_helm/config.yaml`. Extract `github.owner`, `github.repo`, `github.project-number`, `github.project-node-id`, `github.status-field-id`, and `github.columns`.
+Read `_helm/config.yaml`. If it does not exist, stop and tell the user to run `helm-setup` first.
 
-If `_helm/config.yaml` does not exist, stop and tell the user to run `helm-setup` first.
+Read `.kanbn/index.md`. If it does not exist, stop and tell the user to run `helm-setup` first.
 
 ---
 
@@ -27,43 +27,17 @@ helm-start proceeds through named phases. Report the current phase to the user a
 
 0. **Check for handoff brief.** If `_helm/scratch/briefs/handoff.md` exists, read it. The brief's `## Issue` identifies the task --- select it directly (skip step 1). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain.
 
-1. **Select task.** Read tasks from GitHub Projects board:
-
-   ```bash
-   gh project item-list <project-number> --owner <owner> --format json
-   ```
-
-   Filter to Backlog column: items where `status == "Backlog"`.
+1. **Select task.** Read `.kanbn/index.md`. Find all list items under the `## Backlog` heading.
 
    - If zero tasks: report "No tasks in Backlog. Run helm-add to create one." Stop.
    - If one task: select it. Show the title and ask user to confirm.
    - If multiple: list them numbered. User picks one.
 
-   After selection, read the full issue body for context:
-
-   ```bash
-   gh issue view <issue-number> --repo <owner>/<repo> --json title,body,number
-   ```
-
 2. **Worktree decision.** Ask the user: worktree or in-place?
    - `-w` flag or user chooses worktree: tell the user worktree mode is not yet implemented (Phase 5). Continue in-place.
    - No flag / in-place: continue below.
 
-3. **Move to Discussing.** Update kanban:
-
-   First, get the item ID for this issue on the project board:
-
-   ```bash
-   gh project item-list <project-number> --owner <owner> --format json
-   ```
-
-   Find the item whose `content.number` matches the selected issue number. Extract its `id`.
-
-   Then move it:
-
-   ```bash
-   gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <discussing-option-id>
-   ```
+3. **Move to Discussing.** Edit `.kanbn/index.md`: remove the selected task from `## Backlog` and add it under `## Discussing`.
 
 ### Phase: Explore
 
@@ -146,7 +120,7 @@ helm-start proceeds through named phases. Report the current phase to the user a
 
    a. Report to user: **"Plan Review --- round 1/3"**
 
-   b. Spawn the plan-reviewer agent using the Agent tool with `model: sonnet`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, `<TASK_BODY>`, and `<ISSUE_NUMBER>`:
+   b. Spawn the plan-reviewer agent using the Agent tool with `model: sonnet`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, and `<TASK_BODY>`:
 
       ---
       You are an independent plan reviewer. Evaluate the submitted implementation plan for production readiness before any code is written. You have no shared context with the planning conversation --- you see only the plan, the task description, and the codebase. Be thorough, critical, and constructive.
@@ -157,7 +131,7 @@ helm-start proceeds through named phases. Report the current phase to the user a
       **Then do the following in order:**
 
       1. Read the task description:
-         - Issue: #<ISSUE_NUMBER> --- <TASK_TITLE>
+         - Task: <TASK_TITLE>
          - Body: <TASK_BODY>
 
       2. Read the plan:
@@ -222,24 +196,12 @@ helm-start proceeds through named phases. Report the current phase to the user a
     ```
     plan: _helm/scratch/plans/<filename>.md
     phase: planned
-    issue: <issue-number>
+    task: <task title>
     ```
 
-    c. Post a summary of the plan (context + step list) as a comment on the GitHub issue:
+    c. Move task to **Planned** in `.kanbn/index.md`: remove from `## Discussing`, add under `## Planned`.
 
-    ```bash
-    gh issue comment <issue-number> --repo <owner>/<repo> --body "<plan summary>"
-    ```
-
-    The comment should contain the actual plan content (context + steps), not a file path --- plan files are gitignored and won't survive worktree cleanup.
-
-    d. Move task to **Planned** on kanban:
-
-    ```bash
-    gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <planned-option-id>
-    ```
-
-    e. Report: "Plan approved. Task ready for `helm-go`."
+    d. Report: "Plan approved. Task ready for `helm-go`."
 
 ---
 
@@ -260,7 +222,7 @@ Not implemented in this phase. If the user requests a worktree mid-discussion, i
 
 ---
 
-## Kanban Updates
+## Kanban Updates (edit `.kanbn/index.md`)
 
 - Task selected -> move to **Discussing**
 - Plan approved -> move to **Planned**

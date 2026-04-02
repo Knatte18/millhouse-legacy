@@ -13,11 +13,9 @@ Autonomous. Execute the plan.
 
 ## Entry
 
-Read `_helm/config.yaml`. Extract `github.owner`, `github.repo`, `github.project-number`, `github.project-node-id`, `github.status-field-id`, and `github.columns`.
+Read `_helm/config.yaml`. If it does not exist, stop --- tell the user to run `helm-setup` first.
 
-If `_helm/config.yaml` does not exist, stop --- tell the user to run `helm-setup` first.
-
-Read `_helm/scratch/status.md`. Extract the `plan:` field to locate the plan file.
+Read `_helm/scratch/status.md`. Extract the `plan:` field to locate the plan file and `task:` field to identify the task.
 
 Read the plan file. Check `approved: true` in frontmatter. If not approved, refuse --- tell the user to run `helm-start` first.
 
@@ -66,22 +64,11 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 2. **Staleness check.** Run `git log --since=<started> -- <file1> <file2> ...` using the `started:` timestamp from plan frontmatter and files from `## Files`.
    - No changes: proceed.
    - Minor changes (formatting, comments, unrelated areas): log warning in status.md, proceed.
-   - Major changes (files restructured, APIs changed, interfaces modified): halt. Move task to **Discussing** on kanban. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Tell the user to re-run `helm-start`.
+   - Major changes (files restructured, APIs changed, interfaces modified): halt. Move task to **Discussing** in `.kanbn/index.md`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Tell the user to re-run `helm-start`.
 
 3. **Explore.** Read code following each step's `Explore:` targets. Read accumulated knowledge from `_helm/knowledge/` if the directory has entries. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
 
-4. **Move to Implementing.** Update kanban:
-
-   Get the item ID for this issue on the project board:
-   ```bash
-   gh project item-list <project-number> --owner <owner> --format json
-   ```
-   Find the item whose `content.number` matches the issue number from status.md. Extract its `id`.
-
-   Move to Implementing:
-   ```bash
-   gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <implementing-option-id>
-   ```
+4. **Move to Implementing.** Edit `.kanbn/index.md`: remove task from its current column (should be `## Planned`), add under `## Implementing`.
 
    Update `_helm/scratch/status.md`:
    ```
@@ -114,9 +101,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
       2. Track retry count in `_helm/scratch/status.md` under `retries:` as `step_<N>: <count>`.
       3. Max 3 retries per step.
       4. After 3 retries: classify the failure and route:
-         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Move kanban to **Blocked**. Post comment on GitHub issue describing the blocker. Stop.
-         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Move kanban to **Blocked**. Stop.
-         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Move kanban to **Blocked**. Stop.
+         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Move task to **Blocked** in `.kanbn/index.md`. Stop.
+         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Move task to **Blocked** in `.kanbn/index.md`. Stop.
+         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Move task to **Blocked** in `.kanbn/index.md`. Stop.
 
    f. **Commit after each successful step** using the step's `Commit:` message:
       - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
@@ -142,10 +129,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
    phase: reviewing
    ```
 
-   Move kanban to **Reviewing**:
-   ```bash
-   gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <reviewing-option-id>
-   ```
+   Move task to **Reviewing** in `.kanbn/index.md`: remove from `## Implementing`, add under `## Reviewing`.
 
 8. **Spawn code-reviewer Agent.** Use the Agent tool with `model: sonnet`. Report to user: **"Review --- round 1/3"**
 
@@ -223,7 +207,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 15. Re-spawn code-reviewer Agent with the updated diff (`git diff <plan_start_hash>..HEAD`). Report: **"Review --- round N/3"**
 
-16. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Move kanban to **Blocked**. Post comment on GitHub issue with both sides:
+16. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Move task to **Blocked** in `.kanbn/index.md`. Report both sides to user:
     ```
     Code reviewer flagged: "<finding>"
     Implementing agent's position: "<reasoning>"
@@ -277,18 +261,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
     phase: complete
     ```
 
-22. **Update GitHub issue.** Post a summary comment:
-    ```bash
-    gh issue comment <issue-number> --repo <owner>/<repo> --body "<completion summary>"
-    ```
-    The summary should include: steps completed, test results, review result, knowledge captured.
+22. **Move task to Done** in `.kanbn/index.md`: remove from current column, add under `## Done`.
 
-23. **Move kanban to Done:**
-    ```bash
-    gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <done-option-id>
-    ```
-
-24. **Knowledge synthesis.** If `_helm/knowledge/` contains more than 5 entries (excluding `decisions.md` and `summary.md`):
+23. **Knowledge synthesis.** If `_helm/knowledge/` contains more than 5 entries (excluding `decisions.md` and `summary.md`):
     1. Read all entries.
     2. Deduplicate (multiple tasks may discover the same pattern).
     3. Resolve conflicts (if tasks established contradictory patterns, pick the winner).
@@ -302,8 +277,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 When no more planned tasks remain:
 
 1. Set `_helm/scratch/status.md` phase to `ready-to-merge`.
-2. Post comment on GitHub issue: "All tasks complete. Worktree ready to merge."
-3. Report to user: `[helm] ready to merge --- all tasks complete.`
+2. Report to user: `[helm] ready to merge --- all tasks complete.`
 
 ---
 
@@ -317,7 +291,7 @@ When no more planned tasks remain:
 
 ---
 
-## Kanban Updates
+## Kanban Updates (edit `.kanbn/index.md`)
 
 - Execution starts -> move to **Implementing**
 - Code review starts -> move to **Reviewing**
@@ -398,7 +372,6 @@ When a step fails after exhausting retries, classify before escalating:
 On any failure that blocks progress:
 
 1. Update `_helm/scratch/status.md` with `blocked: true` and `blocked_reason:`.
-2. Post comment on GitHub issue describing the blocker.
-3. Move kanban card to **Blocked**.
-4. Preserve all state --- do not clean up, do not rollback automatically.
-5. Report the blocker to the user.
+2. Move task to **Blocked** in `.kanbn/index.md`.
+3. Preserve all state --- do not clean up, do not rollback automatically.
+4. Report the blocker to the user.
