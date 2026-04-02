@@ -66,11 +66,11 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 2. **Staleness check.** Run `git log --since=<started> -- <file1> <file2> ...` using the `started:` timestamp from plan frontmatter and files from `## Files`.
    - No changes: proceed.
    - Minor changes (formatting, comments, unrelated areas): log warning in status.md, proceed.
-   - Major changes (files restructured, APIs changed, interfaces modified): halt. Move task to **Discussing** in `.kanbn/index.md`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Tell the user to re-run `helm-start`.
+   - Major changes (files restructured, APIs changed, interfaces modified): halt. Set `phase: discussing` in task frontmatter, move task back to `## Discussing` in `.kanbn/index.md`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Tell the user to re-run `helm-start`.
 
 3. **Explore.** Read code following each step's `Explore:` targets. Read accumulated knowledge from `_helm/knowledge/` if the directory has entries. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
 
-4. **Move to Implementing.** Edit `.kanbn/index.md`: remove task from its current column (should be `## Planned`), add under `## Implementing`.
+4. **Move to Implementing.** Edit `.kanbn/index.md`: remove task from `## Discussing`, add under `## Implementing`. Set `phase: implementing` in the task file's frontmatter.
 
    Update `_helm/scratch/status.md`:
    ```
@@ -103,9 +103,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
       2. Track retry count in `_helm/scratch/status.md` under `retries:` as `step_<N>: <count>`.
       3. Max 3 retries per step.
       4. After 3 retries: classify the failure and route:
-         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Move task to **Blocked** in `.kanbn/index.md`. Stop.
-         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Move task to **Blocked** in `.kanbn/index.md`. Stop.
-         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Move task to **Blocked** in `.kanbn/index.md`. Stop.
+         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Set `phase: blocked` in task frontmatter (stays in Implementing column). Stop.
+         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Set `phase: blocked` in task frontmatter (stays in Implementing column). Stop.
+         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Set `phase: blocked` in task frontmatter (stays in Implementing column). Stop.
 
    f. **Commit after each successful step** using the step's `Commit:` message:
       - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
@@ -119,6 +119,8 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
    - Compare failures against `_helm/scratch/test-baseline.md` to distinguish pre-existing failures from new regressions.
    - If new failures: debug and fix using the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: block (same flow as step failure above).
 
+   Set `phase: testing` in task frontmatter (stays in Implementing column).
+
    Update `_helm/scratch/status.md`:
    ```
    phase: test
@@ -131,7 +133,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
    phase: reviewing
    ```
 
-   Move task to **Reviewing** in `.kanbn/index.md`: remove from `## Implementing`, add under `## Reviewing`.
+   Set `phase: reviewing` in task frontmatter (stays in Implementing column).
 
 8. **Spawn code-reviewer Agent.** Use the Agent tool with `model: sonnet`. Report to user: **"Review --- round 1/3"**
 
@@ -209,7 +211,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 15. Re-spawn code-reviewer Agent with the updated diff (`git diff <plan_start_hash>..HEAD`). Report: **"Review --- round N/3"**
 
-16. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Move task to **Blocked** in `.kanbn/index.md`. Report both sides to user:
+16. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Set `phase: blocked` in task frontmatter (stays in Implementing column). Report both sides to user:
     ```
     Code reviewer flagged: "<finding>"
     Implementing agent's position: "<reasoning>"
@@ -263,7 +265,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
     phase: complete
     ```
 
-22. **Move task to Done** in `.kanbn/index.md`: remove from current column, add under `## Done`.
+22. **Move task to Done** in `.kanbn/index.md`: remove from `## Implementing`, add under `## Done`. Set `phase: complete` in task frontmatter.
 
 23. **Knowledge synthesis.** If `_helm/knowledge/` contains more than 5 entries (excluding `decisions.md` and `summary.md`):
     1. Read all entries.
@@ -293,12 +295,16 @@ When no more planned tasks remain:
 
 ---
 
-## Kanban Updates (edit `.kanbn/index.md`)
+## Kanban Updates
 
-- Execution starts -> move to **Implementing**
-- Code review starts -> move to **Reviewing**
-- Task complete -> move to **Done**
-- Blocked -> move to **Blocked**
+Column moves (edit `.kanbn/index.md`):
+- Execution starts -> Discussing → **Implementing**
+- Task complete -> Implementing → **Done**
+- Plan stale -> Implementing → **Discussing**
+
+Phase updates (edit task frontmatter `phase:` field, no column move):
+- `implementing` -> `testing` -> `reviewing` -> `complete`
+- Any failure -> `blocked`
 
 ---
 
@@ -374,6 +380,6 @@ When a step fails after exhausting retries, classify before escalating:
 On any failure that blocks progress:
 
 1. Update `_helm/scratch/status.md` with `blocked: true` and `blocked_reason:`.
-2. Move task to **Blocked** in `.kanbn/index.md`.
+2. Set `phase: blocked` in task frontmatter (stays in Implementing column).
 3. Preserve all state --- do not clean up, do not rollback automatically.
 4. Report the blocker to the user.

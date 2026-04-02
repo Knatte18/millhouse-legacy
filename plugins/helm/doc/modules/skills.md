@@ -80,8 +80,8 @@ If you're discussing without a worktree and decide you want one, call `helm-star
 
 ### Kanban updates
 
-- Task selected → move to **Discussing**
-- Plan approved → move to **Planned**
+- Task selected → move to **Discussing** column, set `phase: discussing`
+- Plan approved → set `phase: planned` (stays in Discussing column)
 
 ---
 
@@ -184,10 +184,13 @@ When no more planned tasks remain:
 
 ### Kanban updates
 
-- Execution starts → move to **Implementing**
-- Code review starts → move to **Reviewing**
-- Task complete → move to **Done**
-- Blocked → move to **Blocked**
+Column moves:
+- Execution starts → Discussing → **Implementing**
+- Task complete → Implementing → **Done**
+
+Phase updates (task frontmatter only):
+- `implementing` → `testing` → `reviewing` → `complete`
+- Any failure → `blocked`
 
 ---
 

@@ -39,7 +39,7 @@ helm-start proceeds through named phases. Report the current phase to the user a
    - `-w` flag or user chooses worktree: tell the user worktree mode is not yet implemented (Phase 5). Continue in-place.
    - No flag / in-place: continue below.
 
-3. **Move to Discussing.** Edit `.kanbn/index.md`: remove the `- [task-id](tasks/task-id.md)` line from `## Backlog` and add it under `## Discussing`.
+3. **Move to Discussing.** Edit `.kanbn/index.md`: remove the `- [task-id](tasks/task-id.md)` line from `## Backlog` and add it under `## Discussing`. Set `phase: discussing` in the task file's frontmatter.
 
 ### Phase: Explore
 
@@ -201,7 +201,7 @@ helm-start proceeds through named phases. Report the current phase to the user a
     task: <task-id>
     ```
 
-    c. Move task to **Planned** in `.kanbn/index.md`: remove `- [task-id](tasks/task-id.md)` from `## Discussing`, add under `## Planned`.
+    c. Set `phase: planned` in the task file's frontmatter. Task stays in `## Discussing` column (no move in index.md).
 
     d. Report: "Plan approved. Task ready for `helm-go`."
 
@@ -224,7 +224,7 @@ Not implemented in this phase. If the user requests a worktree mid-discussion, i
 
 ---
 
-## Kanban Updates (edit `.kanbn/index.md`)
+## Kanban Updates
 
-- Task selected -> move to **Discussing**
-- Plan approved -> move to **Planned**
+- Task selected -> move to **Discussing** column, set `phase: discussing`
+- Plan approved -> set `phase: planned` (stays in Discussing column)
