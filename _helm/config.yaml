@@ -5,17 +5,6 @@ worktree:
 github:
   owner: "Knatte18"
   repo: "millhouse"
-  project-number: 1
-  project-node-id: "PVT_kwHOCj-P4s4BThH3"
-  status-field-id: "PVTSSF_lAHOCj-P4s4BThH3zhAvlGY"
-  columns:
-    backlog: "3f20aa9d"
-    discussing: "c8184cb3"
-    planned: "a2b26c30"
-    implementing: "3f45033a"
-    reviewing: "8bb34f18"
-    blocked: "ae4636b1"
-    done: "f49ec32c"
 
 models:
   session: opus
