@@ -24,6 +24,9 @@ startedColumns:
   - Implementing
 completedColumns:
   - Done
+customFields:
+  - name: phase
+    type: string
 ---
 
 # Project Name
@@ -31,6 +34,8 @@ completedColumns:
 ## Backlog
 
 - [my-task](tasks/my-task.md)
+
+## Discussing
 
 ## Implementing
 
@@ -70,6 +75,7 @@ created: 2026-04-02T12:00:00.000Z
 updated: 2026-04-02T12:00:00.000Z
 assigned: ""
 tags: []
+phase: ""
 ---
 
 # Task Name
@@ -102,6 +108,7 @@ Description text. Supports full markdown.
 | `started` | ISO timestamp | Set when task enters a `startedColumns` column |
 | `completed` | ISO timestamp | Set when task enters a `completedColumns` column |
 | `due` | ISO timestamp | Deadline |
+| `phase` | string | Helm workflow phase (custom field: discussing, planned, implementing, testing, reviewing, blocked, complete) |
 
 ### Reserved `## headings`
 
@@ -122,4 +129,5 @@ The task ID is the filename slug. kanbn generates it from the task name: lowerca
 | **List tasks** (helm-start) | Read index.md, find links under target column |
 | **Read task** | Read the linked `.kanbn/tasks/<id>.md` file |
 | **Move task** | Remove the `- [id](tasks/id.md)` line from old column, add under new column in index.md |
+| **Update phase** | Set `phase` in task frontmatter. Move column in index.md only when the board column changes |
 | **Update task** | Edit the task's `.md` file directly (description, sub-tasks, metadata) |
