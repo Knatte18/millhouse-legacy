@@ -146,9 +146,17 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 5. Full verification (lint, type-check, build, test). All tests must pass — not just tests related to this task. Compare against test baseline to distinguish pre-existing failures from new regressions.
 
-#### Phase: Review
+#### Phase: Review (round N/3)
 
-6. Spawn `code-reviewer` Agent with `git diff $PLAN_START_HASH..HEAD`, approved plan, and codeguide Overview (if it exists). When the reviewer returns: **FIRST** invoke `helm-receiving-review` skill via the Skill tool. **THEN** read and evaluate the reviewer's findings. Fix accepted issues, re-verify, re-review. Max 3 rounds. (See [reviews.md](reviews.md)). Verify the reviewer's APPROVE is substantiated — output must contain per-file observations. A bare "APPROVE" is treated as failed review and re-spawned.
+6. Spawn `code-reviewer` Agent with `git diff $PLAN_START_HASH..HEAD`, approved plan, and codeguide Overview (if it exists). Report: "Review — round 1/3".
+7. When the reviewer returns: **FIRST** invoke `helm-receiving-review` skill via the Skill tool. **THEN** read and evaluate the findings. Verify the reviewer's APPROVE is substantiated — output must contain per-file observations. A bare "APPROVE" is treated as failed review and re-spawned.
+8. If reviewer approves: proceed to Phase: Finalize.
+
+#### Phase: Resolve (round N/3)
+
+9. If reviewer requests changes: report "Resolve — round N/3". Fix accepted issues. Re-run full verification.
+10. Re-spawn code-reviewer with updated diff. Report: "Review — round N/3".
+11. Max 3 rounds. If unresolved after 3: escalate to user (see [notifications.md](notifications.md)).
 
 #### Phase: Finalize
 
