@@ -5,13 +5,13 @@ description: Sync local kanbn board state to GitHub Projects and issues.
 
 # helm-sync
 
-On-demand sync from local `.kanbn/index.md` to GitHub Projects board and issues. This skill is optional --- Helm works fully offline without it.
+On-demand sync from local `.kanbn/index.md` to GitHub Projects board. This skill is optional --- Helm works fully offline without it.
 
 ---
 
 ## Entry
 
-Read `_helm/config.yaml`. The `github:` section must exist with `owner`, `repo`, `project-number`, `project-node-id`, `status-field-id`, and `columns`. If missing, stop: "GitHub config not set. Add `github:` section to `_helm/config.yaml` or re-run `helm-setup`."
+Read `_helm/config.yaml`. The `github:` section must exist with `owner`, `repo`, `project-number`, `project-node-id`, `status-field-id`, and `columns`. If missing, stop: "GitHub config incomplete. Run `helm-setup` with `gh` authenticated to provision GitHub fields."
 
 Check GitHub CLI is authenticated:
 
@@ -29,21 +29,7 @@ If not authenticated, stop and tell the user to run `gh auth login`.
 
 Read `.kanbn/index.md`. Parse all tasks and their current columns.
 
-### Step 2: Ensure GitHub Project exists
-
-Check for an existing project linked to this repo:
-
-```bash
-gh project list --owner <owner> --format json
-```
-
-If no project exists or `project-number` is not in config:
-1. Create: `gh project create --title "<repo>" --owner <owner> --format json`
-2. Link: `gh project link <number> --owner <owner> --repo <owner>/<repo>`
-3. Configure Helm columns via GraphQL (same as old helm-setup Step 4).
-4. Save `project-number`, `project-node-id`, `status-field-id`, and column option IDs to `_helm/config.yaml` under `github:`.
-
-### Step 3: Sync tasks
+### Step 2: Sync tasks
 
 For each task in `.kanbn/index.md`:
 
@@ -67,20 +53,11 @@ For each task in `.kanbn/index.md`:
    gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <column-option-id>
    ```
 
-### Step 4: Sync plan comments
-
-If `_helm/scratch/status.md` exists and has a `plan:` field, read the plan file. If the plan is approved and no sync comment has been posted yet, post the plan summary as a comment on the linked issue:
-
-```bash
-gh issue comment <issue-number> --repo <owner>/<repo> --body "<plan summary>"
-```
-
-### Step 5: Report
+### Step 3: Report
 
 ```
 Synced to GitHub:
-  Project: <repo> (#<number>)
   Tasks synced: <count>
   Issues created: <count>
-  Board: https://github.com/users/<owner>/projects/<number>
+  Board: https://github.com/users/<owner>/projects/<project-number>
 ```
