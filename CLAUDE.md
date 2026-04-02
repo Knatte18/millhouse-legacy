@@ -16,6 +16,7 @@ Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `p
 | `plugins/codeguide/` | codeguide | Navigation-first documentation system for AI-assisted codebases |
 | `plugins/conduct/` | conduct | Response style, behavior rules, skill routing, language detection |
 | `plugins/helm/` | helm | Worktree-based task orchestration (in design — see `plugins/helm/doc/`) |
+| `plugins/webfetch/` | webfetch | Fetch web pages and output readable markdown |
 | `plugins/code/` | code | Code quality, CLI, linting, and testing standards |
 | `plugins/git/` | git | Git workflow rules |
 | `plugins/python/` | python | Python build, comments, and testing conventions |
@@ -31,4 +32,8 @@ Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `p
 ### Editing plugins
 
 - Each plugin directory is the source of truth. Edit skills and scripts there directly.
-- To deploy (reinstall all plugins): run `/taskmill-deploy` or re-run install commands from `INSTALL.md`.
+- Plugins are linked via junctions/symlinks — edits are live immediately. Run `bash install-plugins.sh` if adding a new plugin.
+
+## Git workflow
+
+- Always push immediately after every commit. Never ask — just do it.

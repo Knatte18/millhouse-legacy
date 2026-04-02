@@ -6,6 +6,10 @@ _helm/scratch/
 *.local.*
 nul
 
+# Node
+**/node_modules/
+**/ca-bundle.pem
+
 # Python
 __pycache__/
 .pytest_cache/
