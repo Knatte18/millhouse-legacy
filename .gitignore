@@ -2,6 +2,7 @@
 **/.llm/
 **/_codeguide/runtime/
 _helm/scratch/
+.scratch/
 *.local.*
 nul
 
