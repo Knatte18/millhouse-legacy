@@ -35,7 +35,17 @@ gh auth status
 
 If not authenticated, stop and tell the user to run `gh auth login`.
 
-### Step 2: Create project
+### Step 2: Create or link project
+
+Check for existing projects first:
+
+```bash
+gh project list --owner <owner> --format json
+```
+
+If projects exist, list them and ask the user which to use (or create new). If the user picks an existing project, use its number and skip creation.
+
+If creating new:
 
 ```bash
 gh project create --title "<repo-name>" --owner <owner> --format json
