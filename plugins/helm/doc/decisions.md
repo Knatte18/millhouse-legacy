@@ -27,7 +27,7 @@
 **Decision:** Lock file on parent branch (`_helm/scratch/merge.lock`). Lock acquisition resolves parent branch to filesystem path via `git worktree list --porcelain`.
 
 ### Worktree naming convention
-**Decision:** Configurable via `_helm/config.yaml` with `branch-template`. No separate prefix field — the prefix is part of the template string. Examples: `"hanf/{parent-slug}/{slug}"` (team), `"{slug}"` (solo). No distinction between hotfix/feature/experiment — just slugs.
+**Decision:** Configurable via `_helm/config.yaml` with `branch-template`. Uses `-wt-` separator to avoid git ref conflicts (branches with `/` can't have sub-branches). Template variables: `{parent-branch}` (full branch name), `{repo-name}` (repo directory name), `{slug}` (task slug, max 20 chars). Default: `"{parent-branch}-wt-{slug}"`. No distinction between hotfix/feature/experiment — just slugs.
 
 ### _helm/ directory structure
 **Decision:** Single `_helm/` directory, partially tracked:

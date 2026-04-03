@@ -32,24 +32,25 @@ Worktree branches follow a configurable template. Configured in `_helm/config.ya
 
 ```yaml
 worktree:
-  branch-template: "hanf/{parent-slug}/{slug}"
-  path-template: "../{parent-slug}-{slug}"
+  branch-template: "{parent-branch}-wt-{slug}"
+  path-template: "../{repo-name}-wt-{slug}"
 ```
 
 Available placeholders:
-- `{slug}` — derived from task title (kebab-case, max 30 chars), or user-provided
-- `{parent-slug}` — last segment of the parent branch name
+- `{slug}` — derived from task title (kebab-case, max 20 chars), or user-provided
+- `{parent-branch}` — full current branch name (e.g. `hanf/main`)
+- `{repo-name}` — basename of the repo root directory (e.g. `py-hanf`)
 
-Examples by template:
+The `-wt-` separator avoids git ref conflicts — branches with `/` (like `hanf/main`) can't have sub-branches (`hanf/main/slug` would conflict).
+
+Examples:
 
 | Template | Context | Slug | Result |
 |----------|---------|------|--------|
-| `"hanf/{parent-slug}/{slug}"` | parent: `main` | `auth` | `hanf/main/auth` |
-| `"hanf/{parent-slug}/{slug}"` | parent: `hanf/main/auth` | `oauth` | `hanf/auth/oauth` |
-| `"{slug}"` | any | `auth` | `auth` |
-| `"henrik/{slug}"` | any | `auth` | `henrik/auth` |
+| `"{parent-branch}-wt-{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | branch: `hanf/main-wt-auth` |
+| `"../\{repo-name}-wt-{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | path: `../py-hanf-wt-auth` |
 
-The `path-template` controls where the worktree directory is created on disk. `../` places worktrees as sibling directories to the repo root (e.g. repo at `C:\Code\myproject` → worktree at `C:\Code\auth`), not inside the repo.
+The `path-template` controls where the worktree directory is created on disk. `../` places worktrees as sibling directories to the repo root (e.g. repo at `C:\Code\py-hanf` → worktree at `C:\Code\py-hanf-wt-auth`), not inside the repo.
 
 ## When to Use a Worktree
 

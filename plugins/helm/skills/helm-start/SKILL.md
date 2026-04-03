@@ -49,13 +49,16 @@ When the user chooses `-w` (worktree mode):
 
 2. **Read config.** Read `_helm/config.yaml`. Extract `worktree.branch-template` and `worktree.path-template`.
 
-3. **Generate slug.** Derive slug from task title: lowercase, spaces to hyphens, remove special characters, max 30 chars. E.g. "Add OAuth Support" → `add-oauth-support`.
+3. **Generate slug.** Derive slug from task title: lowercase, spaces to hyphens, remove special characters, max 20 chars. E.g. "Add OAuth Support" → `add-oauth-support`.
 
-4. **Resolve parent-slug.** Get the current branch name (`git branch --show-current`). Extract the last `/`-delimited segment. E.g. `hanf/main/auth` → `auth`, `main` → `main`.
+4. **Resolve template variables.**
+   - `{slug}` — the task slug from step 3.
+   - `{parent-branch}` — full current branch name (`git branch --show-current`). E.g. `hanf/main`.
+   - `{repo-name}` — basename of the repo root directory (`basename $(git rev-parse --show-toplevel)`). E.g. `py-hanf`.
 
-5. **Generate branch and path.** Apply the templates:
-   - Replace `{slug}` with the task slug.
-   - Replace `{parent-slug}` with the parent slug.
+5. **Generate branch and path.** Apply the templates from config, replacing variables. E.g. with default templates:
+   - Branch: `hanf/main-wt-add-oauth-support`
+   - Path: `../py-hanf-wt-add-oauth-support`
    - `path-template` is relative to the repo root.
 
 6. **Create worktree.**
@@ -81,9 +84,9 @@ When the user chooses `-w` (worktree mode):
 
 11. **Write handoff brief.** Write `<worktree-path>/_helm/scratch/briefs/handoff.md` using the Handoff Brief Format (see `plugins/helm/doc/modules/plans.md`). If no discussion has happened yet, populate `## Discussion Summary` with the task title and body from `.kanban.md`.
 
-12. **Open VS Code.**
+12. **Open VS Code.** Use the absolute Windows path (Git Bash paths don't work with `code`):
     ```bash
-    code <worktree-path>
+    code "$(cd <worktree-path> && pwd -W)"
     ```
 
 13. **Report.** Tell the user:

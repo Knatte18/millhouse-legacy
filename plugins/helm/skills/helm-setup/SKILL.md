@@ -45,7 +45,7 @@ Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, repo
 
 Ask the user:
 
-> Branch naming template? Examples: `hanf/{parent-slug}/{slug}` (team repo), `{slug}` (solo repo)
+> Branch naming template? Examples: `{parent-branch}-wt-{slug}` (default), `{slug}` (solo repo). Variables: `{parent-branch}` (full branch name), `{repo-name}` (repo dir name), `{slug}` (task slug, max 20 chars).
 
 ### Step 4: Write config
 
@@ -61,7 +61,7 @@ Write `_helm/config.yaml` using the branch template from step 3:
 ```yaml
 worktree:
   branch-template: "<user's answer from step 3>"
-  path-template: "../{slug}"
+  path-template: "../{repo-name}-wt-{slug}"
 
 models:
   session: opus
