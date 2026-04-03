@@ -248,7 +248,7 @@ When the user chooses `-w` (worktree mode):
 
 ### Phase: Approve
 
-9. Confirm with the user that the plan is approved.
+9. Present the plan to the user: show the **file path** to the plan (e.g. `_helm/scratch/plans/<file>.md`) and a **brief summary** (step count, key files touched). Do NOT dump the full plan content in chat — the user reads it in the editor. Ask for approval.
 
 10. **Plan approved** --- lock the plan:
 
