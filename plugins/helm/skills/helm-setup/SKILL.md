@@ -39,6 +39,8 @@ If `.kanban.md` does not exist, create it:
 
 If `.kanban.md` already exists, check that it has all Helm columns (Backlog, In Progress, Done, Blocked). Add any missing columns.
 
+Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+
 ### Step 3: Write config
 
 Detect repo info:
@@ -71,6 +73,10 @@ notifications:
 ```
 
 No `github:` section by default. GitHub integration is optional --- run `helm-sync` to set it up when needed.
+
+### Step 3b: Validate config
+
+Validate `_helm/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
 ### Step 4: Update .gitignore
 

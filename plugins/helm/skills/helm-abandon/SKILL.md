@@ -104,6 +104,7 @@ Read `.kanban.md` **from the main repo** (never from worktrees). Find the task b
 
 - Move the task block to `## Backlog`.
 - Remove the `- phase:` line from the task metadata (or set it to `backlog`).
+- Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
 ### 8. Report
 

@@ -124,7 +124,7 @@ Run the **Notification Procedure** (same as helm-go — see below) with `COMPLET
 
 ### 8. Kanban update
 
-Read `.kanban.md` **from the main repo** (never from the worktree). Move the task block to `## Done`. Set `- phase: complete`.
+Read `.kanban.md` **from the main repo** (never from the worktree). Move the task block to `## Done`. Set `- phase: complete`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
 ### 9. Cleanup
 

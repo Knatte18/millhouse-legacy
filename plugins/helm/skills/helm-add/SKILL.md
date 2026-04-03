@@ -46,7 +46,11 @@ Read `.kanban.md`. Add a new task block under the `## Backlog` heading (before t
 <Description, if provided>
 ```
 
-### Step 4: Report
+### Step 4: Validate
+
+Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+
+### Step 5: Report
 
 ```
 Added: <title>

@@ -66,13 +66,13 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 2. **Staleness check.** Run `git log --since=<started> -- <file1> <file2> ...` using the `started:` timestamp from plan frontmatter and files from `## Files`.
    - No changes: proceed.
    - Minor changes (formatting, comments, unrelated areas): log warning in status.md, proceed.
-   - Major changes (files restructured, APIs changed, interfaces modified): halt. Update `- phase: discussing` in the task block in `.kanban.md`, move task block back to `## Backlog`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `helm-start`.
+   - Major changes (files restructured, APIs changed, interfaces modified): halt. Update `- phase: discussing` in the task block in `.kanban.md`, move task block back to `## Backlog`. Validate `.kanban.md` per `doc/modules/validation.md`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `helm-start`.
 
 3. **Explore.** Read code following each step's `Explore:` targets. Read accumulated knowledge from `_helm/knowledge/` if the directory has entries — if `_helm/knowledge/summary.md` exists, read only the summary (not individual entries); otherwise read all entries. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
 
 4. **Read constraints.** Resolve repo root: `git rev-parse --show-toplevel`. Read `CONSTRAINTS.md` from repo root if it exists. These are hard invariants — never write code that violates them. If the file does not exist, proceed without it.
 
-5. **Move to In Progress.** Ensure task block is under `## In Progress` in `.kanban.md` (it should already be there from helm-start). Set `- phase: implementing` in the task's metadata.
+5. **Move to In Progress.** Ensure task block is under `## In Progress` in `.kanban.md` (it should already be there from helm-start). Set `- phase: implementing` in the task's metadata. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
    Update `_helm/scratch/status.md`:
    ```
@@ -105,9 +105,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
       2. Track retry count in `_helm/scratch/status.md` under `retries:` as `step_<N>: <count>`.
       3. Max 3 retries per step.
       4. After 3 retries: classify the failure and route:
-         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Set `- phase: blocked` in task metadata. Move task block to `## Blocked` in `.kanban.md`. Stop.
-         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Set `- phase: blocked` in task metadata. Move task block to `## Blocked`. Stop.
-         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Set `- phase: blocked` in task metadata. Move task block to `## Blocked`. Stop.
+         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Set `- phase: blocked` in task metadata. Move task block to `## Blocked` in `.kanban.md`. Validate `.kanban.md` per `doc/modules/validation.md`. Stop.
+         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Set `- phase: blocked` in task metadata. Move task block to `## Blocked`. Validate `.kanban.md` per `doc/modules/validation.md`. Stop.
+         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Set `- phase: blocked` in task metadata. Move task block to `## Blocked`. Validate `.kanban.md` per `doc/modules/validation.md`. Stop.
 
    f. **Commit after each successful step** using the step's `Commit:` message:
       - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
@@ -219,7 +219,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 15. Re-spawn code-reviewer Agent with the updated diff (`git diff <plan_start_hash>..HEAD`). Report: **"Review --- round N/3"**
 
-16. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Set `- phase: blocked` in task metadata. Move task block to `## Blocked` in `.kanban.md`. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after 3 rounds`. Report both sides to user:
+16. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Set `- phase: blocked` in task metadata. Move task block to `## Blocked` in `.kanban.md`. Validate `.kanban.md` per `doc/modules/validation.md`. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after 3 rounds`. Report both sides to user:
     ```
     Code reviewer flagged: "<finding>"
     Implementing agent's position: "<reasoning>"
@@ -273,7 +273,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
     phase: complete
     ```
 
-22. **Move task to Done** in `.kanban.md`: cut the task block from `## In Progress`, paste under `## Done`. Set `- phase: complete` in task metadata.
+22. **Move task to Done** in `.kanban.md`: cut the task block from `## In Progress`, paste under `## Done`. Set `- phase: complete` in task metadata. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
 23. **Knowledge synthesis.** If `_helm/knowledge/` contains more than 5 entries (excluding `decisions.md` and `summary.md`):
     1. Read all entries.

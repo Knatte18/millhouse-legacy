@@ -53,6 +53,8 @@ github:
 
 If `github:` section already exists and is complete, skip this step.
 
+Validate `_helm/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+
 ### Step 2: Read local board
 
 Read `.kanban.md`. Parse all tasks and their current columns.
