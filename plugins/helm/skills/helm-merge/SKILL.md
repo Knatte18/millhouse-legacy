@@ -124,7 +124,7 @@ Run the **Notification Procedure** (same as helm-go — see below) with `COMPLET
 
 ### 8. Kanban update
 
-Update `.kanban.md` in the parent worktree (after merge, you are on the parent branch). Move the task block to `## Done`. Set `- phase: complete`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to Done" && git push`.
+Update `.kanban.md` in the parent worktree (after merge, you are on the parent branch). Move the task block to `## Done`. Update `[phase]` in the task's `###` heading to `[complete]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to Done" && git push`.
 
 ### 9. Cleanup
 
@@ -171,5 +171,5 @@ Merge completion is info-level (toast + status only). Merge failure/rollback is 
 
 ## Kanban Updates
 
-- Merge complete → move task to **Done** in parent's `.kanban.md`, set `- phase: complete`
+- Merge complete → move task to **Done** in parent's `.kanban.md`, update `[complete]` in heading
 - On `.kanban.md` merge conflict: always keep parent's version (parent has the full board)

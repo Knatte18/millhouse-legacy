@@ -39,13 +39,13 @@ helm-start proceeds through named phases. Report the current phase to the user a
    - `-w` flag or user chooses worktree → **Worktree spawn flow** (see below). After spawning, stop. The user continues in the new VS Code window.
    - No flag / in-place: continue below.
 
-3. **Move to In Progress.** Edit `.kanban.md`: cut the entire task block (from `### Title` to just before the next `###` or `##`) from `## Backlog` and paste it under `## In Progress`. Set `- phase: discussing` in the task's metadata lines. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push the kanban change: `git add .kanban.md && git commit -m "kanban: move <task> to In Progress" && git push`.
+3. **Move to In Progress.** Edit `.kanban.md`: cut the entire task block (from `### Title` to just before the next `###` or `##`) from `## Backlog` and paste it under `## In Progress`. Update the `[phase]` in the `###` heading to `[discussing]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push the kanban change: `git add .kanban.md && git commit -m "kanban: move <task> to In Progress" && git push`.
 
 #### Worktree Spawn Flow
 
 When the user chooses `-w` (worktree mode):
 
-1. **Move to In Progress first.** Edit `.kanban.md`: move the task block to `## In Progress`, set `- phase: discussing`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to In Progress" && git push`.
+1. **Move to In Progress first.** Edit `.kanban.md`: move the task block to `## In Progress`, update `[phase]` in the `###` heading to `[discussing]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to In Progress" && git push`.
 
 2. **Read config.** Read `_helm/config.yaml`. Extract `worktree.branch-template` and `worktree.path-template`.
 
@@ -76,7 +76,7 @@ When the user chooses `-w` (worktree mode):
     ```
     parent: <parent-branch>
     task: <task-title>
-    phase: discussing
+    phase: discussing  # also reflected as [discussing] in .kanban.md heading
     ```
 
 11. **Write handoff brief.** Write `<worktree-path>/_helm/scratch/briefs/handoff.md` using the Handoff Brief Format (see `plugins/helm/doc/modules/plans.md`). If no discussion has happened yet, populate `## Discussion Summary` with the task title and body from `.kanban.md`.
@@ -258,7 +258,7 @@ When the user chooses `-w` (worktree mode):
     task: <task-title>
     ```
 
-    c. Update `- phase: planned` in the task block in `.kanban.md`. Task stays in `## In Progress` column (no move). Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+    c. Update `[phase]` in the task's `###` heading to `[planned]` in `.kanban.md`. Task stays in `## In Progress` column (no move). Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
     d. Report: "Plan approved. Task ready for `helm-go`."
 
@@ -289,5 +289,5 @@ If the user decides mid-discussion that they want a worktree:
 
 ## Kanban Updates
 
-- Task selected -> move to **In Progress** column, set `phase: discussing`
-- Plan approved -> set `phase: planned` (stays in In Progress column)
+- Task selected -> move to **In Progress** column, update `[discussing]` in heading
+- Plan approved -> update `[planned]` in heading (stays in In Progress column)

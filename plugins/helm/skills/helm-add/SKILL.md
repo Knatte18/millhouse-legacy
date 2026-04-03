@@ -35,14 +35,10 @@ Split the argument on the first `:` character.
 
 ### Step 3: Add task to board
 
-Run `date -u +%Y-%m-%d` to get the current UTC date. **Do not guess or fabricate a date.**
-
 Read `.kanban.md`. Add a new task block under the `## Backlog` heading (before the next `##` heading or end of file):
 
 ```markdown
-### <Title>
-- created: <current UTC date>
-- phase: backlog
+### <Title> [backlog]
 
 <Description, if provided>
 ```

@@ -27,13 +27,10 @@ If `.kanban.md` does not exist, stop and tell the user to run `helm-setup` first
 
 For each issue returned in step 1:
 
-1. Run `date -u +%Y-%m-%d` to get the current UTC date.
-2. Read `.kanban.md`. Append a new task block under the `## Backlog` heading (before the next `##` heading or end of file):
+1. Read `.kanban.md`. Append a new task block under the `## Backlog` heading (before the next `##` heading or end of file):
 
 ```markdown
-### <issue title>
-- created: <current UTC date>
-- phase: backlog
+### <issue title> [backlog]
 
 <issue body, if non-empty>
 ```
