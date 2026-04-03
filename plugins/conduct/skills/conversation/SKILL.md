@@ -22,8 +22,10 @@ General behavior rules for Claude Code. These apply regardless of which plugins 
 
 ## Prompts for New Threads
 
-- When writing a prompt for the user to paste into a new thread: **always write the complete prompt**. Never show only a diff or say "add this to the prompt." The user copies the entire block.
-- If the prompt needs amendments before the user has started the thread: rewrite the full prompt, not a partial update.
+- When writing a prompt for a new thread: **write it to a file** at `.scratch/prompt.md` (or `.scratch/prompt-<slug>.md` if multiple). Never dump long prompts inline in the chat.
+- Tell the user: `Les .scratch/prompt.md og følg instruksjonene der.`
+- If the prompt needs amendments before the user has started the thread: overwrite the file with the complete updated prompt. Never show partial diffs.
+- The user copies from the file in the editor, which has a built-in copy function.
 
 ## File Writing
 
