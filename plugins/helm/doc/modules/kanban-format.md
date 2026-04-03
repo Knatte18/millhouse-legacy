@@ -226,3 +226,4 @@ A task block starts at `### Title` (with or without `[phase]`) and ends immediat
 - On merge (`helm-merge`): `.kanban.md` will conflict — always keep the **parent's version** (`--theirs` during merge parent→worktree, parent's copy during merge worktree→parent). Then update the parent's board (move task to Done).
 - Only use extension-supported metadata fields (tags, priority, workload, due, defaultExpanded, steps).
 - Descriptions use indented ` ```md ` code blocks — never plain text.
+- **Never commit `.kanban.md` alone.** Stage kanban changes and include them in the next code commit. Kanban updates are not worth their own commit.

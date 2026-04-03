@@ -77,7 +77,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 2. **Staleness check.** Run `git log --since=<started> -- <file1> <file2> ...` using the `started:` timestamp from plan frontmatter and files from `## Files`.
    - No changes: proceed.
    - Minor changes (formatting, comments, unrelated areas): log warning in status.md, proceed.
-   - Major changes (files restructured, APIs changed, interfaces modified): halt. Update `[phase]` in the task's `###` heading to `[backlog]`, move task block back to `## Backlog`. Validate `.kanban.md` per `doc/modules/validation.md`. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to Backlog (plan stale)" && git push`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `helm-start`.
+   - Major changes (files restructured, APIs changed, interfaces modified): halt. Update `[phase]` in the task's `###` heading to `[backlog]`, move task block back to `## Backlog`. Validate `.kanban.md` per `doc/modules/validation.md`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `helm-start`.
 
 3. **Explore.** Read code following each step's `Explore:` targets. Read accumulated knowledge from `_helm/knowledge/` if the directory has entries — if `_helm/knowledge/summary.md` exists, read only the summary (not individual entries); otherwise read all entries. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
 
@@ -116,9 +116,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
       2. Track retry count in `_helm/scratch/status.md` under `retries:` as `step_<N>: <count>`.
       3. Max 3 retries per step.
       4. After 3 retries: classify the failure and route:
-         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Update `[phase]` in heading to `[blocked]`. Move task block to `## Blocked` in `.kanban.md`. Validate `.kanban.md` per `doc/modules/validation.md`. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to Blocked" && git push`. Stop.
-         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Update `[phase]` in heading to `[blocked]`. Move task block to `## Blocked`. Validate `.kanban.md` per `doc/modules/validation.md`. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to Blocked" && git push`. Stop.
-         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Update `[phase]` in heading to `[blocked]`. Move task block to `## Blocked`. Validate `.kanban.md` per `doc/modules/validation.md`. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to Blocked" && git push`. Stop.
+         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Update `[phase]` in heading to `[blocked]`. Move task block to `## Blocked` in `.kanban.md`. Validate `.kanban.md` per `doc/modules/validation.md`. Stop.
+         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Update `[phase]` in heading to `[blocked]`. Move task block to `## Blocked`. Validate `.kanban.md` per `doc/modules/validation.md`. Stop.
+         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Update `[phase]` in heading to `[blocked]`. Move task block to `## Blocked`. Validate `.kanban.md` per `doc/modules/validation.md`. Stop.
 
    f. **Commit and push after each successful step** using the step's `Commit:` message:
       - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
@@ -286,7 +286,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
     phase: complete
     ```
 
-23. **Move task to Done** in `.kanban.md`: cut the task block from `## In Progress`, paste under `## Done`. Update `[phase]` in heading to `[complete]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to Done" && git push`.
+23. **Move task to Done** in `.kanban.md`: cut the task block from `## In Progress`, paste under `## Done`. Update `[phase]` in heading to `[complete]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Stage `.kanban.md` to be included in the next code commit — do NOT create a separate commit for kanban changes alone.
 
 24. **Knowledge synthesis.** If `_helm/knowledge/` contains more than 5 entries (excluding `decisions.md` and `summary.md`):
     1. Read all entries.
