@@ -88,12 +88,12 @@ Select a task. Go through all phases: Discuss → Plan → Plan Review → Appro
 Select a task, choose worktree (`-w`).
 
 **Verify:**
-- [ ] Worktree created at path from config template
-- [ ] Branch created from config template
-- [ ] VS Code opens new window
+- [ ] Worktree created at `../<repo-name>-worktrees/<slug>/`
+- [ ] Branch uses `-wt-` separator (e.g. `hanf/main-wt-fix-config`)
+- [ ] VS Code opens new window (via `code.cmd`)
 - [ ] `_helm/scratch/status.md` in worktree has `parent:`, `task:`, `phase:`
 - [ ] Handoff brief written to `_helm/scratch/briefs/handoff.md`
-- [ ] Parent `.kanban.md` updated (task → In Progress)
+- [ ] Parent `.kanban.md` updated (task → In Progress with `[discussing]`)
 - [ ] Worktree `.kanban.md` has only the selected task
 
 ---
@@ -109,7 +109,8 @@ In the new VS Code window:
 **Verify:**
 - [ ] Reads handoff brief
 - [ ] Continues from Explore phase (doesn't repeat discussion)
-- [ ] Plan approved → run `/helm-go`
+- [ ] Plan approved → run `/helm-go` (use `--rev 0` for doc tasks, `--rev 1` for quick tests)
+- [ ] `[phase]` in `.kanban.md` heading updates through phases (implementing → testing → reviewing)
 - [ ] Implementation + review + knowledge works as in step 4
 
 ---
@@ -128,14 +129,30 @@ From the worktree:
 - [ ] Parent merged into worktree first
 - [ ] `.kanban.md` conflict resolved (parent version kept)
 - [ ] Verification passes
-- [ ] Worktree merged into parent
-- [ ] Parent `.kanban.md` updated (task → Done)
-- [ ] Worktree removed, branch deleted
+- [ ] Squash merge into parent (one commit for entire task)
+- [ ] Parent `.kanban.md` updated (task → Done with `[complete]`)
 - [ ] Merge lock released
+
+Note: helm-merge cannot delete the worktree directory while VS Code has it open. Cleanup happens in step 9.
 
 ---
 
-## 9. Test abandon (optional)
+## 9. Cleanup worktree
+
+Close the worktree VS Code window. Back in the parent:
+
+```
+/helm-status
+```
+
+**Verify:**
+- [ ] Stale worktree detected and removed automatically
+- [ ] Branch deleted (local + remote)
+- [ ] Dashboard shows updated board
+
+---
+
+## 10. Test abandon (optional)
 
 Start a task in a worktree, then:
 
@@ -147,12 +164,13 @@ Start a task in a worktree, then:
 - [ ] Warns about uncommitted changes (if any)
 - [ ] Warns about unmerged commits (if any)
 - [ ] Requires explicit "abandon" confirmation
-- [ ] Worktree removed, branch deleted
-- [ ] Parent `.kanban.md` updated (task → Backlog, phase removed)
+- [ ] Parent `.kanban.md` updated (task → Backlog, `[backlog]` in heading)
+
+Note: worktree directory cleanup requires closing VS Code first, then `/helm-status` from parent.
 
 ---
 
-## 10. Test constraints (optional)
+## 11. Test constraints (optional)
 
 Create `CONSTRAINTS.md` in repo root with a test rule:
 
@@ -166,3 +184,22 @@ No camelCase in Python code. This applies to all functions, variables, and param
 Run `/helm-start`, create a plan. Verify plan reviewer flags constraint violations as BLOCKING.
 
 Delete `CONSTRAINTS.md` after testing.
+
+---
+
+## 12. Test --rev parameter (optional)
+
+```
+/helm-go --rev 0
+```
+
+**Verify:**
+- [ ] Code review is skipped entirely
+- [ ] Goes straight from implementation to finalize
+
+```
+/helm-go --rev 5
+```
+
+**Verify:**
+- [ ] Max review rounds set to 5 instead of default 3
