@@ -20,6 +20,11 @@ General behavior rules for Claude Code. These apply regardless of which plugins 
   - "definitely", "certainly", "absolutely", "just", "simply", "merely"
   - **Test:** remove the word. If the sentence means the same thing, delete it.
 
+## Prompts for New Threads
+
+- When writing a prompt for the user to paste into a new thread: **always write the complete prompt**. Never show only a diff or say "add this to the prompt." The user copies the entire block.
+- If the prompt needs amendments before the user has started the thread: rewrite the full prompt, not a partial update.
+
 ## File Writing
 
 - **Never write to `/tmp/` or system temporary directories.** This causes permission prompts.
