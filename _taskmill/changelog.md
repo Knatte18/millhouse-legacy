@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-03 **Weblens: Puppeteer fallback for JS-rendered pages**
+- Added puppeteer-core dependency (connects to system Chrome, no bundled browser)
+- New `fetchWithBrowser()` fallback in fetch-worker.mjs — launches headless Chrome when static fetch+Readability yields <100 chars
+- Auto-detects Chrome/Chromium path on Windows, macOS, and Linux
+- Reddit JSON path unchanged
+
 ## 2026-04-03 **Helm format-validering for .kanban.md og config.yaml**
 - Shared validation rules doc at plugins/helm/doc/modules/validation.md
 - .kanban.md: structural checks (single # heading, valid ## columns, ### under columns, no stray content)
