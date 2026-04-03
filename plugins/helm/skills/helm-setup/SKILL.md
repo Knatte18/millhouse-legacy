@@ -61,7 +61,7 @@ Write `_helm/config.yaml` using the branch template from step 3:
 ```yaml
 worktree:
   branch-template: "<user's answer from step 3>"
-  path-template: "../{repo-name}-wt-{slug}"
+  path-template: "../{repo-name}-worktrees/{slug}"
 
 models:
   session: opus

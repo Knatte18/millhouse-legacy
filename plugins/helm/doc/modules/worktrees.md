@@ -33,7 +33,7 @@ Worktree branches follow a configurable template. Configured in `_helm/config.ya
 ```yaml
 worktree:
   branch-template: "{parent-branch}-wt-{slug}"
-  path-template: "../{repo-name}-wt-{slug}"
+  path-template: "../{repo-name}-worktrees/{slug}"
 ```
 
 Available placeholders:
@@ -48,9 +48,9 @@ Examples:
 | Template | Context | Slug | Result |
 |----------|---------|------|--------|
 | `"{parent-branch}-wt-{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | branch: `hanf/main-wt-auth` |
-| `"../\{repo-name}-wt-{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | path: `../py-hanf-wt-auth` |
+| `"../{repo-name}-worktrees/{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | path: `../py-hanf-worktrees/auth` |
 
-The `path-template` controls where the worktree directory is created on disk. `../` places worktrees as sibling directories to the repo root (e.g. repo at `C:\Code\py-hanf` → worktree at `C:\Code\py-hanf-wt-auth`), not inside the repo.
+The `path-template` controls where the worktree directory is created on disk. Default places worktrees in a sibling directory named `<repo>-worktrees/` (e.g. repo at `C:\Code\py-hanf` → worktrees at `C:\Code\py-hanf-worktrees/auth`).
 
 ## When to Use a Worktree
 
