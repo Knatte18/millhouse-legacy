@@ -1,6 +1,7 @@
 ---
 name: helm-go
 description: Execute an approved plan autonomously. Session agent.
+argument-hint: "[--rev N]"
 ---
 
 # helm-go
@@ -24,6 +25,16 @@ Read the plan file. If it does not exist, stop --- tell the user to re-run `helm
 `helm-go` is always autonomous. It never runs a discuss phase or asks clarifying questions. That is `helm-start`'s job.
 
 **Never ask for permission or confirmation during execution.** Do not say "Want me to continue?", "Should I proceed?", "Shall I fix this?". The only valid stopping points are listed in "Stops when" below. Everything else --- just do it.
+
+---
+
+## Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--rev N` | `3` | Maximum number of code review rounds. `--rev 0` skips code review entirely (Phase: Review and Phase: Resolve are not executed). |
+
+Parse the `--rev` value from the skill invocation arguments. If not provided, default to `3`. Store the value as `max_review_rounds` for use in Phase: Review.
 
 ---
 
@@ -129,7 +140,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
    - Compare failures against `_helm/scratch/test-baseline.md` to distinguish pre-existing failures from new regressions.
    - If new failures: debug and fix using the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: block (same flow as step failure above).
 
-### Phase: Review (round N/3)
+   **If `max_review_rounds` is `0`:** skip Phase: Review and Phase: Resolve entirely. Proceed directly to Phase: Finalize.
+
+### Phase: Review (round N/max_review_rounds)
 
 8. Update `_helm/scratch/status.md`:
    ```
@@ -138,7 +151,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
    Update `[phase]` in the task's `###` heading to `[reviewing]` (stays in In Progress column).
 
-9. **Spawn code-reviewer Agent.** Use the Agent tool with `model: sonnet`. Report to user: **"Review --- round 1/3"**
+9. **Spawn code-reviewer Agent.** Use the Agent tool with `model: sonnet`. Report to user: **"Review --- round 1/&lt;max_review_rounds&gt;"**
 
    Compute the diff: `git diff <plan_start_hash>..HEAD`
 
@@ -204,9 +217,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 12. If reviewer **approves** (no BLOCKING issues): proceed to Phase: Finalize.
 
-### Phase: Resolve (round N/3)
+### Phase: Resolve (round N/max_review_rounds)
 
-13. If reviewer **requests changes**: report **"Resolve --- round N/3"**
+13. If reviewer **requests changes**: report **"Resolve --- round N/&lt;max_review_rounds&gt;"**
 
 14. Evaluate each finding through the receiving-review decision tree. For each finding, state:
     1. The finding
@@ -216,9 +229,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 15. Fix accepted issues. Re-run full verification (the verify command from plan frontmatter).
 
-16. Re-spawn code-reviewer Agent with the updated diff (`git diff <plan_start_hash>..HEAD`). Report: **"Review --- round N/3"**
+16. Re-spawn code-reviewer Agent with the updated diff (`git diff <plan_start_hash>..HEAD`). Report: **"Review --- round N/&lt;max_review_rounds&gt;"**
 
-17. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Update `[phase]` in heading to `[blocked]`. Move task block to `## Blocked` in `.kanban.md`. Validate `.kanban.md` per `doc/modules/validation.md`. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after 3 rounds`. Report both sides to user:
+17. Max `max_review_rounds` rounds. If unresolved BLOCKING issues after all rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after <max_review_rounds> rounds`. Update `[phase]` in heading to `[blocked]`. Move task block to `## Blocked` in `.kanban.md`. Validate `.kanban.md` per `doc/modules/validation.md`. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after <max_review_rounds> rounds`. Report both sides to user:
     ```
     Code reviewer flagged: "<finding>"
     Implementing agent's position: "<reasoning>"
@@ -298,7 +311,7 @@ When no more planned tasks remain:
 
 - All tasks complete -> completion flow
 - Test failure after 3 retries -> block, notify user
-- Code reviewer blocks after 3 rounds with unresolvable issues -> block, notify user
+- Code reviewer blocks after `max_review_rounds` rounds with unresolvable issues -> block, notify user
 - Permission/config error -> block, notify user immediately (no retries)
 - Plan staleness (major changes to listed files) -> block, tell user to re-run helm-start
 
@@ -377,7 +390,7 @@ If the webhook call fails, log a warning and continue — Slack is notification-
 | Call site | Event | Urgency |
 |-----------|-------|---------|
 | Phase: Implement — step failure after 3 retries | `BLOCKED: Test failure in step N after 3 retries` | High |
-| Phase: Resolve — reviewer blocks after 3 rounds | `BLOCKED: Code reviewer dispute after 3 rounds` | High |
+| Phase: Resolve — reviewer blocks after max rounds | `BLOCKED: Code reviewer dispute after <max_review_rounds> rounds` | High |
 | Phase: Implement — permission/config error | `BLOCKED: Permission/config error (no retries)` | High |
 | Phase: Setup — plan stale | `BLOCKED: Plan stale — files changed` | High |
 | Completion — all tasks done | `COMPLETE: All tasks done, ready to merge` | Info (toast + status only, skip Slack) |
@@ -448,7 +461,7 @@ When a step fails after exhausting retries, classify before escalating:
 **Action:** Block the task. The dependency must be resolved first.
 
 ### 4. Review Escalation
-**Signals:** Code reviewer has unresolved BLOCKING issues after 3 rounds.
+**Signals:** Code reviewer has unresolved BLOCKING issues after `max_review_rounds` rounds.
 **Action:** Present both sides to user for decision.
 
 ---
