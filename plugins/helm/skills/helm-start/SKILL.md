@@ -82,7 +82,7 @@ When the user chooses `-w` (worktree mode):
      }
    }
    ```
-   Pick a random color from this list (all readable with white text): `#2d7d46`, `#7d2d6b`, `#2d4f7d`, `#7d5c2d`, `#6b2d2d`, `#2d6b6b`, `#4a2d7d`, `#7d462d`.
+   Pick a color from this list (all readable with white text): `#2d7d46`, `#7d2d6b`, `#2d4f7d`, `#7d5c2d`, `#6b2d2d`, `#2d6b6b`, `#4a2d7d`, `#7d462d`. To avoid duplicates, check existing worktrees' `.vscode/settings.json` files (via `git worktree list`) and pick a color not already in use. If all colors are taken, cycle back to the first.
 
 9. **Write worktree-local kanban board.** Write `<worktree-path>/.kanban.md` with only the spawned task under `## In Progress` (plus empty Backlog, Done, Blocked columns). This replaces the parent's full board — the worktree tracks only its own task. If the task has a description body in the parent board, preserve it using the indented ` ```md ` code block format (see `kanban-format.md`).
 
