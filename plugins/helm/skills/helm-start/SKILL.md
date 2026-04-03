@@ -84,10 +84,11 @@ When the user chooses `-w` (worktree mode):
 
 11. **Write handoff brief.** Write `<worktree-path>/_helm/scratch/briefs/handoff.md` using the Handoff Brief Format (see `plugins/helm/doc/modules/plans.md`). If no discussion has happened yet, populate `## Discussion Summary` with the task title and body from `.kanban.md`.
 
-12. **Open VS Code.** Use the absolute Windows path (Git Bash paths don't work with `code`):
+12. **Open VS Code.** Use `code.cmd` (not `code` — the wrapper is broken on Node 24+):
     ```bash
-    code "$(cd <worktree-path> && pwd -W)"
+    code.cmd "$(cd <worktree-path> && pwd -W)"
     ```
+    If `code.cmd` is not in PATH, use the full path: `"/c/Users/<user>/AppData/Local/Programs/Microsoft VS Code/bin/code.cmd"`.
 
 13. **Report.** Tell the user:
     - Worktree created at `<path>` on branch `<branch>`
