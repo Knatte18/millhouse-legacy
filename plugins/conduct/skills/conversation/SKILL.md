@@ -26,6 +26,7 @@ General behavior rules for Claude Code. These apply regardless of which plugins 
 - Tell the user: `Read .scratch/prompt.md and follow the instructions there.`
 - If the prompt needs amendments before the user has started the thread: overwrite the file with the complete updated prompt. Never show partial diffs.
 - The user copies from the file in the editor, which has a built-in copy function.
+- **Every prompt must instruct the receiving thread to:** write its full report/result to a file (e.g. `.scratch/result-<slug>.md`) and only output to the user: (1) the path to the result file, and (2) a brief summary of key points. This keeps thread output concise and results reviewable.
 
 ## File Writing
 
