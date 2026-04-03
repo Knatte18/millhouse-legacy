@@ -3,7 +3,7 @@
 ## Resolved
 
 ### Backlog format
-**Decision:** `.kanban.md` is the backlog. Tasks are `###` headings under `##` column headings. The kanban.md VS Code extension renders the board. GitHub sync is on-demand via `helm-sync`.
+**Decision:** `kanbans/` directory with 4 separate board files (`backlog.kanban.md`, `processing.kanban.md`, `done.kanban.md`, `blocked.kanban.md`). Each is a standalone kanban board with one `#` title and one `##` column. Tasks are `###` headings moved between files. The kanban.md VS Code extension renders each board. GitHub sync is on-demand via `helm-sync`.
 
 ### Backlog inheritance on merge
 **Decision:** Yes. Child worktree's changelog entries propagate to parent on merge (they're tracked and travel with the merge). Knowledge files also propagate via `_helm/knowledge/`.
@@ -60,7 +60,7 @@ _helm/
 **Decision:** Not used. Helm relies on existing always-on skills (`code:code-quality`, `code:testing`, `code:linting`) plus a strengthened code reviewer that checks for utility duplication and pattern consistency using codeguide context. See [coherence.md](coherence.md).
 
 ### helm-setup skill
-**Decision:** Fully specified in kanban.md "Setup" section. Creates `.kanban.md` with Helm columns and `_helm/` directory structure.
+**Decision:** Fully specified in helm-setup SKILL.md. Creates `kanbans/` directory with 4 board files and `_helm/` directory structure.
 
 ### Knowledge file naming
 **Decision:** `<worktree-slug>-<timestamp>-<topic>.md`. Worktree-slug prefix prevents collisions on merge.
@@ -103,4 +103,4 @@ models:
 Carry over Taskmill's changelog format? Use `_helm/changelog.md`? Or rely on GitHub issue comments as the changelog? A tracked changelog is useful for commit history and PR descriptions. Lean toward keeping it.
 
 ### Format protection for tracked files
-`.kanban.md` is the kanban board — a bad write breaks task tracking. Options: (A) validation hook that checks format on commit, (B) rely on kanban.md extension to enforce format. Knowledge files and changelog are lower risk. Needs a decision.
+`kanbans/*.kanban.md` are the kanban boards — a bad write to any file breaks task tracking for that column. Options: (A) validation hook that checks format on commit, (B) rely on kanban.md extension to enforce format. Knowledge files and changelog are lower risk. Needs a decision.

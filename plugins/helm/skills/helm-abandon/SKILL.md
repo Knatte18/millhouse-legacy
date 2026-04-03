@@ -100,12 +100,12 @@ git branch -D helm-checkpoint-<name>
 
 ### 7. Kanban update
 
-Read `.kanban.md` **from the parent worktree** (using the parent branch and task title from Entry, already read from status.md before worktree removal; find the parent's path via `git worktree list --porcelain`). Find the task block associated with this worktree (match by task title or branch name slug).
+Search for the task in the parent worktree's kanban files (using the parent branch and task title from Entry, already read from status.md before worktree removal; find the parent's path via `git worktree list --porcelain`). Search in order: `kanbans/processing.kanban.md` → `kanbans/blocked.kanban.md` → `kanbans/done.kanban.md` → `kanbans/backlog.kanban.md`. Stop at first match. If the task is not found in any file, stop and report the error to the user.
 
-- Move the task block to `## Backlog`.
+- Cut the task block from the source file and paste it into `kanbans/backlog.kanban.md`.
 - Update `[phase]` in the task's `###` heading to `[backlog]` (or remove the `[...]` suffix entirely).
-- Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
-- Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to Backlog (abandoned)" && git push`.
+- Validate all modified board files per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+- Stage `kanbans/` and include it in the cleanup commit together with any other changes (branch deletion, checkpoint removal, etc.). Never commit kanban files alone.
 
 ### 8. Report
 
@@ -115,4 +115,4 @@ Read `.kanban.md` **from the parent worktree** (using the parent branch and task
 
 ## Kanban Updates
 
-- Abandon → move task to **Backlog** in parent's `.kanban.md`, update `[backlog]` in heading
+- Abandon → search parent's `kanbans/` files for the task, move to `kanbans/backlog.kanban.md`, update `[backlog]` in heading

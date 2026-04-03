@@ -5,7 +5,7 @@ description: Sync local kanban board state to GitHub Projects and issues.
 
 # helm-sync
 
-On-demand sync from local `.kanban.md` to GitHub Projects board. Optional --- Helm works fully offline without it.
+On-demand sync from local `kanbans/` boards to GitHub Projects board. Optional --- Helm works fully offline without it.
 
 ---
 
@@ -55,13 +55,13 @@ If `github:` section already exists and is complete, skip this step.
 
 Validate `_helm/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
-### Step 2: Read local board
+### Step 2: Read local boards
 
-Read `.kanban.md`. Parse all tasks and their current columns.
+Read all 4 board files in `kanbans/`: `backlog.kanban.md`, `processing.kanban.md`, `done.kanban.md`, `blocked.kanban.md`. Collect all tasks with their column (derived from which file the task is in).
 
 ### Step 3: Sync tasks
 
-For each task in `.kanban.md`:
+For each task collected from `kanbans/`:
 
 1. **Find or create GitHub issue.** Search for an existing issue with matching title:
    ```bash

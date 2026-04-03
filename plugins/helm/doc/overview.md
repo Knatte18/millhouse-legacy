@@ -26,7 +26,7 @@ All work happens in git worktrees. The repo root stays on `main` and serves as h
 
 ### Task Tracking
 
-`.kanban.md` is the single source of truth for tasks. The kanban.md VS Code extension renders it as a visual board. Tasks are `###` headings under `##` column headings, moved between columns as work progresses. GitHub sync is available on demand via `helm-sync`. Details in [kanban-format.md](modules/kanban-format.md).
+The `kanbans/` directory contains 4 separate board files (`backlog.kanban.md`, `processing.kanban.md`, `done.kanban.md`, `blocked.kanban.md`), each a standalone kanban board recognized by the VS Code kanban.md extension. Tasks are `###` headings moved between files as work progresses. GitHub sync is available on demand via `helm-sync`. Details in [kanban-format.md](modules/kanban-format.md).
 
 ### Execution Model
 
@@ -67,5 +67,5 @@ Each skill is defined in `plugins/helm/skills/<name>/SKILL.md`.
 | [modules/coherence.md](modules/coherence.md) | Why Helm doesn't use coherence audits |
 | [modules/codeguide.md](modules/codeguide.md) | Codeguide integration points |
 | [modules/constraints.md](modules/constraints.md) | Repo-specific invariants (CONSTRAINTS.md) |
-| [modules/validation.md](modules/validation.md) | Post-write validation rules for .kanban.md and config.yaml |
+| [modules/validation.md](modules/validation.md) | Post-write validation rules for kanban board files and config.yaml |
 | [decisions.md](decisions.md) | Design decisions and open questions |

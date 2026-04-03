@@ -68,14 +68,14 @@ This catches up the worktree with changes on the parent since the worktree was c
 **If conflicts occur:**
 1. List conflicting files: `git diff --name-only --diff-filter=U`
 2. For each file:
-   - `.kanban.md` → always accept parent's version (`git checkout --theirs .kanban.md && git add .kanban.md`). The parent board has the full task list; the worktree board only tracked its own task.
+   - `kanbans/*.kanban.md` → always accept parent's version for all 4 board files (`for f in kanbans/*.kanban.md; do git checkout --theirs "$f" && git add "$f"; done`). The parent boards have the full task list; the worktree boards only tracked its own task.
    - Whitespace/formatting only → accept worktree version
    - Package lock files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) → accept worktree version, then regenerate with the install command
    - Other generated files (build artifacts) → accept worktree version
    - Real code conflicts → attempt resolution based on understanding both sides
 3. If conflicts are unresolvable: roll back to checkpoint, release lock, escalate to user with the list of conflicting files.
 
-Never use `-X theirs` or `-X ours` on real code conflicts (`.kanban.md` is the exception — see above).
+Never use `-X theirs` or `-X ours` on real code conflicts (`kanbans/*.kanban.md` is the exception — see above).
 
 ### 4. Verify
 
@@ -98,38 +98,26 @@ This captures all changes introduced by the worktree, including conflict resolut
 
 Determine the merge method:
 
-**Direct merge** (parent is NOT `main`/`master`, or worktree-to-worktree):
+Always direct squash merge. Helm never creates PRs — that is the user's responsibility via `/git-pr` or manually.
+
 ```bash
 # Switch to parent in the parent worktree or repo root
 cd <parent-path>
 git merge --squash <worktree-branch>
-git commit -m "<task title>"
 ```
-Squash merge collapses all worktree commits into a single commit on the parent branch. The commit message should be the task title — implementation details stay in the worktree's git log.
-
-**PR** (parent is `main` or `master`):
+Then update the parent's kanban: cut the task block from `kanbans/processing.kanban.md`, paste into `kanbans/done.kanban.md`, update `[phase]` to `[complete]`. Validate both files per `doc/modules/validation.md`. Stage:
 ```bash
-git push -u origin <worktree-branch>
-gh pr create --title "<task title>" --body "<generated description>"
+git add kanbans/
+git commit -m "<task title>"
+git push
 ```
-Note: PR merges should also use squash merge — configure this in GitHub repo settings or select "Squash and merge" in the PR UI.
-
-PR description generated from:
-- Knowledge files (`_helm/knowledge/`)
-- Changelog entries
-- Plan context
-
-Report the PR URL to the user. Do NOT proceed to cleanup — wait for PR approval.
+Squash merge collapses all worktree commits + kanban update into a single commit on the parent branch.
 
 ### 7. Notify
 
 Run the **Notification Procedure** (same as helm-go — see below) with `COMPLETE: Merge successful for <branch>` (info-level — toast + status only, skip Slack).
 
-### 8. Kanban update
-
-Update `.kanban.md` in the parent worktree (after merge, you are on the parent branch). Move the task block to `## Done`. Update `[phase]` in the task's `###` heading to `[complete]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to Done" && git push`.
-
-### 9. Cleanup
+### 8. Cleanup
 
 After successful direct merge (or after user confirms PR was merged):
 
@@ -144,7 +132,7 @@ If the branch was pushed to remote:
 git push origin --delete <worktree-branch>
 ```
 
-### 10. Release merge lock
+### 9. Release merge lock
 
 Delete `<parent-path>/_helm/scratch/merge.lock`.
 
@@ -166,13 +154,27 @@ Then release the merge lock. Run the **Notification Procedure** with `BLOCKED: M
 
 ## Notification Procedure
 
-Follow the Notification Procedure defined in `helm-go` SKILL.md. Same steps: status file → toast → Slack.
+### Step 1: Update status file (always)
 
-Merge completion is info-level (toast + status only). Merge failure/rollback is high-urgency (all channels).
+Write the event to `_helm/scratch/status.md`. For blocking events, ensure `blocked: true` and `blocked_reason:` are set. For completion events, ensure `phase: complete`. Status file updates are the calling skill's responsibility, not the script's.
+
+### Step 2: Send notification
+
+```bash
+bash "$(git rev-parse --show-toplevel)/plugins/helm/scripts/notify.sh" \
+  --event "<EVENT>" \
+  --branch "$(git branch --show-current)" \
+  --detail "<detail>" \
+  --urgency "<info|high>"
+```
+
+Urgency per event:
+- Merge successful → `--urgency info` (toast + status only, skip Slack)
+- Merge failed / rolled back → `--urgency high` (all channels)
 
 ---
 
 ## Kanban Updates
 
-- Merge complete → move task to **Done** in parent's `.kanban.md`, update `[complete]` in heading
-- On `.kanban.md` merge conflict: always keep parent's version (parent has the full board)
+- Merge complete → cut task from parent's `kanbans/processing.kanban.md`, paste into `kanbans/done.kanban.md`, update `[complete]` in heading
+- On `kanbans/*.kanban.md` merge conflict: always keep parent's version (parent has the full boards)

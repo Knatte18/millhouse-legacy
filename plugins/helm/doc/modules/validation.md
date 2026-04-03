@@ -1,18 +1,26 @@
 # Validation Rules
 
-Post-write validation for `.kanban.md` and `_helm/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
+Post-write validation for kanban board files and `_helm/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
 
-## .kanban.md
+## Kanban Board Files (`kanbans/*.kanban.md`)
 
-After writing, verify all of the following:
+### Directory validation
+
+1. **All 4 files must exist.** The `kanbans/` directory must contain: `backlog.kanban.md`, `processing.kanban.md`, `done.kanban.md`, `blocked.kanban.md`.
+
+### Per-file validation
+
+After writing any board file, verify all of the following:
 
 1. **Single project heading.** Exactly one `#` heading, at line 1.
-2. **Valid columns.** Every `##` heading is one of: `Backlog`, `In Progress`, `Done`, `Blocked`.
-3. **No unknown columns.** No `##` headings outside the valid set.
-4. **Tasks under columns.** Every `###` heading appears after a `##` heading (no orphaned tasks before the first column).
-5. **No stray content.** No non-blank lines between the `#` heading and the first `##` heading.
-
-Column order is not validated — any ordering of the four columns is valid.
+2. **Correct column.** Exactly one `##` heading, matching the file's designated column:
+   - `backlog.kanban.md` → `## Backlog`
+   - `processing.kanban.md` → `## In Progress`
+   - `done.kanban.md` → `## Done`
+   - `blocked.kanban.md` → `## Blocked`
+3. **No extra columns.** No `##` headings beyond the one designated column.
+4. **Tasks under column.** Every `###` heading appears after the `##` heading (no orphaned tasks before the column).
+5. **No stray content.** No non-blank lines between the `#` heading and the `##` heading.
 
 ## _helm/config.yaml
 

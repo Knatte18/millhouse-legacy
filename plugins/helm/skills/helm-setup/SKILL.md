@@ -1,11 +1,11 @@
 ---
 name: helm-setup
-description: Initialize Helm for a repository. Creates .kanban.md board, config, and directory structure.
+description: Initialize Helm for a repository. Creates kanban board files, config, and directory structure.
 ---
 
 # helm-setup
 
-One-time initialization per repo. Creates the `.kanban.md` board with Helm columns and writes `_helm/config.yaml`.
+One-time initialization per repo. Creates the `kanbans/` directory with separate board files and writes `_helm/config.yaml`.
 
 For kanban.md file format details, see `plugins/helm/doc/modules/kanban-format.md`.
 
@@ -18,28 +18,44 @@ Run these steps in order. Stop on any failure and report the error.
 ### Step 1: Create directory structure
 
 ```bash
-mkdir -p _helm/knowledge _helm/scratch/plans _helm/scratch/briefs
+mkdir -p _helm/knowledge _helm/scratch/plans _helm/scratch/briefs kanbans
 ```
 
-### Step 2: Create kanban board
+### Step 2: Create kanban board files
 
-If `.kanban.md` does not exist, create it:
+If `kanbans/` does not contain all 4 board files, create the missing ones. Do not overwrite existing files.
 
+Each file follows the same template — `# <REPO_NAME>` title and one `##` column heading:
+
+**`kanbans/backlog.kanban.md`:**
 ```markdown
 # <REPO_NAME>
 
 ## Backlog
+```
+
+**`kanbans/processing.kanban.md`:**
+```markdown
+# <REPO_NAME>
 
 ## In Progress
+```
+
+**`kanbans/done.kanban.md`:**
+```markdown
+# <REPO_NAME>
 
 ## Done
+```
+
+**`kanbans/blocked.kanban.md`:**
+```markdown
+# <REPO_NAME>
 
 ## Blocked
 ```
 
-If `.kanban.md` already exists, check that it has all Helm columns (Backlog, In Progress, Done, Blocked). Add any missing columns.
-
-Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+Validate all board files per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
 ### Step 3: Ask for branch template
 
@@ -86,15 +102,29 @@ Validate `_helm/config.yaml` per `doc/modules/validation.md`. If validation fail
 
 ### Step 5: Update .gitignore
 
-Add `_helm/scratch/` to `.gitignore` if not already present.
+Add `_helm/scratch/` and `.scratch/` to `.gitignore` if not already present.
 
-### Step 6: Report
+### Step 6: Update CLAUDE.md
+
+If `CLAUDE.md` exists, append the following rules under a `## Kanban` section (if not already present):
+
+```markdown
+## Kanban
+
+- Task board: `.kanban.md` in repo root (kanban.md VS Code extension).
+- Never commit `.kanban.md` alone. Stage kanban changes with the next code commit.
+- Batch related small changes into one commit. Don't commit trivial edits individually.
+```
+
+If `CLAUDE.md` does not exist, create it with these rules.
+
+### Step 7: Report
 
 ```
 Helm initialized:
-  Board: .kanban.md
+  Board: kanbans/ (4 board files)
   Config: _helm/config.yaml
 
-Open the kanban.md panel in VS Code to see the board.
+Open any .kanban.md file in VS Code to see its board.
 Run helm-add to create your first task.
 ```
