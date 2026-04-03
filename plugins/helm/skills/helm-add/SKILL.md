@@ -42,6 +42,7 @@ Read `.kanban.md`. Add a new task block under the `## Backlog` heading (before t
 ```markdown
 ### <Title>
 - created: <current UTC date>
+- phase: backlog
 
 <Description, if provided>
 ```

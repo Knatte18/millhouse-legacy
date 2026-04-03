@@ -66,13 +66,13 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 2. **Staleness check.** Run `git log --since=<started> -- <file1> <file2> ...` using the `started:` timestamp from plan frontmatter and files from `## Files`.
    - No changes: proceed.
    - Minor changes (formatting, comments, unrelated areas): log warning in status.md, proceed.
-   - Major changes (files restructured, APIs changed, interfaces modified): halt. Update `- phase: discussing` in the task block in `.kanban.md`, move task block back to `## Backlog`. Validate `.kanban.md` per `doc/modules/validation.md`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `helm-start`.
+   - Major changes (files restructured, APIs changed, interfaces modified): halt. Remove the `- phase:` line from the task block in `.kanban.md`, move task block back to `## Backlog`. Validate `.kanban.md` per `doc/modules/validation.md`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `helm-start`.
 
 3. **Explore.** Read code following each step's `Explore:` targets. Read accumulated knowledge from `_helm/knowledge/` if the directory has entries — if `_helm/knowledge/summary.md` exists, read only the summary (not individual entries); otherwise read all entries. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
 
 4. **Read constraints.** Resolve repo root: `git rev-parse --show-toplevel`. Read `CONSTRAINTS.md` from repo root if it exists. These are hard invariants — never write code that violates them. If the file does not exist, proceed without it.
 
-4. **Move to In Progress.** Ensure task block is under `## In Progress` in `.kanban.md` (it should already be there from helm-start). Set `- phase: implementing` in the task's metadata. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+5. **Move to In Progress.** Ensure task block is under `## In Progress` in `.kanban.md` (it should already be there from helm-start). Set `- phase: implementing` in the task's metadata. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
    Update `_helm/scratch/status.md`:
    ```
@@ -82,7 +82,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 ### Phase: Implement
 
-5. **For each step in the plan:**
+6. **For each step in the plan:**
 
    a. Update `_helm/scratch/status.md` with current step number and name:
       ```
@@ -119,7 +119,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 ### Phase: Test
 
-6. Set `- phase: testing` in task metadata (stays in In Progress column). Update `_helm/scratch/status.md`:
+7. Set `- phase: testing` in task metadata (stays in In Progress column). Update `_helm/scratch/status.md`:
    ```
    phase: test
    ```
@@ -131,14 +131,14 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 ### Phase: Review (round N/3)
 
-7. Update `_helm/scratch/status.md`:
+8. Update `_helm/scratch/status.md`:
    ```
    phase: reviewing
    ```
 
    Set `- phase: reviewing` in task metadata (stays in In Progress column).
 
-8. **Spawn code-reviewer Agent.** Use the Agent tool with `model: sonnet`. Report to user: **"Review --- round 1/3"**
+9. **Spawn code-reviewer Agent.** Use the Agent tool with `model: sonnet`. Report to user: **"Review --- round 1/3"**
 
    Compute the diff: `git diff <plan_start_hash>..HEAD`
 
@@ -198,27 +198,27 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
    Return only the review report. No preamble, no closing remarks.
    ---
 
-9. **Before reading the reviewer's findings**, invoke the `helm-receiving-review` skill via the Skill tool. This is **mandatory** --- it loads the decision tree into context before evaluation begins. Loading it after reading findings is useless; you will have already formed rationalizations.
+10. **Before reading the reviewer's findings**, invoke the `helm-receiving-review` skill via the Skill tool. This is **mandatory** --- it loads the decision tree into context before evaluation begins. Loading it after reading findings is useless; you will have already formed rationalizations.
 
-10. Read the reviewer's findings. Verify the reviewer's verdict is substantiated --- output must contain per-file observations. A bare "APPROVE" without per-file analysis is treated as a failed review; re-spawn the reviewer.
+11. Read the reviewer's findings. Verify the reviewer's verdict is substantiated --- output must contain per-file observations. A bare "APPROVE" without per-file analysis is treated as a failed review; re-spawn the reviewer.
 
-11. If reviewer **approves** (no BLOCKING issues): proceed to Phase: Finalize.
+12. If reviewer **approves** (no BLOCKING issues): proceed to Phase: Finalize.
 
 ### Phase: Resolve (round N/3)
 
-12. If reviewer **requests changes**: report **"Resolve --- round N/3"**
+13. If reviewer **requests changes**: report **"Resolve --- round N/3"**
 
-13. Evaluate each finding through the receiving-review decision tree. For each finding, state:
+14. Evaluate each finding through the receiving-review decision tree. For each finding, state:
     1. The finding
     2. Your VERIFY assessment (accurate / inaccurate / uncertain)
     3. Your HARM CHECK result (which harm category, if any)
     4. Your action: FIX or PUSH BACK (with cited evidence)
 
-14. Fix accepted issues. Re-run full verification (the verify command from plan frontmatter).
+15. Fix accepted issues. Re-run full verification (the verify command from plan frontmatter).
 
-15. Re-spawn code-reviewer Agent with the updated diff (`git diff <plan_start_hash>..HEAD`). Report: **"Review --- round N/3"**
+16. Re-spawn code-reviewer Agent with the updated diff (`git diff <plan_start_hash>..HEAD`). Report: **"Review --- round N/3"**
 
-16. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Set `- phase: blocked` in task metadata. Move task block to `## Blocked` in `.kanban.md`. Validate `.kanban.md` per `doc/modules/validation.md`. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after 3 rounds`. Report both sides to user:
+17. Max 3 rounds. If unresolved BLOCKING issues after 3 rounds: escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after 3 rounds`. Set `- phase: blocked` in task metadata. Move task block to `## Blocked` in `.kanban.md`. Validate `.kanban.md` per `doc/modules/validation.md`. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after 3 rounds`. Report both sides to user:
     ```
     Code reviewer flagged: "<finding>"
     Implementing agent's position: "<reasoning>"
@@ -226,9 +226,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 ### Phase: Finalize
 
-17. **Codeguide update.** If `_codeguide/Overview.md` exists, invoke the `codeguide:codeguide-update` skill (no arguments --- it defaults to the current git diff).
+18. **Codeguide update.** If `_codeguide/Overview.md` exists, invoke the `codeguide:codeguide-update` skill (no arguments --- it defaults to the current git diff).
 
-18. **Write knowledge entry.** Create `_helm/knowledge/<worktree-slug>-<timestamp>-<topic>.md` where:
+19. **Write knowledge entry.** Create `_helm/knowledge/<worktree-slug>-<timestamp>-<topic>.md` where:
     - `<worktree-slug>` is the current branch name slugified (e.g. `feature-auth-oauth`)
     - `<timestamp>` is UTC `YYYYMMDD-HHMMSS`
     - `<topic>` is a short slug for the task (e.g. `oauth-client`)
@@ -252,7 +252,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
     Include only categories that have content. If nothing was learned, skip this step.
 
-19. **Record architectural decisions.** If any steps involved architectural choices (where a future session might ask "why did they do it this way?"), append to `_helm/knowledge/decisions.md`:
+20. **Record architectural decisions.** If any steps involved architectural choices (where a future session might ask "why did they do it this way?"), append to `_helm/knowledge/decisions.md`:
 
     ```markdown
     ## [Step N] Decision title
@@ -263,19 +263,19 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
     Create the file if it doesn't exist.
 
-20. **Post-review commit.** If any files changed during review fixes, codeguide update, or knowledge writing:
+21. **Post-review commit.** If any files changed during review fixes, codeguide update, or knowledge writing:
     - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
     - Commit: `chore: post-review cleanup for <task-title>`
     - Push: `git push`
 
-21. **Update status.md:**
+22. **Update status.md:**
     ```
     phase: complete
     ```
 
-22. **Move task to Done** in `.kanban.md`: cut the task block from `## In Progress`, paste under `## Done`. Set `- phase: complete` in task metadata. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+23. **Move task to Done** in `.kanban.md`: cut the task block from `## In Progress`, paste under `## Done`. Set `- phase: complete` in task metadata. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
-23. **Knowledge synthesis.** If `_helm/knowledge/` contains more than 5 entries (excluding `decisions.md` and `summary.md`):
+24. **Knowledge synthesis.** If `_helm/knowledge/` contains more than 5 entries (excluding `decisions.md` and `summary.md`):
     1. Read all entries.
     2. Deduplicate (multiple tasks may discover the same pattern).
     3. Resolve conflicts (if tasks established contradictory patterns, pick the winner).

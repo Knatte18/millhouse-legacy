@@ -107,5 +107,5 @@ Slug for branch names: lowercase, spaces to hyphens, remove special characters. 
   - **Task worktree** (spawned by `helm-start -w`): board with only the spawned task (+ any sub-tasks created during work).
 - Each worktree updates its own `.kanban.md`. Never reach into another worktree's filesystem to edit its board.
 - On merge (`helm-merge`): `.kanban.md` will conflict — always keep the **parent's version** (`--theirs` during merge parent→worktree, parent's copy during merge worktree→parent). Then update the parent's board (move task to Done).
-- Keep metadata lines in consistent order: priority, tags, due, phase, created.
+- Keep metadata lines in consistent order: created, phase, priority, tags, due.
 - Descriptions and sub-tasks go after the metadata lines, separated by a blank line.
