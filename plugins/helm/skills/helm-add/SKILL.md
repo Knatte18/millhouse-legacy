@@ -37,10 +37,20 @@ Split the argument on the first `:` character.
 
 Read `.kanban.md`. Add a new task block under the `## Backlog` heading (before the next `##` heading or end of file):
 
+If no description:
+
+```markdown
+### <Title> [backlog]
+```
+
+If description provided, use an indented ` ```md ` code block (plain text descriptions are not parsed by the kanban.md extension and are destroyed on drag-and-drop):
+
 ```markdown
 ### <Title> [backlog]
 
-<Description, if provided>
+    ```md
+    <Description>
+    ```
 ```
 
 ### Step 4: Validate

@@ -29,10 +29,20 @@ For each issue returned in step 1:
 
 1. Read `.kanban.md`. Append a new task block under the `## Backlog` heading (before the next `##` heading or end of file):
 
+If no body:
+
+```markdown
+### <issue title> [backlog]
+```
+
+If the issue has a body, use an indented ` ```md ` code block (plain text descriptions are not parsed by the kanban.md extension and are destroyed on drag-and-drop):
+
 ```markdown
 ### <issue title> [backlog]
 
-<issue body, if non-empty>
+    ```md
+    <issue body>
+    ```
 ```
 
 ### Step 4: Validate

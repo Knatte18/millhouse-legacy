@@ -70,7 +70,7 @@ When the user chooses `-w` (worktree mode):
 
 8. **Create _helm structure in worktree.** Create `_helm/scratch/briefs/` in the worktree path.
 
-9. **Write worktree-local kanban board.** Write `<worktree-path>/.kanban.md` with only the spawned task under `## In Progress` (plus empty Backlog, Done, Blocked columns). This replaces the parent's full board — the worktree tracks only its own task.
+9. **Write worktree-local kanban board.** Write `<worktree-path>/.kanban.md` with only the spawned task under `## In Progress` (plus empty Backlog, Done, Blocked columns). This replaces the parent's full board — the worktree tracks only its own task. If the task has a description body in the parent board, preserve it using the indented ` ```md ` code block format (see `kanban-format.md`).
 
 10. **Write status.md in worktree.** Write `<worktree-path>/_helm/scratch/status.md`:
     ```

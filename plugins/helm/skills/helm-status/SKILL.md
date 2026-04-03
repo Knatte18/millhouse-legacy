@@ -19,10 +19,9 @@ Read `.kanban.md` from the repo root. If it does not exist, stop and tell the us
 
 Parse the file:
 - `##` headings are columns (e.g. Backlog, In Progress, Done, Blocked).
-- `###` headings are tasks within columns.
-- Each task may have `- phase: <value>` metadata.
+- `###` headings are tasks within columns. A task heading may include a `[phase]` suffix (e.g. `### Fix bug [implementing]`).
 
-Count tasks per column. For columns with tasks that have `- phase:` metadata, also count tasks per phase within that column.
+Count tasks per column. For columns with tasks that have a `[phase]` suffix in their heading, also count tasks per phase within that column.
 
 ### Step 2: Read current status
 
@@ -54,7 +53,7 @@ Board (.kanban.md):
   Blocked:       N tasks
 ```
 
-Only show columns that exist in the board. For In Progress, if tasks have phase metadata, show a parenthetical breakdown, e.g. `2 tasks (1 implementing, 1 reviewing)`.
+Only show columns that exist in the board. For In Progress, if tasks have `[phase]` suffixes in their headings, show a parenthetical breakdown, e.g. `2 tasks (1 implementing, 1 reviewing)`.
 
 If `_helm/scratch/status.md` exists and has a phase that is not `complete`:
 

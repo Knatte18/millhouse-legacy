@@ -27,7 +27,7 @@ Test Helm in an existing repo (not millhouse). Run each step in order.
 **Verify:**
 - [ ] Tasks appear in `.kanban.md` under Backlog
 - [ ] kanban.md extension shows them visually
-- [ ] Each task has `- created:` and `- phase: backlog`
+- [ ] Each task heading has `[backlog]` phase suffix (e.g. `### Fix input validation on API endpoint [backlog]`)
 
 ---
 
