@@ -5,9 +5,9 @@ description: Dashboard showing all active worktrees and their state.
 
 # helm-status
 
-Dashboard. Read-only. No arguments.
+Dashboard. No arguments.
 
-Shows board summary, current status, and worktree overview.
+Shows board summary, current status, and worktree overview. Also cleans up stale worktrees.
 
 ---
 
@@ -32,7 +32,16 @@ Read `_helm/scratch/status.md` if it exists. Extract:
 
 If a plan file path is present and the file exists, read the plan to count total steps (lines matching `### Step`) and completed steps (based on git log matching `Commit:` messages from the plan).
 
-### Step 3: Read worktrees
+### Step 3: Clean up stale worktrees
+
+Run `git worktree list --porcelain`. For each worktree (skip the main one):
+1. Check if the worktree's `_helm/scratch/status.md` has `phase: complete`.
+2. Check if the worktree directory is still open in VS Code: `test -f <worktree-path>/.vscode-server` or check if any process holds a lock. In practice, just try `git worktree remove <path>` — if it fails (directory locked), skip it silently.
+3. If phase is complete and removal succeeds: delete the local branch (`git branch -D <branch>`) and the remote branch (`git push origin --delete <branch>` if it was pushed). Report: `Cleaned up: <branch>`.
+
+Run `git worktree prune` to remove any remaining stale entries (directories deleted manually).
+
+### Step 4: Read worktrees
 
 Run `git worktree list`. Parse the output — each line has: `<path> <hash> [<branch>]`.
 
@@ -41,7 +50,7 @@ Skip the main worktree (the first entry). For each additional worktree:
 2. Try to read `<worktree-path>/_helm/scratch/status.md` for that worktree's phase, step progress, and `parent:` field.
 3. Determine parent branch from the `parent:` field in status.md. If not present, fall back to `main`.
 
-### Step 4: Display dashboard
+### Step 5: Display dashboard
 
 Print the dashboard. Use this exact format:
 
