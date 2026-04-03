@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Skill(weblens:*)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(bash *)"
     ]
   }
 }

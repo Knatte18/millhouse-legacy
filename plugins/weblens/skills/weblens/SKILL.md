@@ -14,7 +14,7 @@ Only use this skill when the built-in WebFetch fails or returns unusable content
 
 2. Fetch the URL(s):
    ```bash
-   node ${CLAUDE_SKILL_DIR}/../../scripts/fetch.mjs <url1> [url2...] > .scratch/weblens-output.md
+   bash ${CLAUDE_SKILL_DIR}/../../scripts/run.sh <url1> [url2...] > .scratch/weblens-output.md
    ```
 
 3. Read `.scratch/weblens-output.md`.
