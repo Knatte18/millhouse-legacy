@@ -102,14 +102,17 @@ Determine the merge method:
 ```bash
 # Switch to parent in the parent worktree or repo root
 cd <parent-path>
-git merge <worktree-branch>
+git merge --squash <worktree-branch>
+git commit -m "<task title>"
 ```
+Squash merge collapses all worktree commits into a single commit on the parent branch. The commit message should be the task title — implementation details stay in the worktree's git log.
 
 **PR** (parent is `main` or `master`):
 ```bash
 git push -u origin <worktree-branch>
 gh pr create --title "<task title>" --body "<generated description>"
 ```
+Note: PR merges should also use squash merge — configure this in GitHub repo settings or select "Squash and merge" in the PR UI.
 
 PR description generated from:
 - Knowledge files (`_helm/knowledge/`)
