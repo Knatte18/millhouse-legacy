@@ -73,14 +73,13 @@ When the user chooses `-w` (worktree mode):
 
 8. **Create _helm structure in worktree.** Create `_helm/scratch/briefs/` in the worktree path.
 
-   **Create `.vscode/settings.json`** in the worktree with a random title bar color and title showing repo name (extension "Branch in Window Title" appends the branch):
+   **Create `.vscode/settings.json`** in the worktree with a random title bar color so the user can visually distinguish worktree windows:
    ```json
    {
      "workbench.colorCustomizations": {
        "titleBar.activeBackground": "<random hex color>",
        "titleBar.activeForeground": "#ffffff"
-     },
-     "window.title": "${rootName}"
+     }
    }
    ```
    Generate a random dark-ish color (keep it readable with white text). Examples: `#2d7d46`, `#7d2d6b`, `#2d4f7d`, `#7d5c2d`.
