@@ -61,15 +61,10 @@ Details in [skills.md](skills.md).
 |------|----------|
 | [overview.md](overview.md) | This file — architecture and principles |
 | [modules/worktrees.md](modules/worktrees.md) | Worktree model, lifecycle, nesting, env setup |
-| [modules/skills.md](modules/skills.md) | All skill definitions and flows |
 | [modules/plans.md](modules/plans.md) | Plan format, locking, staleness detection |
-| [modules/reviews.md](modules/reviews.md) | Plan review, code review, receiving-review protocol |
-| [modules/kanban.md](modules/kanban.md) | Local kanban board integration |
 | [modules/kanban-format.md](modules/kanban-format.md) | kanban.md file format reference |
 | [modules/knowledge.md](modules/knowledge.md) | Knowledge curation between tasks |
-| [modules/coherence.md](modules/coherence.md) | Coherence audits and quality dimensions |
-| [modules/merge.md](modules/merge.md) | Merge strategy, checkpoints, locking, PR workflow |
-| [modules/notifications.md](modules/notifications.md) | Slack, toast, status files |
+| [modules/coherence.md](modules/coherence.md) | Why Helm doesn't use coherence audits |
 | [modules/codeguide.md](modules/codeguide.md) | Codeguide integration points |
-| [modules/failures.md](modules/failures.md) | Failure classification and escalation |
+| [modules/constraints.md](modules/constraints.md) | Repo-specific invariants (CONSTRAINTS.md) |
 | [decisions.md](decisions.md) | Design decisions and open questions |
