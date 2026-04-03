@@ -84,7 +84,7 @@ User opens CC in the new VS Code window. Runs `helm-start`. CC reads the brief a
 
 ### Completion
 
-When all tasks are done, user runs `helm-merge` (see [merge.md](merge.md)):
+When all tasks are done, user runs `helm-merge`:
 1. Merge parent into worktree (catch up)
 2. Verify and audit
 3. Merge worktree into parent (or create PR)
@@ -101,7 +101,7 @@ Never cleanup on failure — preserve the worktree for investigation.
 
 ## Status Tracking
 
-Each worktree writes `_helm/scratch/status.md`, updated after every step (not just on errors). Canonical format defined in [notifications.md](notifications.md). Key fields:
+Each worktree writes `_helm/scratch/status.md`, updated after every step (not just on errors). Canonical format defined in `helm-go` SKILL.md. Key fields:
 
 ```markdown
 parent: feature/auth

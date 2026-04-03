@@ -100,7 +100,7 @@ git branch -D helm-checkpoint-<name>
 
 ### 7. Kanban update
 
-Read `.kanban.md` **from the main repo** (never from worktrees). Find the task block associated with this worktree (match by task title from `_helm/scratch/status.md` or by branch name slug).
+Read `.kanban.md` **from the parent worktree** (resolve parent from `_helm/scratch/status.md` `parent:` field, then find its path via `git worktree list --porcelain`). Find the task block associated with this worktree (match by task title from `_helm/scratch/status.md` or by branch name slug).
 
 - Move the task block to `## Backlog`.
 - Remove the `- phase:` line from the task metadata (or set it to `backlog`).
@@ -114,5 +114,4 @@ Read `.kanban.md` **from the main repo** (never from worktrees). Find the task b
 
 ## Kanban Updates
 
-- Abandon → move task to **Backlog**, remove `- phase:` line
-- `.kanban.md` is written only from the main repo, never from worktrees
+- Abandon → move task to **Backlog** in parent's `.kanban.md`, remove `- phase:` line

@@ -39,13 +39,13 @@ helm-start proceeds through named phases. Report the current phase to the user a
    - `-w` flag or user chooses worktree → **Worktree spawn flow** (see below). After spawning, stop. The user continues in the new VS Code window.
    - No flag / in-place: continue below.
 
-3. **Move to In Progress.** Edit `.kanban.md`: cut the entire task block (from `### Title` to just before the next `###` or `##`) from `## Backlog` and paste it under `## In Progress`. Set `- phase: discussing` in the task's metadata lines. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+3. **Move to In Progress.** Edit `.kanban.md`: cut the entire task block (from `### Title` to just before the next `###` or `##`) from `## Backlog` and paste it under `## In Progress`. Set `- phase: discussing` in the task's metadata lines. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push the kanban change: `git add .kanban.md && git commit -m "kanban: move <task> to In Progress" && git push`.
 
 #### Worktree Spawn Flow
 
 When the user chooses `-w` (worktree mode):
 
-1. **Move to In Progress first.** Edit `.kanban.md`: move the task block to `## In Progress`, set `- phase: discussing`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+1. **Move to In Progress first.** Edit `.kanban.md`: move the task block to `## In Progress`, set `- phase: discussing`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to In Progress" && git push`.
 
 2. **Read config.** Read `_helm/config.yaml`. Extract `worktree.branch-template` and `worktree.path-template`.
 
@@ -70,18 +70,27 @@ When the user chooses `-w` (worktree mode):
 
 8. **Create _helm structure in worktree.** Create `_helm/scratch/briefs/` in the worktree path.
 
-9. **Write handoff brief.** Write `<worktree-path>/_helm/scratch/briefs/handoff.md` using the Handoff Brief Format (see `plugins/helm/doc/modules/plans.md`). If no discussion has happened yet, populate `## Discussion Summary` with the task title and body from `.kanban.md`.
+9. **Write worktree-local kanban board.** Write `<worktree-path>/.kanban.md` with only the spawned task under `## In Progress` (plus empty Backlog, Done, Blocked columns). This replaces the parent's full board — the worktree tracks only its own task.
 
-10. **Open VS Code.**
+10. **Write status.md in worktree.** Write `<worktree-path>/_helm/scratch/status.md`:
+    ```
+    parent: <parent-branch>
+    task: <task-title>
+    phase: discussing
+    ```
+
+11. **Write handoff brief.** Write `<worktree-path>/_helm/scratch/briefs/handoff.md` using the Handoff Brief Format (see `plugins/helm/doc/modules/plans.md`). If no discussion has happened yet, populate `## Discussion Summary` with the task title and body from `.kanban.md`.
+
+12. **Open VS Code.**
     ```bash
     code <worktree-path>
     ```
 
-11. **Report.** Tell the user:
+13. **Report.** Tell the user:
     - Worktree created at `<path>` on branch `<branch>`
     - "Run `helm-start` in the new VS Code window to continue planning."
 
-12. **Stop.** Do not continue to Explore or Discuss phases. The parent session is done with this task.
+14. **Stop.** Do not continue to Explore or Discuss phases. The parent session is done with this task.
 
 ### Phase: Explore
 
@@ -235,7 +244,7 @@ When the user chooses `-w` (worktree mode):
 
 ### Phase: Approve
 
-9. Present the final plan to the user for approval. Show the complete plan content.
+9. Confirm with the user that the plan is approved.
 
 10. **Plan approved** --- lock the plan:
 
@@ -272,7 +281,7 @@ If the user decides mid-discussion that they want a worktree:
 
 1. **Write handoff brief.** Write `_helm/scratch/briefs/handoff.md` summarizing the discussion so far — decisions made, approaches considered, relevant code explored.
 
-2. **Run the Worktree Spawn Flow** from Phase: Select (steps 2-12 above). The brief is written to the *new* worktree's `_helm/scratch/briefs/handoff.md` (not the parent's).
+2. **Run the Worktree Spawn Flow** from Phase: Select (steps 2-14 above). The brief is written to the *new* worktree's `_helm/scratch/briefs/handoff.md` (not the parent's).
 
 3. **Stop.** The user runs `helm-start` in the new VS Code window. The receiving session reads the brief and continues from Phase: Explore — it does not repeat the discussion, but it does run its own exploration and may ask follow-up questions.
 

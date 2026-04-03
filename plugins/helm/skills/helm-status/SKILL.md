@@ -39,8 +39,8 @@ Run `git worktree list`. Parse the output — each line has: `<path> <hash> [<br
 
 Skip the main worktree (the first entry). For each additional worktree:
 1. Extract branch name from the `[branch]` part.
-2. Try to read `<worktree-path>/_helm/scratch/status.md` for that worktree's phase and step progress.
-3. Determine parent branch: read `_helm/config.yaml` `worktree.branch-template` to infer parent from branch name, or fall back to `main`.
+2. Try to read `<worktree-path>/_helm/scratch/status.md` for that worktree's phase, step progress, and `parent:` field.
+3. Determine parent branch from the `parent:` field in status.md. If not present, fall back to `main`.
 
 ### Step 4: Display dashboard
 

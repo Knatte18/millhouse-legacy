@@ -53,7 +53,7 @@ The user controls the transition. `helm-go` never asks for input during normal o
 | `helm-sync` | Sync local kanban board to GitHub Projects | One-shot |
 | `git:git-commit` | Ad-hoc commit (general git skill, not Helm-specific) | One-shot |
 
-Details in [skills.md](skills.md).
+Each skill is defined in `plugins/helm/skills/<name>/SKILL.md`.
 
 ## Document Index
 

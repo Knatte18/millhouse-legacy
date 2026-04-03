@@ -19,7 +19,7 @@ Read `_helm/config.yaml`. If it does not exist, stop --- tell the user to run `h
 
 Read `_helm/scratch/status.md`. Extract the `plan:` field to locate the plan file and `task:` field to identify the task title.
 
-Read the plan file. Check `approved: true` in frontmatter. If not approved, refuse --- tell the user to run `helm-start` first.
+Read the plan file. If it does not exist, stop --- tell the user to re-run `helm-start`. Check `approved: true` in frontmatter. If not approved, refuse --- tell the user to run `helm-start` first.
 
 `helm-go` is always autonomous. It never runs a discuss phase or asks clarifying questions. That is `helm-start`'s job.
 
@@ -72,7 +72,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 4. **Read constraints.** Resolve repo root: `git rev-parse --show-toplevel`. Read `CONSTRAINTS.md` from repo root if it exists. These are hard invariants — never write code that violates them. If the file does not exist, proceed without it.
 
-5. **Move to In Progress.** Ensure task block is under `## In Progress` in `.kanban.md` (it should already be there from helm-start). Set `- phase: implementing` in the task's metadata. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+4. **Move to In Progress.** Ensure task block is under `## In Progress` in `.kanban.md` (it should already be there from helm-start). Set `- phase: implementing` in the task's metadata. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
    Update `_helm/scratch/status.md`:
    ```
@@ -109,26 +109,25 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
          - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Set `- phase: blocked` in task metadata. Move task block to `## Blocked`. Validate `.kanban.md` per `doc/modules/validation.md`. Stop.
          - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Set `- phase: blocked` in task metadata. Move task block to `## Blocked`. Validate `.kanban.md` per `doc/modules/validation.md`. Stop.
 
-   f. **Commit after each successful step** using the step's `Commit:` message:
+   f. **Commit and push after each successful step** using the step's `Commit:` message:
       - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
       - Commit: `git commit -m "<commit message from step>"`
+      - Push: `git push`
       - This enables resume on crash.
 
    On any block (after 3 retries, permission error, upstream dependency): after updating status.md and kanban, run the **Notification Procedure** with the appropriate BLOCKED event.
 
 ### Phase: Test
 
-6. **Full verification.** Run the complete verify command from plan frontmatter (lint, type-check, build, test --- whatever the command includes).
-   - All tests must pass --- not just tests related to this task.
-   - Compare failures against `_helm/scratch/test-baseline.md` to distinguish pre-existing failures from new regressions.
-   - If new failures: debug and fix using the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: block (same flow as step failure above).
-
-   Set `- phase: testing` in task metadata (stays in In Progress column).
-
-   Update `_helm/scratch/status.md`:
+6. Set `- phase: testing` in task metadata (stays in In Progress column). Update `_helm/scratch/status.md`:
    ```
    phase: test
    ```
+
+   **Full verification.** Run the complete verify command from plan frontmatter (lint, type-check, build, test --- whatever the command includes).
+   - All tests must pass --- not just tests related to this task.
+   - Compare failures against `_helm/scratch/test-baseline.md` to distinguish pre-existing failures from new regressions.
+   - If new failures: debug and fix using the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: block (same flow as step failure above).
 
 ### Phase: Review (round N/3)
 
@@ -267,6 +266,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 20. **Post-review commit.** If any files changed during review fixes, codeguide update, or knowledge writing:
     - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
     - Commit: `chore: post-review cleanup for <task-title>`
+    - Push: `git push`
 
 21. **Update status.md:**
     ```

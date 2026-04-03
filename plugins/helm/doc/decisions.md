@@ -69,7 +69,7 @@ _helm/
 **Decision:** Standalone skill at `plugins/helm/skills/helm-receiving-review/SKILL.md`. Must be invoked via Skill tool BEFORE reading reviewer findings.
 
 ### Cross-platform notifications
-**Decision:** Windows (BurntToast), macOS (osascript), Linux (notify-send). Detect platform. Specified in notifications.md.
+**Decision:** Windows (BurntToast), macOS (osascript), Linux (notify-send). Detect platform. Specified in helm-go SKILL.md (Notification Procedure section).
 
 ### Notification config location
 **Decision:** Per-repo in `_helm/config.yaml` alongside worktree and kanban config. Not global.

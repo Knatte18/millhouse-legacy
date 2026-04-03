@@ -102,7 +102,10 @@ Slug for branch names: lowercase, spaces to hyphens, remove special characters. 
 
 ## Write Rules
 
-- `.kanban.md` lives in the repo root and is written **only from the main repo**, never from worktrees.
-- Each worktree works on one task. The task's column and phase are updated from the main repo.
+- `.kanban.md` is **worktree-local**. Each worktree has its own copy via git.
+  - **Parent worktree / main repo:** full board with all tasks.
+  - **Task worktree** (spawned by `helm-start -w`): board with only the spawned task (+ any sub-tasks created during work).
+- Each worktree updates its own `.kanban.md`. Never reach into another worktree's filesystem to edit its board.
+- On merge (`helm-merge`): `.kanban.md` will conflict — always keep the **parent's version** (`--theirs` during merge parent→worktree, parent's copy during merge worktree→parent). Then update the parent's board (move task to Done).
 - Keep metadata lines in consistent order: priority, tags, due, phase, created.
 - Descriptions and sub-tasks go after the metadata lines, separated by a blank line.

@@ -8,7 +8,6 @@ description: Merge a completed worktree back to its parent branch.
 You are an integration engineer. Your job is to merge a feature branch back to its parent branch safely. You never force-merge, never pass a defect downstream, and never lose work. If something goes wrong, you roll back to the checkpoint and escalate.
 
 For kanban.md file format details, see `plugins/helm/doc/modules/kanban-format.md`.
-For merge strategy details, see `plugins/helm/doc/modules/merge.md`.
 
 ---
 
@@ -69,13 +68,14 @@ This catches up the worktree with changes on the parent since the worktree was c
 **If conflicts occur:**
 1. List conflicting files: `git diff --name-only --diff-filter=U`
 2. For each file:
+   - `.kanban.md` → always accept parent's version (`git checkout --theirs .kanban.md && git add .kanban.md`). The parent board has the full task list; the worktree board only tracked its own task.
    - Whitespace/formatting only → accept worktree version
    - Package lock files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) → accept worktree version, then regenerate with the install command
    - Other generated files (build artifacts) → accept worktree version
    - Real code conflicts → attempt resolution based on understanding both sides
 3. If conflicts are unresolvable: roll back to checkpoint, release lock, escalate to user with the list of conflicting files.
 
-Never use `-X theirs` or `-X ours` on real code conflicts.
+Never use `-X theirs` or `-X ours` on real code conflicts (`.kanban.md` is the exception — see above).
 
 ### 4. Verify
 
@@ -92,7 +92,7 @@ If `_codeguide/Overview.md` exists, run `codeguide-update` scoped to the checkpo
 git diff helm-checkpoint-<name>..HEAD
 ```
 
-This captures all changes introduced by the worktree, including conflict resolutions. Must run BEFORE the merge to parent.
+This captures all changes introduced by the worktree, including conflict resolutions. Must run BEFORE merging the worktree INTO the parent (step 6).
 
 ### 6. Merge into parent
 
@@ -124,7 +124,7 @@ Run the **Notification Procedure** (same as helm-go — see below) with `COMPLET
 
 ### 8. Kanban update
 
-Read `.kanban.md` **from the main repo** (never from the worktree). Move the task block to `## Done`. Set `- phase: complete`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+Update `.kanban.md` in the parent worktree (after merge, you are on the parent branch). Move the task block to `## Done`. Set `- phase: complete`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
 ### 9. Cleanup
 
@@ -163,26 +163,7 @@ Then release the merge lock. Run the **Notification Procedure** with `BLOCKED: M
 
 ## Notification Procedure
 
-Same procedure as documented in `helm-go`. Read `_helm/config.yaml` for `notifications.slack` and `notifications.toast` settings.
-
-1. **Status file** (always): update `_helm/scratch/status.md` with the event.
-2. **Toast** (if `notifications.toast.enabled`): detect platform and fire desktop notification.
-
-   ```bash
-   case "$(uname -s)" in
-     MINGW*|MSYS*|CYGWIN*|Windows_NT)
-       powershell -Command "New-BurntToastNotification -Text '[helm] <branch> <EVENT>', '<detail>'"
-       ;;
-     Darwin)
-       osascript -e 'display notification "<detail>" with title "[helm] <branch> <EVENT>"'
-       ;;
-     Linux)
-       notify-send "[helm] <branch> <EVENT>" "<detail>"
-       ;;
-   esac
-   ```
-
-3. **Slack** (if `notifications.slack.enabled` and high-urgency only): POST to webhook URL.
+Follow the Notification Procedure defined in `helm-go` SKILL.md. Same steps: status file → toast → Slack.
 
 Merge completion is info-level (toast + status only). Merge failure/rollback is high-urgency (all channels).
 
@@ -190,5 +171,5 @@ Merge completion is info-level (toast + status only). Merge failure/rollback is 
 
 ## Kanban Updates
 
-- Merge complete → move task to **Done**, set `- phase: complete`
-- `.kanban.md` is written only from the main repo, never from worktrees
+- Merge complete → move task to **Done** in parent's `.kanban.md`, set `- phase: complete`
+- On `.kanban.md` merge conflict: always keep parent's version (parent has the full board)
