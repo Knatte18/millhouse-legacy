@@ -3,7 +3,8 @@
     "allow": [
       "Read(~/.claude/**)",
       "Edit(~/.claude/**)",
-      "Bash(python ~/.claude/scripts/*)"
+      "Bash(python ~/.claude/scripts/*)",
+      "Bash(mkdir *)"
     ]
   }
 }

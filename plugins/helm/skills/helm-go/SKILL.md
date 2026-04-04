@@ -343,47 +343,19 @@ For blocking events, ensure `blocked: true` and `blocked_reason:` are set (alrea
 
 For completion events, ensure `phase: ready-to-merge`.
 
-### Step 2: Read notification config
+### Step 2: Send notification
 
-Read `_helm/config.yaml`. Extract `notifications.slack` and `notifications.toast` settings.
-
-### Step 3: Toast notification (if enabled)
-
-If `notifications.toast.enabled` is `true`, detect the platform and fire a desktop notification:
+Run the `notify.sh` script. It reads `_helm/config.yaml`, detects the platform, and sends a desktop toast (and Slack, when enabled). Best-effort — failures warn on stderr, never block execution.
 
 ```bash
-# Detect platform
-case "$(uname -s)" in
-  MINGW*|MSYS*|CYGWIN*|Windows_NT)
-    # Windows — requires BurntToast PowerShell module
-    powershell -Command "New-BurntToastNotification -Text '[helm] <branch> <EVENT>', '<detail>'"
-    ;;
-  Darwin)
-    # macOS
-    osascript -e 'display notification "<detail>" with title "[helm] <branch> <EVENT>"'
-    ;;
-  Linux)
-    # Linux — requires libnotify
-    notify-send "[helm] <branch> <EVENT>" "<detail>"
-    ;;
-esac
+bash "$(git rev-parse --show-toplevel)/plugins/helm/scripts/notify.sh" \
+  --event "<EVENT>" \
+  --branch "$(git branch --show-current)" \
+  --detail "<detail>" \
+  --urgency "<info|high>"
 ```
 
-Replace `<branch>` with the current branch name, `<EVENT>` with `BLOCKED` or `COMPLETE`, and `<detail>` with the reason (e.g. "Test failure after 3 retries in step 3").
-
-If the toast command fails (module not installed, no display), log a warning and continue — toast is best-effort.
-
-### Step 4: Slack notification (if enabled)
-
-If `notifications.slack.enabled` is `true` and `notifications.slack.webhook` is non-empty, post to the webhook:
-
-```bash
-curl -s -X POST "<webhook-url>" \
-  -H "Content-Type: application/json" \
-  -d '{"text": "[helm] <branch> <EVENT>\n<detail>\nWorktree: <worktree-path>"}'
-```
-
-If the webhook call fails, log a warning and continue — Slack is notification-only and non-blocking.
+Replace `<EVENT>` with `BLOCKED` or `COMPLETE`, `<detail>` with the reason, and `<urgency>` with `high` (blocking events) or `info` (completion events).
 
 ### When to notify
 
