@@ -5,7 +5,7 @@ description: Create a new task on the local kanban board.
 
 # helm-add
 
-One-shot. Add a task to `kanbans/backlog.kanban.md`.
+One-shot. Add a task to the `## Backlog` column in `kanbans/board.kanban.md`.
 
 For kanban.md file format details, see `plugins/helm/doc/modules/kanban-format.md`.
 
@@ -24,7 +24,7 @@ Text before the first colon is the title. Text after is the body. No colon means
 
 ### Step 1: Check board exists
 
-If `kanbans/backlog.kanban.md` does not exist, stop and tell the user to run `helm-setup` first.
+If `kanbans/board.kanban.md` does not exist, stop and tell the user to run `helm-setup` first.
 
 ### Step 2: Parse input
 
@@ -35,7 +35,7 @@ Split the argument on the first `:` character.
 
 ### Step 3: Add task to board
 
-Read `kanbans/backlog.kanban.md`. Add a new task block under the `## Backlog` heading (before the next `##` heading or end of file):
+Read `kanbans/board.kanban.md`. Add a new task block under the `## Backlog` column (before the next `##` heading or end of file):
 
 If no description:
 
@@ -55,7 +55,7 @@ If description provided, use an indented ` ```md ` code block (plain text descri
 
 ### Step 4: Validate
 
-Validate `kanbans/backlog.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+Validate `kanbans/board.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
 ### Step 5: Report
 

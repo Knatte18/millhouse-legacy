@@ -1,36 +1,32 @@
 # Validation Rules
 
-Post-write validation for kanban board files and `_helm/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
+Post-write validation for the kanban board file and `_helm/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
 
-## Kanban Board Files (`kanbans/*.kanban.md`)
+## Kanban Board File (`kanbans/board.kanban.md`)
 
-### Directory validation
+### File validation
 
-1. **All 4 files must exist.** The `kanbans/` directory must contain: `backlog.kanban.md`, `processing.kanban.md`, `done.kanban.md`, `blocked.kanban.md`.
+1. **File must exist.** `kanbans/board.kanban.md` must exist. It is gitignored and local-only. On fresh clones, the file will not exist until `helm-setup` is run.
 
-### Per-file validation
+### Structural validation
 
-After writing any board file, verify all of the following:
+After writing the board file, verify all of the following:
 
 1. **Single project heading.** Exactly one `#` heading, at line 1.
-2. **Correct column.** Exactly one `##` heading, matching the file's designated column:
-   - `backlog.kanban.md` → `## Backlog`
-   - `processing.kanban.md` → `## In Progress`
-   - `done.kanban.md` → `## Done`
-   - `blocked.kanban.md` → `## Blocked`
-3. **No extra columns.** No `##` headings beyond the one designated column.
-4. **Tasks under column.** Every `###` heading appears after the `##` heading (no orphaned tasks before the column).
-5. **No stray content.** No non-blank lines between the `#` heading and the `##` heading.
+2. **All five columns present.** Exactly five `##` headings, in order: `## Backlog`, `## Spawn`, `## In Progress`, `## Done`, `## Blocked`.
+3. **No extra columns.** No `##` headings beyond the five designated columns.
+4. **Tasks under columns.** Every `###` heading appears after a `##` heading (no orphaned tasks before the first column).
+5. **No stray content.** No non-blank lines between the `#` heading and the first `##` heading.
 
 ## _helm/config.yaml
 
 After writing, verify all of the following:
 
 1. **Valid YAML.** The file parses without errors.
-2. **Required top-level keys.** These keys must be present: `worktree`, `models`, `notifications`.
+2. **Required top-level keys.** These keys must be present: `models`, `notifications`.
 3. **GitHub section (if present).** If a `github:` key exists, it must contain `owner` and `repo` sub-keys.
 
-Sub-keys under `worktree`, `models`, and `notifications` are not validated — new fields can be added without updating these rules.
+Sub-keys under `models` and `notifications` are not validated — new fields can be added without updating these rules.
 
 ## Failure behavior
 

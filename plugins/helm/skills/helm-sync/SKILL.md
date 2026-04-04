@@ -5,7 +5,7 @@ description: Sync local kanban board state to GitHub Projects and issues.
 
 # helm-sync
 
-On-demand sync from local `kanbans/` boards to GitHub Projects board. Optional --- Helm works fully offline without it.
+On-demand sync from local `kanbans/board.kanban.md` to GitHub Projects board. Optional --- Helm works fully offline without it.
 
 ---
 
@@ -33,7 +33,7 @@ If `_helm/config.yaml` has no `github:` section (or it is incomplete), set it up
 2. Check for existing projects: `gh project list --owner <owner> --format json`
 3. Ask user which to use or create new.
 4. Get the Status field ID: `gh project field-list <number> --owner <owner> --format json`
-5. Configure Helm columns via GraphQL mutation (Backlog, In Progress, Done, Blocked).
+5. Configure Helm columns via GraphQL mutation (Backlog, Spawn, In Progress, Done, Blocked).
 6. Get the Project Node ID via GraphQL query.
 7. Write all IDs to `_helm/config.yaml` under `github:`:
 
@@ -46,6 +46,7 @@ github:
   status-field-id: "<STATUS_FIELD_ID>"
   columns:
     backlog: "<OPTION_ID>"
+    spawn: "<OPTION_ID>"
     in-progress: "<OPTION_ID>"
     done: "<OPTION_ID>"
     blocked: "<OPTION_ID>"
@@ -57,11 +58,11 @@ Validate `_helm/config.yaml` per `doc/modules/validation.md`. If validation fail
 
 ### Step 2: Read local boards
 
-Read all 4 board files in `kanbans/`: `backlog.kanban.md`, `processing.kanban.md`, `done.kanban.md`, `blocked.kanban.md`. Collect all tasks with their column (derived from which file the task is in).
+Read `kanbans/board.kanban.md`. Collect all tasks with their column (derived from which `##` section the task is under).
 
 ### Step 3: Sync tasks
 
-For each task collected from `kanbans/`:
+For each task collected from the board:
 
 1. **Find or create GitHub issue.** Search for an existing issue with matching title:
    ```bash

@@ -37,13 +37,12 @@ Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `p
 ## Git workflow
 
 - Always push immediately after every commit. Never ask — just do it.
-- Never commit kanban files alone. Stage `kanbans/` changes with the next code commit.
 - Batch related small changes into one commit. Don't commit trivial edits individually — accumulate doc fixes, settings tweaks, and minor adjustments, then commit them together as one logical unit.
 
 ## Kanban
 
-- Task boards: `kanbans/` directory with 4 separate board files (kanban.md VS Code extension).
-  - `kanbans/backlog.kanban.md`, `kanbans/processing.kanban.md`, `kanbans/done.kanban.md`, `kanbans/blocked.kanban.md`
+- Task board: `kanbans/board.kanban.md` — single board file with 5 columns: Backlog, Spawn, In Progress, Done, Blocked (kanban.md VS Code extension). Gitignored and local-only.
+- Run `helm-setup` to create the board file after a fresh clone (safe to re-run; skips existing file).
 - Format reference: `plugins/helm/doc/modules/kanban-format.md`.
 - Tasks use `### Title [phase]` headings. Only extension-supported metadata fields (priority, tags, workload, due).
 - Descriptions use indented ` ```md ` code blocks, never plain text.

@@ -6,27 +6,22 @@ Source: [wguilherme/kanban.md](https://github.com/wguilherme/kanban.md) — veri
 
 ## File Location
 
-Four separate board files in a `kanbans/` directory at the repo root:
+Single board file at the repo root:
 
-| File | Column heading |
-|------|---------------|
-| `kanbans/backlog.kanban.md` | `## Backlog` |
-| `kanbans/processing.kanban.md` | `## In Progress` |
-| `kanbans/done.kanban.md` | `## Done` |
-| `kanbans/blocked.kanban.md` | `## Blocked` |
+```
+kanbans/board.kanban.md
+```
 
-Each file is a standalone kanban board recognized by the VS Code extension (the `.kanban.md` extension triggers detection). Each file contains one `#` project title and one `##` column heading.
-
-Files must use the `.kanban.md` extension to be recognized by the VS Code extension.
+The file contains one `#` project title and five `##` column headings. The `.kanban.md` extension triggers detection by the VS Code extension.
 
 ## Structure
 
-Each board file follows this structure:
+The board file follows this structure:
 
 ```markdown
 # Project Name
 
-## Column Name
+## Backlog
 
 ### Task Title [phase]
 - priority: high
@@ -35,20 +30,29 @@ Each board file follows this structure:
     ```md
     Description text here.
     ```
+
+## Spawn
+
+## In Progress
+
+## Done
+
+## Blocked
 ```
 
-- `#` — project title (one per file, must be line 1, same in all 4 files)
-- `##` — column heading (exactly one per file, matching the file's designated column)
-- `###` — tasks within the column, optionally with `[phase]` suffix
+- `#` — project title (one per file, must be line 1)
+- `##` — column headings (five columns in order: Backlog, Spawn, In Progress, Done, Blocked)
+- `###` — tasks within a column, optionally with `[phase]` suffix
 
 ## Columns Helm Uses
 
-| Column | File | Meaning |
-|--------|------|---------|
-| **Backlog** | `backlog.kanban.md` | Task exists, not started |
-| **In Progress** | `processing.kanban.md` | Active work (discussing, implementing, reviewing) |
-| **Done** | `done.kanban.md` | Completed |
-| **Blocked** | `blocked.kanban.md` | Needs user input or upstream fix |
+| Column | Heading | Meaning |
+|--------|---------|---------|
+| **Backlog** | `## Backlog` | Task exists, not started |
+| **Spawn** | `## Spawn` | Ready to be spawned into a worktree |
+| **In Progress** | `## In Progress` | Active work (discussing, implementing, reviewing) |
+| **Done** | `## Done` | Completed |
+| **Blocked** | `## Blocked` | Needs user input or upstream fix |
 
 Columns can have an `[Archived]` suffix (e.g. `## Done [Archived]`) to collapse them in the VS Code panel.
 
@@ -214,27 +218,30 @@ The parser skips empty lines unconditionally (`continue`). Blank lines are not r
   - [ ] Write security tests
 ```
 
-## How Helm Uses Kanban Files
+## How Helm Uses the Board
 
 | Operation | What Helm does |
 |-----------|---------------|
-| **Create task** (helm-add) | Add `### Title [backlog]` to `kanbans/backlog.kanban.md` |
-| **List tasks** (helm-start) | Read all `###` headings from the target board file |
-| **Move task** | Cut the entire task block from one board file, paste into another board file |
-| **Update phase** | Edit the `[phase]` suffix in the `###` heading (within the same file) |
+| **Create task** (helm-add) | Add `### Title [backlog]` under the `## Backlog` column in `kanbans/board.kanban.md` |
+| **List tasks** (helm-start) | Read all `###` headings under the target `##` column |
+| **Move task** | Cut the task block from one `##` column section, paste under another `##` column section (same file) |
+| **Update phase** | Edit the `[phase]` suffix in the `###` heading |
 | **Update task** | Edit content within the task block directly |
 
 ## Task Block Boundaries
 
 A task block starts at `### Title` (with or without `[phase]`) and ends immediately before the next `###`, `##`, or end of file. When moving or reading tasks, capture the entire block.
 
+## Column Section Boundaries
+
+A column section starts at `## Column Name` and ends immediately before the next `##` or end of file. When inserting a task into a column, append it at the end of the column section (before the next `##`).
+
 ## Write Rules
 
-- `kanbans/` is **worktree-local**. Each worktree has its own copy via git.
-  - **Parent worktree / main repo:** full boards with all tasks distributed across the 4 files.
-  - **Task worktree** (spawned by `helm-start -w`): 4 board files — the spawned task in `processing.kanban.md`, others empty (+ any sub-tasks created during work).
-- Each worktree updates its own `kanbans/` files. Never reach into another worktree's filesystem to edit its boards.
-- On merge (`helm-merge`): `kanbans/*.kanban.md` will conflict — always keep the **parent's version** for all 4 files. Then update the parent's boards (move task to Done).
+- The board file is **gitignored and local-only**. It is not tracked by git.
+  - **Parent worktree / main repo:** full board with all tasks distributed across the 5 columns.
+  - **Task worktree** (spawned by `helm-start -w`): board file created by `helm-spawn.ps1` — the spawned task under `## In Progress`, other columns empty (+ any sub-tasks created during work).
+  - **Fresh clone:** no board file exists. Run `helm-setup` to create it.
+- Each worktree updates its own `kanbans/board.kanban.md`. Never reach into another worktree's filesystem to edit its board.
 - Only use extension-supported metadata fields (tags, priority, workload, due, defaultExpanded, steps).
 - Descriptions use indented ` ```md ` code blocks — never plain text.
-- **Never commit kanban files alone.** Stage `kanbans/` changes and include them in the next code commit. Kanban updates are not worth their own commit.

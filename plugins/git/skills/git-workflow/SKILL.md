@@ -14,7 +14,7 @@ Git workflow rules. No exceptions.
 - **Never switch to `main`/`master`.** If already on main, stay there for read-only work (log, diff, compare).
 - **Never switch to an existing branch** other than the one currently active.
 - **Can create new branches** and switch to them when needed (e.g. to move work off main before committing).
-- **No rebase.** Merging to main happens via Pull Request, manually by the user.
+- **No rebase.** Merging to main happens via Pull Request. Use `/git-pr` to create a PR from the current branch, or create one manually on GitHub.
 - **Committing on `main` requires `--onmain`** passed as an argument to the commit command. Without it, refuse and suggest creating a new branch.
 
 ---

@@ -25,14 +25,20 @@ Get-ChildItem -Path $SourceDir -Directory | ForEach-Object {
     if (Test-Path $target) {
         $item = Get-Item $target -Force
         if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
-            Write-Host "Already linked: $name"
-            return
+            $currentTarget = $item.Target
+            if ($currentTarget -eq $_.FullName) {
+                Write-Host "Already linked: $name"
+                return
+            }
+            # Junction points to wrong target — remove and re-create
+            Write-Host "Repairing: $name (was -> $currentTarget)"
+            cmd /c "rmdir `"$target`"" | Out-Null
+        } else {
+            # Backup existing cache
+            $backup = "${target}.bak"
+            if (Test-Path $backup) { Remove-Item $backup -Recurse -Force }
+            Move-Item $target $backup
         }
-
-        # Backup existing cache
-        $backup = "${target}.bak"
-        if (Test-Path $backup) { Remove-Item $backup -Recurse -Force }
-        Move-Item $target $backup
     }
 
     # Create junction

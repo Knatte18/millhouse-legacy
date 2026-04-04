@@ -3,7 +3,7 @@
 ## Resolved
 
 ### Backlog format
-**Decision:** `kanbans/` directory with 4 separate board files (`backlog.kanban.md`, `processing.kanban.md`, `done.kanban.md`, `blocked.kanban.md`). Each is a standalone kanban board with one `#` title and one `##` column. Tasks are `###` headings moved between files. The kanban.md VS Code extension renders each board. GitHub sync is on-demand via `helm-sync`.
+**Decision:** `kanbans/board.kanban.md` — single board file with 5 columns (Backlog, Spawn, In Progress, Done, Blocked). Tasks are `###` headings moved between `##` column sections within the same file. The kanban.md VS Code extension renders the board. GitHub sync is on-demand via `helm-sync`.
 
 ### Backlog inheritance on merge
 **Decision:** Yes. Child worktree's changelog entries propagate to parent on merge (they're tracked and travel with the merge). Knowledge files also propagate via `_helm/knowledge/`.
@@ -27,7 +27,7 @@
 **Decision:** Lock file on parent branch (`_helm/scratch/merge.lock`). Lock acquisition resolves parent branch to filesystem path via `git worktree list --porcelain`.
 
 ### Worktree naming convention
-**Decision:** Configurable via `_helm/config.yaml` with `branch-template`. Uses `-wt-` separator to avoid git ref conflicts (branches with `/` can't have sub-branches). Template variables: `{parent-branch}` (full branch name), `{repo-name}` (repo directory name), `{slug}` (task slug, max 20 chars). Default: `"{parent-branch}-wt-{slug}"`. No distinction between hotfix/feature/experiment — just slugs.
+**Decision:** Built-in logic in `spawn-worktree.ps1`. Uses `-wt-` separator to avoid git ref conflicts (branches with `/` can't have sub-branches). Pattern: `{parent-branch}-wt-{slug}` (slug is kebab-case, max 20 chars). Directory placement is layout-aware (hub vs non-hub). No configuration needed — no distinction between hotfix/feature/experiment — just slugs.
 
 ### _helm/ directory structure
 **Decision:** Single `_helm/` directory, partially tracked:
@@ -36,7 +36,7 @@ _helm/
   knowledge/              ← tracked. knowledge entries
   knowledge/decisions.md  ← tracked. architectural decisions register (append-only)
   changelog.md            ← tracked. completed task log
-  config.yaml             ← tracked. worktree config + model/notification settings
+  config.yaml             ← tracked. model/notification settings
   scratch/                ← gitignored (entire directory)
     plans/                ← implementation plans
     briefs/               ← handoff documents
@@ -60,7 +60,7 @@ _helm/
 **Decision:** Not used. Helm relies on existing always-on skills (`code:code-quality`, `code:testing`, `code:linting`) plus a strengthened code reviewer that checks for utility duplication and pattern consistency using codeguide context. See [coherence.md](coherence.md).
 
 ### helm-setup skill
-**Decision:** Fully specified in helm-setup SKILL.md. Creates `kanbans/` directory with 4 board files and `_helm/` directory structure.
+**Decision:** Fully specified in helm-setup SKILL.md. Creates `kanbans/board.kanban.md` (single board file with 5 columns) and `_helm/` directory structure.
 
 ### Knowledge file naming
 **Decision:** `<worktree-slug>-<timestamp>-<topic>.md`. Worktree-slug prefix prevents collisions on merge.
@@ -102,5 +102,5 @@ models:
 ### Changelog format
 Carry over Taskmill's changelog format? Use `_helm/changelog.md`? Or rely on GitHub issue comments as the changelog? A tracked changelog is useful for commit history and PR descriptions. Lean toward keeping it.
 
-### Format protection for tracked files
-`kanbans/*.kanban.md` are the kanban boards — a bad write to any file breaks task tracking for that column. Options: (A) validation hook that checks format on commit, (B) rely on kanban.md extension to enforce format. Knowledge files and changelog are lower risk. Needs a decision.
+### Format protection for kanban files
+`kanbans/board.kanban.md` is the kanban board — a bad write breaks task tracking. Since the board is gitignored (local-only), commit hooks cannot protect it. Options: (A) rely on kanban.md extension to enforce format, (B) pre-write validation in each skill (already done via `doc/modules/validation.md`). Option B is the current approach. Needs evaluation of whether it is sufficient.

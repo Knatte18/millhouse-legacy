@@ -1,7 +1,3 @@
-worktree:
-  branch-template: "{parent-branch}-wt-{slug}"
-  path-template: "../{repo-name}-worktrees/{slug}"
-
 models:
   session: opus
   plan-review: sonnet

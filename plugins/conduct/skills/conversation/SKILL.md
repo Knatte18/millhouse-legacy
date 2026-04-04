@@ -30,8 +30,10 @@ General behavior rules for Claude Code. These apply regardless of which plugins 
 
 ## User Choices
 
-- **≤4 choices:** use `AskUserQuestion` with concrete options. Include a short `description` on each. Recommended option goes first with `(Recommended)` in the label. Use `preview` for code snippets or mockups. The user always has "Other" for free-text.
-- **>4 choices:** `AskUserQuestion` caps at 4 options. Use a numbered text list instead and let the user type their selection (e.g. "1", "3, 5"). This applies to dynamic lists like labels, branches, and projects.
+- **Never use `AskUserQuestion`.** It requires mouse interaction.
+- **Always use numbered text lists.** Print each option as `1) Label — description`. Recommended option gets `(Recommended)` suffix.
+- The user types the number (e.g. `1`), multiple numbers for multi-select (e.g. `1, 3`), or free text for something else.
+- Keep descriptions short — one line per option.
 
 ## File Writing
 

@@ -2,7 +2,9 @@
 **/.llm/
 **/_codeguide/runtime/
 _helm/scratch/
+_git/
 .scratch/
+kanbans/
 *.local.*
 nul
 

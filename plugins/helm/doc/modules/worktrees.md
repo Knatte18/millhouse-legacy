@@ -28,29 +28,16 @@ repo root (main) — nobody works here directly
 
 ## Branch Naming
 
-Worktree branches follow a configurable template. Configured in `_helm/config.yaml` (tracked):
-
-```yaml
-worktree:
-  branch-template: "{parent-branch}-wt-{slug}"
-  path-template: "../{repo-name}-worktrees/{slug}"
-```
-
-Available placeholders:
-- `{slug}` — derived from task title (kebab-case, max 20 chars), or user-provided
-- `{parent-branch}` — full current branch name (e.g. `hanf/main`)
-- `{repo-name}` — basename of the repo root directory (e.g. `py-hanf`)
+Worktree branches use the `-wt-` separator pattern: `{parent-branch}-wt-{slug}`. This is handled by `spawn-worktree.ps1` with built-in logic — no configuration needed.
 
 The `-wt-` separator avoids git ref conflicts — branches with `/` (like `hanf/main`) can't have sub-branches (`hanf/main/slug` would conflict).
 
-Examples:
+Directory placement depends on the repo layout:
 
-| Template | Context | Slug | Result |
-|----------|---------|------|--------|
-| `"{parent-branch}-wt-{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | branch: `hanf/main-wt-auth` |
-| `"../{repo-name}-worktrees/{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | path: `../py-hanf-worktrees/auth` |
+- **Hub layout** (bare repo with worktrees): worktrees are siblings under the hub root.
+- **Non-hub layout** (regular repo): worktrees are siblings of the repo directory.
 
-The `path-template` controls where the worktree directory is created on disk. Default places worktrees in a sibling directory named `<repo>-worktrees/` (e.g. repo at `C:\Code\py-hanf` → worktrees at `C:\Code\py-hanf-worktrees/auth`).
+The slug is derived from the task title (kebab-case, max 20 chars).
 
 ## When to Use a Worktree
 
@@ -72,12 +59,13 @@ Use `helm-start -w` to spawn a worktree, or `helm-start` to work in the current 
 When `helm-start -w` is called:
 
 1. `git worktree add <path> -b <branch-name> <parent-branch>`
-2. Symlink gitignored environment files: `for f in .env*; do [ -f "$f" ] && ln -sf "$(pwd)/$f" <worktree-path>/"$f"; done`
-3. Create `_helm/` directory structure in worktree (tracked: `knowledge/`, `changelog.md`, `config.yaml`; ignored: `scratch/`)
-4. Write `_helm/scratch/briefs/handoff.md` in the child worktree (see [plans.md](plans.md) Handoff Brief Format). If no discussion has happened, populate Discussion Summary from the task title.
-5. Ensure the task exists in the parent's `kanbans/` board files (it should already be there from `helm-add`)
-6. `code <worktree-path>` — open VS Code in the new worktree
-7. Parent session continues with other work
+2. Create `_git/config.yaml` in the new worktree with `base-branch` (from source) and `parent-branch` (current branch). Gitignored, per-worktree.
+3. Copy gitignored environment files from repo root to worktree (`.env*`). Copies are used instead of symlinks because file symlinks on Windows require Developer Mode or admin elevation.
+4. Create `_helm/` directory structure in worktree (tracked: `knowledge/`, `changelog.md`, `config.yaml`; ignored: `scratch/`)
+5. Write `_helm/scratch/briefs/handoff.md` in the child worktree (see [plans.md](plans.md) Handoff Brief Format). If no discussion has happened, populate Discussion Summary from the task title.
+6. Ensure the task exists in the parent's `kanbans/board.kanban.md` (it should already be there from `helm-add`)
+7. `code <worktree-path>` — open VS Code in the new worktree
+8. Parent session continues with other work
 
 ### Working
 
@@ -102,10 +90,18 @@ Never cleanup on failure — preserve the worktree for investigation.
 
 ## Status Tracking
 
-Each worktree writes `_helm/scratch/status.md`, updated after every step (not just on errors). Canonical format defined in `helm-go` SKILL.md. Key fields:
+Each worktree has `_git/config.yaml` (gitignored, per-worktree) for git state and `_helm/scratch/status.md` for helm workflow state.
+
+`_git/config.yaml` — created by `spawn-worktree.ps1`:
+
+```yaml
+base-branch: main
+parent-branch: feature/auth
+```
+
+`_helm/scratch/status.md` — updated after every step by `helm-go`. Canonical format defined in `helm-go` SKILL.md. Key fields:
 
 ```markdown
-parent: feature/auth
 phase: implementing
 issue: #57
 plan: _helm/scratch/plans/2026-04-01-120000-oauth.md
@@ -126,8 +122,8 @@ last_updated: 2026-04-01T14:30:00Z
 
 ## Environment Setup
 
-Git worktrees don't include gitignored files. On creation, symlink:
-- `.env`, `.env.local`, `.env.*` — environment variables
+Git worktrees don't include gitignored files. On creation, copy:
+- `.env`, `.env.local`, `.env.*` — environment variables (copies, not symlinks — file symlinks on Windows require Developer Mode or admin elevation)
 - Any other gitignored config files needed for build/test
 
 Dependencies (`node_modules`, `venv`, etc.) must be installed fresh per worktree via the verify command in the plan.

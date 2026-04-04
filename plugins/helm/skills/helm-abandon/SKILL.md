@@ -29,6 +29,8 @@ git branch --show-current
 
 Read `_helm/scratch/status.md` if it exists to identify the task title.
 
+Read `_git/config.yaml` if it exists; extract `parent-branch`. If not found, fall back to `parent:` in `_helm/scratch/status.md` (different field name — backwards compat with pre-migration worktrees). If neither exists, ask the user which branch to merge into. The resolved parent-branch must be in memory before Step 4 removes the worktree.
+
 ---
 
 ## Steps
@@ -100,12 +102,12 @@ git branch -D helm-checkpoint-<name>
 
 ### 7. Kanban update
 
-Search for the task in the parent worktree's kanban files (using the parent branch and task title from Entry, already read from status.md before worktree removal; find the parent's path via `git worktree list --porcelain`). Search in order: `kanbans/processing.kanban.md` → `kanbans/blocked.kanban.md` → `kanbans/done.kanban.md` → `kanbans/backlog.kanban.md`. Stop at first match. If the task is not found in any file, stop and report the error to the user.
+Search for the task in the parent worktree's `kanbans/board.kanban.md` (using the parent branch and task title from Entry, already read from status.md before worktree removal; find the parent's path via `git worktree list --porcelain`). Search columns in order: `## In Progress` → `## Blocked` → `## Done` → `## Backlog` → `## Spawn`. Stop at first match. If the task is not found in any column, stop and report the error to the user.
 
-- Cut the task block from the source file and paste it into `kanbans/backlog.kanban.md`.
+- Cut the task block from the source column and paste it under the `## Backlog` column.
 - Update `[phase]` in the task's `###` heading to `[backlog]` (or remove the `[...]` suffix entirely).
-- Validate all modified board files per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
-- Stage `kanbans/` and include it in the cleanup commit together with any other changes (branch deletion, checkpoint removal, etc.). Never commit kanban files alone.
+- Validate per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+- Kanban changes are local-only (gitignored). No staging needed.
 
 ### 8. Report
 
@@ -115,4 +117,4 @@ Search for the task in the parent worktree's kanban files (using the parent bran
 
 ## Kanban Updates
 
-- Abandon → search parent's `kanbans/` files for the task, move to `kanbans/backlog.kanban.md`, update `[backlog]` in heading
+- Abandon → search parent's `kanbans/board.kanban.md` for the task, move to `## Backlog` column, update `[backlog]` in heading (local-only — board file is gitignored)

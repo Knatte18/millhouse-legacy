@@ -22,7 +22,7 @@ git worktree list --porcelain
 ```
 If the current directory is the main worktree (the repo root), stop: "helm-merge must be run from a worktree, not the main repo."
 
-Read `_helm/scratch/status.md` to identify the parent branch. If no `parent:` field, ask the user which branch to merge into.
+Read `_git/config.yaml` if it exists; extract `parent-branch`. If not found, fall back to `parent:` in `_helm/scratch/status.md` (different field name — backwards compat with pre-migration worktrees). If neither exists, ask the user which branch to merge into.
 
 ---
 
@@ -68,14 +68,13 @@ This catches up the worktree with changes on the parent since the worktree was c
 **If conflicts occur:**
 1. List conflicting files: `git diff --name-only --diff-filter=U`
 2. For each file:
-   - `kanbans/*.kanban.md` → always accept parent's version for all 4 board files (`for f in kanbans/*.kanban.md; do git checkout --theirs "$f" && git add "$f"; done`). The parent boards have the full task list; the worktree boards only tracked its own task.
    - Whitespace/formatting only → accept worktree version
    - Package lock files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) → accept worktree version, then regenerate with the install command
    - Other generated files (build artifacts) → accept worktree version
    - Real code conflicts → attempt resolution based on understanding both sides
 3. If conflicts are unresolvable: roll back to checkpoint, release lock, escalate to user with the list of conflicting files.
 
-Never use `-X theirs` or `-X ours` on real code conflicts (`kanbans/*.kanban.md` is the exception — see above).
+Never use `-X theirs` or `-X ours` on real code conflicts.
 
 ### 4. Verify
 
@@ -105,13 +104,12 @@ Always direct squash merge. Helm never creates PRs — that is the user's respon
 cd <parent-path>
 git merge --squash <worktree-branch>
 ```
-Then update the parent's kanban: cut the task block from `kanbans/processing.kanban.md`, paste into `kanbans/done.kanban.md`, update `[phase]` to `[complete]`. Validate both files per `doc/modules/validation.md`. Stage:
+Then update the parent's local kanban (gitignored — not committed): in `kanbans/board.kanban.md`, cut the task block from the `## In Progress` column and paste it under the `## Done` column, update `[phase]` to `[complete]`. Validate per `doc/modules/validation.md`.
 ```bash
-git add kanbans/
 git commit -m "<task title>"
 git push
 ```
-Squash merge collapses all worktree commits + kanban update into a single commit on the parent branch.
+Squash merge collapses all worktree commits into a single commit on the parent branch.
 
 ### 7. Notify
 
@@ -119,13 +117,15 @@ Run the **Notification Procedure** (same as helm-go — see below) with `COMPLET
 
 ### 8. Cleanup
 
-After successful direct merge (or after user confirms PR was merged):
+After successful direct merge (already running in `<parent-path>` from step 6):
 
 ```bash
 git worktree remove <worktree-path>
 git branch -D <worktree-branch>
 git branch -D helm-checkpoint-<name>
 ```
+
+The physical directory may remain if VS Code still has it open — that is fine; `helm-status` cleans up stale directories.
 
 If the branch was pushed to remote:
 ```bash
@@ -176,5 +176,4 @@ Urgency per event:
 
 ## Kanban Updates
 
-- Merge complete → cut task from parent's `kanbans/processing.kanban.md`, paste into `kanbans/done.kanban.md`, update `[complete]` in heading
-- On `kanbans/*.kanban.md` merge conflict: always keep parent's version (parent has the full boards)
+- Merge complete → in parent's `kanbans/board.kanban.md`, cut task from `## In Progress` column, paste under `## Done` column, update `[complete]` in heading (local-only — board file is gitignored)

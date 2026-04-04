@@ -15,15 +15,9 @@ Shows board summary, current status, and worktree overview. Also cleans up stale
 
 ### Step 1: Read the board
 
-Check that `kanbans/` directory exists at the repo root. If it does not exist, stop and tell the user to run `helm-setup` first.
+Check that `kanbans/board.kanban.md` exists. If it does not exist, stop and tell the user to run `helm-setup` first.
 
-Read all 4 board files:
-- `kanbans/backlog.kanban.md`
-- `kanbans/processing.kanban.md`
-- `kanbans/done.kanban.md`
-- `kanbans/blocked.kanban.md`
-
-For each file, count `###` headings (tasks). For `kanbans/processing.kanban.md`, if tasks have `[phase]` suffixes in their headings, also count tasks per phase.
+Read `kanbans/board.kanban.md`. For each `##` column, count `###` headings (tasks). For the `## In Progress` column, if tasks have `[phase]` suffixes in their headings, also count tasks per phase.
 
 ### Step 2: Read current status
 
@@ -43,7 +37,9 @@ Run `git worktree list --porcelain`. For each worktree (skip the main one):
 
 Run `git worktree prune` to remove any remaining stale entries (directories deleted manually).
 
-Check for orphaned worktree directories: read `_helm/config.yaml` `worktree.path-template` to determine the worktrees parent directory (e.g. `../<repo-name>-worktrees/`). If that directory exists, list its subdirectories. For each subdirectory that is NOT registered in `git worktree list`, delete it. If the parent directory is then empty, delete it too.
+Check for orphaned worktree directories using layout-aware logic. Derive hub root: the parent directory of the repo root (`git rev-parse --show-toplevel`). Detect hub layout: `.bare` directory exists at `<hub-root>/.bare`.
+- **Hub layout**: scan the hub root for subdirectories not in `git worktree list` output AND not `.bare`. These are orphans — delete them.
+- **Non-hub layout**: skip orphan directory scanning entirely — no dedicated container directory exists, so scanning the parent directory would be overly broad.
 
 ### Step 4: Read worktrees
 
@@ -51,22 +47,23 @@ Run `git worktree list`. Parse the output — each line has: `<path> <hash> [<br
 
 Skip the main worktree (the first entry). For each additional worktree:
 1. Extract branch name from the `[branch]` part.
-2. Try to read `<worktree-path>/_helm/scratch/status.md` for that worktree's phase, step progress, and `parent:` field.
-3. Determine parent branch from the `parent:` field in status.md. If not present, fall back to `main`.
+2. Try to read `<worktree-path>/_git/config.yaml` for that worktree's `parent-branch`. If not found, fall back to `parent:` in `<worktree-path>/_helm/scratch/status.md` (different field name — backwards compat with pre-migration worktrees). If neither exists, fall back to `main`.
+3. Try to read `<worktree-path>/_helm/scratch/status.md` for that worktree's phase and step progress.
 
 ### Step 5: Display dashboard
 
 Print the dashboard. Use this exact format:
 
 ```
-Board (kanbans/):
+Board (kanbans/board.kanban.md):
   Backlog:       N tasks
+  Spawn:         N tasks
   In Progress:   N tasks (details per phase if present)
   Done:          N tasks
   Blocked:       N tasks
 ```
 
-Only show columns that have tasks or are standard (all 4 are always shown). For In Progress, if tasks have `[phase]` suffixes in their headings, show a parenthetical breakdown, e.g. `2 tasks (1 implementing, 1 reviewing)`.
+All 5 columns are always shown. For In Progress, if tasks have `[phase]` suffixes in their headings, show a parenthetical breakdown, e.g. `2 tasks (1 implementing, 1 reviewing)`.
 
 If `_helm/scratch/status.md` exists and has a phase that is not `complete`:
 
@@ -101,11 +98,12 @@ Worktrees:
 ### Example output
 
 ```
-Board (kanbans/):
+Board (kanbans/board.kanban.md):
   Backlog:       2 tasks
+  Spawn:         1 task
   In Progress:   1 task
+  Done:          3 tasks
   Blocked:       0 tasks
-  Done:          1 task
 
 Current:
   Task:   Implement helm-status skill

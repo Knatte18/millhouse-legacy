@@ -15,7 +15,11 @@ started: 2026-04-01-120000
 # Task Title
 
 ## Context
-Summary of discussion and key design decisions.
+Summary of the problem and what was discussed.
+
+### Decision: <title>
+**Why:** Reasoning behind the choice.
+**Alternatives rejected:** What else was considered and why not.
 
 ## Files
 - src/auth/oauth-client.ts
