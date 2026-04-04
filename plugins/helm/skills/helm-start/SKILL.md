@@ -17,7 +17,7 @@ For kanban.md file format details, see `plugins/helm/doc/modules/kanban-format.m
 
 Read `_helm/config.yaml`. If it does not exist, stop and tell the user to run `helm-setup` first.
 
-Read `.kanban.md`. If it does not exist, stop and tell the user to run `helm-setup` first.
+Read `kanbans/backlog.kanban.md`. If it does not exist, stop and tell the user to run `helm-setup` first.
 
 ---
 
@@ -29,7 +29,7 @@ helm-start proceeds through named phases. Report the current phase to the user a
 
 0. **Check for handoff brief.** If `_helm/scratch/briefs/handoff.md` exists, read it. The brief's `## Issue` identifies the task --- select it directly (skip step 1). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain.
 
-1. **Select task.** Read `.kanban.md`. Find all `###` headings under the `## Backlog` column (everything between `## Backlog` and the next `##` heading). Each `###` heading is a task title.
+1. **Select task.** Read `kanbans/backlog.kanban.md`. Find all `###` headings under the `## Backlog` column. Each `###` heading is a task title.
 
    - If zero tasks: report "No tasks in Backlog. Run helm-add to create one." Stop.
    - If one task: select it. Show the title and ask user to confirm.
@@ -40,13 +40,13 @@ helm-start proceeds through named phases. Report the current phase to the user a
    - `-w` flag or user chooses worktree → **Worktree spawn flow** (see below). After spawning, stop. The user continues in the new VS Code window.
    - No flag / in-place: continue below.
 
-3. **Move to In Progress.** Edit `.kanban.md`: cut the entire task block (from `### Title` to just before the next `###` or `##`) from `## Backlog` and paste it under `## In Progress`. Update the `[phase]` in the `###` heading to `[discussing]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Stage `.kanban.md` — do NOT commit it alone. It will be included in the next code commit.
+3. **Move to In Progress.** Cut the entire task block (from `### Title` to just before the next `###` or `##`) from `kanbans/backlog.kanban.md` and paste it into `kanbans/processing.kanban.md`. Update the `[phase]` in the `###` heading to `[discussing]`. Validate both files per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Stage `kanbans/` — do NOT commit it alone. It will be included in the next code commit.
 
 #### Worktree Spawn Flow
 
 When the user chooses `-w` (worktree mode):
 
-1. **Move to In Progress first.** Edit `.kanban.md`: move the task block to `## In Progress`, update `[phase]` in the `###` heading to `[discussing]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Stage `.kanban.md` — do NOT commit it alone. It will be included in the next code commit.
+1. **Move to In Progress first.** Cut the task block from `kanbans/backlog.kanban.md` and paste it into `kanbans/processing.kanban.md`, update `[phase]` in the `###` heading to `[discussing]`. Validate both files per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Stage `kanbans/` — do NOT commit it alone. It will be included in the next code commit.
 
 2. **Read config.** Read `_helm/config.yaml`. Extract `worktree.branch-template` and `worktree.path-template`.
 
@@ -85,16 +85,16 @@ When the user chooses `-w` (worktree mode):
    ```
    Pick a color from this list (all readable with white text): `#2d7d46`, `#7d2d6b`, `#2d4f7d`, `#7d5c2d`, `#6b2d2d`, `#2d6b6b`, `#4a2d7d`, `#7d462d`. To avoid duplicates, check existing worktrees' `.vscode/settings.json` files (via `git worktree list`) and pick a color not already in use. If all colors are taken, cycle back to the first.
 
-9. **Write worktree-local kanban board.** Write `<worktree-path>/.kanban.md` with only the spawned task under `## In Progress` (plus empty Backlog, Done, Blocked columns). This replaces the parent's full board — the worktree tracks only its own task. If the task has a description body in the parent board, preserve it using the indented ` ```md ` code block format (see `kanban-format.md`).
+9. **Write worktree-local kanban boards.** Create `<worktree-path>/kanbans/` directory with all 4 board files. The spawned task goes in `kanbans/processing.kanban.md`; the other 3 files are empty boards (just `#` title and `##` column heading). If the task has a description body in the parent board, preserve it using the indented ` ```md ` code block format (see `kanban-format.md`).
 
 10. **Write status.md in worktree.** Write `<worktree-path>/_helm/scratch/status.md`:
     ```
     parent: <parent-branch>
     task: <task-title>
-    phase: discussing  # also reflected as [discussing] in .kanban.md heading
+    phase: discussing
     ```
 
-11. **Write handoff brief.** Write `<worktree-path>/_helm/scratch/briefs/handoff.md` using the Handoff Brief Format (see `plugins/helm/doc/modules/plans.md`). If no discussion has happened yet, populate `## Discussion Summary` with the task title and body from `.kanban.md`.
+11. **Write handoff brief.** Write `<worktree-path>/_helm/scratch/briefs/handoff.md` using the Handoff Brief Format (see `plugins/helm/doc/modules/plans.md`). If no discussion has happened yet, populate `## Discussion Summary` with the task title and body from `kanbans/processing.kanban.md`.
 
 12. **Open VS Code.** Use `code.cmd` (not `code` — the wrapper is broken on Node 24+):
     ```bash
@@ -274,7 +274,7 @@ When the user chooses `-w` (worktree mode):
     task: <task-title>
     ```
 
-    c. Update `[phase]` in the task's `###` heading to `[planned]` in `.kanban.md`. Task stays in `## In Progress` column (no move). Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+    c. Update `[phase]` in the task's `###` heading to `[planned]` in `kanbans/processing.kanban.md`. Task stays in In Progress (no file move). Validate `kanbans/processing.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
     d. Report: "Plan approved. Task ready for `helm-go`."
 
@@ -305,5 +305,5 @@ If the user decides mid-discussion that they want a worktree:
 
 ## Kanban Updates
 
-- Task selected -> move to **In Progress** column, update `[discussing]` in heading
-- Plan approved -> update `[planned]` in heading (stays in In Progress column)
+- Task selected → cut from `kanbans/backlog.kanban.md`, paste into `kanbans/processing.kanban.md`, update `[discussing]` in heading
+- Plan approved → update `[planned]` in heading in `kanbans/processing.kanban.md` (no file move)
