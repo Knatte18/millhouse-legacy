@@ -61,14 +61,27 @@ If both methods fail, stop and tell the user: "Could not detect the repository. 
 
 ### 3. Fetch labels and prompt
 
+**Override: Do NOT use AskUserQuestion for labels.** Present labels as a numbered text list instead.
+
 Run:
 
 ```bash
-gh label list --repo <owner/repo> --json name --limit 4 -q '.[].name'
+gh label list --repo <owner/repo> --json name -q '.[].name'
 ```
 
-- If labels are found: present up to 4 labels as `AskUserQuestion` with `multiSelect: true`. The user can select multiple labels, or use the built-in "Other" option to type comma-separated label names manually.
-- If the command fails or returns no labels: skip this step entirely.
+If labels are found, print them as a numbered list:
+
+```
+Labels:
+1. bug
+2. documentation
+3. enhancement
+...
+```
+
+Then ask the user to type the numbers they want, comma-separated (e.g. `1, 5, 9`). The user can also type `none` or leave blank to skip labels.
+
+If the command fails or returns no labels: skip this step entirely.
 
 ### 4. Create the issue
 
