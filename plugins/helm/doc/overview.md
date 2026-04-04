@@ -67,5 +67,5 @@ Each skill is defined in `plugins/helm/skills/<name>/SKILL.md`.
 | [modules/coherence.md](modules/coherence.md) | Why Helm doesn't use coherence audits |
 | [modules/codeguide.md](modules/codeguide.md) | Codeguide integration points |
 | [modules/constraints.md](modules/constraints.md) | Repo-specific invariants (CONSTRAINTS.md) |
-| [modules/validation.md](modules/validation.md) | Post-write validation rules for .kanban.md and config.yaml |
+| [modules/validation.md](modules/validation.md) | Post-write validation rules for kanban board files and config.yaml |
 | [decisions.md](decisions.md) | Design decisions and open questions |
