@@ -33,7 +33,8 @@ helm-start proceeds through named phases. Report the current phase to the user a
 
    - If zero tasks: report "No tasks in Backlog. Run helm-add to create one." Stop.
    - If one task: select it. Show the title and ask user to confirm.
-   - If multiple: list them numbered with titles. User picks one.
+   - If 2-4 tasks: use `AskUserQuestion` with task titles as options (follow conduct:conversation rules).
+   - If more than 4: print numbered list, user types the number.
 
 2. **Worktree decision.** Ask the user: worktree or in-place?
    - `-w` flag or user chooses worktree → **Worktree spawn flow** (see below). After spawning, stop. The user continues in the new VS Code window.
