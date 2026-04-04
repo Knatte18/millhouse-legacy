@@ -73,13 +73,14 @@ When the user chooses `-w` (worktree mode):
 
 8. **Create _helm structure in worktree.** Create `_helm/scratch/briefs/` in the worktree path.
 
-   **Create `.vscode/settings.json`** in the worktree with a random title bar color so the user can visually distinguish worktree windows:
+   **Create `.vscode/settings.json`** in the worktree with a random title bar color and folder name as window title:
    ```json
    {
      "workbench.colorCustomizations": {
        "titleBar.activeBackground": "<random hex color>",
        "titleBar.activeForeground": "#ffffff"
-     }
+     },
+     "window.title": "${rootName}"
    }
    ```
    Pick a color from this list (all readable with white text): `#2d7d46`, `#7d2d6b`, `#2d4f7d`, `#7d5c2d`, `#6b2d2d`, `#2d6b6b`, `#4a2d7d`, `#7d462d`. To avoid duplicates, check existing worktrees' `.vscode/settings.json` files (via `git worktree list`) and pick a color not already in use. If all colors are taken, cycle back to the first.
