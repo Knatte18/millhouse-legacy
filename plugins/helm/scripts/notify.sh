@@ -4,7 +4,7 @@
 # Reads _helm/config.yaml to decide whether toast is enabled.
 # Always exits 0 — failures warn on stderr, never block the caller.
 
-set -euo pipefail
+set -u
 
 # --- Argument parsing ---
 EVENT=""
@@ -37,9 +37,9 @@ CONFIG="$REPO_ROOT/_helm/config.yaml"
 TOAST_ENABLED=true  # default: enabled when config missing or toast key absent
 
 if [[ -f "$CONFIG" ]]; then
-  TOAST_BLOCK=$(awk '/^  toast:/,/^  [a-zA-Z]/' "$CONFIG" | tail -n +2)
+  TOAST_BLOCK=$(awk '/^  toast:/{ found=1; next } found && /^  [a-zA-Z]/{ exit } found{ print }' "$CONFIG")
   if [[ -n "$TOAST_BLOCK" ]]; then
-    if echo "$TOAST_BLOCK" | grep -q 'enabled: false'; then
+    if echo "$TOAST_BLOCK" | grep -qE 'enabled:\s+false\s*$'; then
       TOAST_ENABLED=false
     fi
   fi
@@ -52,13 +52,14 @@ fi
 # --- Sanitize inputs ---
 # Strip characters that break shell quoting in platform commands: " $ ' ` \
 sanitize() {
-  echo "$1" | tr -d "\"\$'\`\\\\"
+  printf '%s' "$1" | tr -d "\"\$'\`\\\\"  # strips: " $ ' ` \
 }
 
+SAFE_EVENT=$(sanitize "$EVENT")
 SAFE_BRANCH=$(sanitize "$BRANCH")
 SAFE_DETAIL=$(sanitize "$DETAIL")
 
-TITLE="[helm] $SAFE_BRANCH $EVENT"
+TITLE="[helm] $SAFE_BRANCH $SAFE_EVENT"
 
 # --- Platform detection & toast ---
 send_toast() {
@@ -87,8 +88,9 @@ send_toast() {
 send_toast
 
 # --- Slack (TODO) ---
-# Future: if notifications.slack.enabled is true and webhook is non-empty,
-# post to Slack. Use --urgency to gate: info-level events skip Slack.
+# URGENCY is intentionally a no-op until Slack is implemented.
+# When enabled, info-level events (completion) skip Slack; high-urgency
+# events (blocked) post to the webhook.
 # if [[ "$URGENCY" == "high" ]]; then
 #   curl -s -X POST "$SLACK_WEBHOOK" ...
 # fi
