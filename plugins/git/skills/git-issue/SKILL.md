@@ -1,7 +1,7 @@
 ---
 name: git-issue
 description: "Create a GitHub issue on the current repo"
-argument-hint: "<title>"
+argument-hint: "<title>[: <body>]"
 ---
 
 # Create GitHub Issue
@@ -11,22 +11,27 @@ Create a GitHub issue on the repo you're currently working in.
 ## Usage
 
 ```
-/issue "Fix login redirect loop"
-/issue "Add rate limiting to API endpoints"
+/git-issue Fix login redirect loop
+/git-issue Fix login redirect loop: The redirect happens after OAuth callback
 ```
 
-The argument is the issue title (required).
+The first `:` separates title from body. If no `:` is present, the entire argument is the title and no body is set. Both title and body are trimmed of leading/trailing whitespace.
 
 ## Instructions
 
-When the user invokes `/issue`, follow these steps exactly:
+When the user invokes `/git-issue`, follow these steps exactly:
 
-### 1. Validate title
+### 1. Parse argument
+
+Split the argument on the first `:` character.
+- Everything before `:` → **title**
+- Everything after `:` → **body** (optional)
+- No `:` → entire argument is the title, no body
 
 If no argument was provided, tell the user:
 
 ```
-Usage: /issue "Issue title here"
+Usage: /git-issue Title: optional body text
 ```
 
 Stop — do not proceed without a title.
@@ -65,16 +70,7 @@ gh label list --repo <owner/repo> --json name --limit 4 -q '.[].name'
 - If labels are found: present up to 4 labels as `AskUserQuestion` with `multiSelect: true`. The user can select multiple labels, or use the built-in "Other" option to type comma-separated label names manually.
 - If the command fails or returns no labels: skip this step entirely.
 
-### 4. Ask for body (optional)
-
-Ask the user for an optional issue body via `AskUserQuestion`. Present two options:
-
-- **No body** — create the issue with title and labels only.
-- **Other** — user types the body text.
-
-If the user skips or provides empty text, omit the `--body` flag.
-
-### 5. Create the issue
+### 4. Create the issue
 
 Run `gh issue create`. Use simple quoting for `--title` and heredoc quoting for `--body` (to safely handle quotes, newlines, and special characters):
 
@@ -91,7 +87,7 @@ BODY
 - Omit `--body` entirely if no body was provided.
 - Omit all `--label` flags if no labels were selected.
 
-### 6. Fallback to browser
+### 5. Fallback to browser
 
 If `gh` is not installed or the `gh issue create` command fails, fall back to opening a pre-filled GitHub issue URL in the browser:
 
@@ -108,6 +104,6 @@ URL-encode title, body, and label names. Separate multiple labels with commas in
 
 Note: GitHub's browser URL may not reliably pre-fill labels. If labels were selected, tell the user to verify and apply labels manually after the page opens.
 
-### 7. Confirm
+### 6. Confirm
 
 Tell the user whether the issue was created (with the issue URL from `gh` output) or whether the browser was opened as fallback.
