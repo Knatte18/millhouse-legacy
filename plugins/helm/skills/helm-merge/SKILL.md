@@ -68,14 +68,14 @@ This catches up the worktree with changes on the parent since the worktree was c
 **If conflicts occur:**
 1. List conflicting files: `git diff --name-only --diff-filter=U`
 2. For each file:
-   - `.kanban.md` → always accept parent's version (`git checkout --theirs .kanban.md && git add .kanban.md`). The parent board has the full task list; the worktree board only tracked its own task.
+   - `kanbans/*.kanban.md` → always accept parent's version for all 4 board files (`for f in kanbans/*.kanban.md; do git checkout --theirs "$f" && git add "$f"; done`). The parent boards have the full task list; the worktree boards only tracked its own task.
    - Whitespace/formatting only → accept worktree version
    - Package lock files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) → accept worktree version, then regenerate with the install command
    - Other generated files (build artifacts) → accept worktree version
    - Real code conflicts → attempt resolution based on understanding both sides
 3. If conflicts are unresolvable: roll back to checkpoint, release lock, escalate to user with the list of conflicting files.
 
-Never use `-X theirs` or `-X ours` on real code conflicts (`.kanban.md` is the exception — see above).
+Never use `-X theirs` or `-X ours` on real code conflicts (`kanbans/*.kanban.md` is the exception — see above).
 
 ### 4. Verify
 
@@ -104,9 +104,9 @@ Determine the merge method:
 cd <parent-path>
 git merge --squash <worktree-branch>
 ```
-Then update `.kanban.md` in the parent: move the task block to `## Done`, update `[phase]` to `[complete]`. Validate per `doc/modules/validation.md`. Stage it:
+Then update the parent's kanban: cut the task block from `kanbans/processing.kanban.md`, paste into `kanbans/done.kanban.md`, update `[phase]` to `[complete]`. Validate both files per `doc/modules/validation.md`. Stage:
 ```bash
-git add .kanban.md
+git add kanbans/
 git commit -m "<task title>"
 git push
 ```
@@ -175,5 +175,5 @@ Merge completion is info-level (toast + status only). Merge failure/rollback is 
 
 ## Kanban Updates
 
-- Merge complete → move task to **Done** in parent's `.kanban.md`, update `[complete]` in heading
-- On `.kanban.md` merge conflict: always keep parent's version (parent has the full board)
+- Merge complete → cut task from parent's `kanbans/processing.kanban.md`, paste into `kanbans/done.kanban.md`, update `[complete]` in heading
+- On `kanbans/*.kanban.md` merge conflict: always keep parent's version (parent has the full boards)
