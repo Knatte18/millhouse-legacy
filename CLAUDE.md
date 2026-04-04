@@ -37,3 +37,4 @@ Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `p
 ## Git workflow
 
 - Always push immediately after every commit. Never ask — just do it.
+- Never commit `.kanban.md` alone. Stage kanban changes with the next code commit.
