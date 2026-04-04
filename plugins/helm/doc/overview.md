@@ -26,7 +26,7 @@ All work happens in git worktrees. The repo root stays on `main` and serves as h
 
 ### Task Tracking
 
-`.kanban.md` is the single source of truth for tasks. The kanban.md VS Code extension renders it as a visual board. Tasks are `###` headings under `##` column headings, moved between columns as work progresses. GitHub sync is available on demand via `helm-sync`. Details in [kanban-format.md](modules/kanban-format.md).
+The `kanbans/` directory contains 4 separate board files (`backlog.kanban.md`, `processing.kanban.md`, `done.kanban.md`, `blocked.kanban.md`), each a standalone kanban board recognized by the VS Code kanban.md extension. Tasks are `###` headings moved between files as work progresses. GitHub sync is available on demand via `helm-sync`. Details in [kanban-format.md](modules/kanban-format.md).
 
 ### Execution Model
 
