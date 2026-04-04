@@ -105,7 +105,7 @@ Read `.kanban.md` **from the parent worktree** (using the parent branch and task
 - Move the task block to `## Backlog`.
 - Update `[phase]` in the task's `###` heading to `[backlog]` (or remove the `[...]` suffix entirely).
 - Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
-- Commit and push: `git add .kanban.md && git commit -m "kanban: move <task> to Backlog (abandoned)" && git push`.
+- Stage `.kanban.md` and include it in the cleanup commit together with any other changes (branch deletion, checkpoint removal, etc.). Never commit `.kanban.md` alone.
 
 ### 8. Report
 
