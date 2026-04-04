@@ -32,7 +32,7 @@ current_branch=$(git branch --show-current)
 
 **If no argument:** ask the user via AskUserQuestion with two options:
 
-- "Current branch (`<current_branch>`)" (Recommended) — create a new branch from the current HEAD
+- "Branch from HEAD (`<current_branch>-wt`)" (Recommended) — creates a new branch from current HEAD (git cannot check out the same branch twice)
 - "New branch" — user types a new branch name
 
 If the user selects "New branch" or types a custom value via the built-in Other option, use their typed value as the branch name.
@@ -66,21 +66,26 @@ Resolve the path as `../<chosen-name>` relative to the repo root.
 Check if the branch already exists and whether it's already checked out:
 
 ```bash
+# Check if branch exists
 git rev-parse --verify <branch> 2>/dev/null
+
+# Check if branch is checked out in any worktree
+git worktree list --porcelain | grep "^branch refs/heads/<branch>$"
 ```
 
 - **Branch exists and is NOT checked out elsewhere:** `git worktree add <path> <branch>`
-- **Branch exists and IS checked out** (current worktree or another): `git worktree add <path> -b <branch>-wt HEAD` (create a new branch from HEAD)
+- **Branch exists and IS checked out** (grep found a match): `git worktree add <path> -b <branch>-wt HEAD` (create a new branch from HEAD)
 - **Branch does not exist:** `git worktree add <path> -b <branch> HEAD`
 
 If the command fails, report the error and stop.
 
 ### 6. Symlink environment files
 
-From the repo root directory (`git rev-parse --show-toplevel`), symlink all `.env*` files to the worktree:
+Symlink all `.env*` files from the repo root to the worktree:
 
 ```bash
-for f in .env*; do [ -f "$f" ] && ln -sf "$(pwd)/$f" "<worktree-path>/$f"; done
+root=$(git rev-parse --show-toplevel)
+for f in "$root"/.env*; do [ -f "$f" ] && ln -sf "$f" "<worktree-path>/$(basename "$f")"; done
 ```
 
 Skip silently if no `.env*` files exist in the repo root.
