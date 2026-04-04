@@ -74,7 +74,7 @@ git worktree list --porcelain | grep "^branch refs/heads/<branch>$"
 ```
 
 - **Branch exists and is NOT checked out elsewhere:** `git worktree add <path> <branch>`
-- **Branch exists and IS checked out** (grep found a match): `git worktree add <path> -b <branch>-wt HEAD` (create a new branch from HEAD)
+- **Branch exists and IS checked out** (grep found a match): derive a new name `<branch>-wt`. If `<branch>-wt` also already exists or is checked out, append a number: `<branch>-wt2`, `<branch>-wt3`, etc. Then: `git worktree add <path> -b <derived-name> HEAD`
 - **Branch does not exist:** `git worktree add <path> -b <branch> HEAD`
 
 If the command fails, report the error and stop.
