@@ -59,7 +59,7 @@ If both methods fail, stop and tell the user: "Could not detect the repository. 
 Run:
 
 ```bash
-gh label list --repo <owner/repo> --json name -q '.[].name'
+gh label list --repo <owner/repo> --json name --limit 4 -q '.[].name'
 ```
 
 - If labels are found: present up to 4 labels as `AskUserQuestion` with `multiSelect: true`. The user can select multiple labels, or use the built-in "Other" option to type comma-separated label names manually.
@@ -76,14 +76,11 @@ If the user skips or provides empty text, omit the `--body` flag.
 
 ### 5. Create the issue
 
-Run `gh issue create` with heredoc quoting for safe handling of quotes and special characters:
+Run `gh issue create`. Use simple quoting for `--title` and heredoc quoting for `--body` (to safely handle quotes, newlines, and special characters):
 
 ```bash
 gh issue create --repo <owner/repo> \
-  --title "$(cat <<'TITLE'
-<title text>
-TITLE
-)" \
+  --title "<title text>" \
   --body "$(cat <<'BODY'
 <body text>
 BODY
@@ -93,7 +90,6 @@ BODY
 
 - Omit `--body` entirely if no body was provided.
 - Omit all `--label` flags if no labels were selected.
-- If only a title: `gh issue create --repo <owner/repo> --title "<title>"` (simple form is fine when no special characters are expected, but prefer heredoc if the title contains quotes).
 
 ### 6. Fallback to browser
 
@@ -108,7 +104,9 @@ open "https://github.com/<owner/repo>/issues/new?title=<url-encoded-title>&body=
 xdg-open "https://github.com/<owner/repo>/issues/new?title=<url-encoded-title>&body=<url-encoded-body>&labels=<url-encoded-labels>"
 ```
 
-URL-encode title, body, and label names. Separate multiple labels with commas in the `labels` parameter. Detect the platform from the environment.
+URL-encode title, body, and label names. Separate multiple labels with commas in the `labels` parameter. Omit `&labels=` entirely if no labels were selected. Omit `&body=` if no body was provided. Detect the platform from the environment.
+
+Note: GitHub's browser URL may not reliably pre-fill labels. If labels were selected, tell the user to verify and apply labels manually after the page opens.
 
 ### 7. Confirm
 
