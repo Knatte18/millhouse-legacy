@@ -30,11 +30,8 @@ General behavior rules for Claude Code. These apply regardless of which plugins 
 
 ## User Choices
 
-- When presenting choices to the user (A/B/C options, yes/no, pick an approach): **always use `AskUserQuestion`** with concrete options. Never dump numbered lists in text and wait for a typed answer.
-- Include a short `description` on each option explaining trade-offs or implications.
-- The user always has "Other" available for free-text — no need to add it manually.
-- Use `preview` for code snippets or mockups that need visual comparison.
-- Recommended option goes first with `(Recommended)` in the label.
+- **≤4 choices:** use `AskUserQuestion` with concrete options. Include a short `description` on each. Recommended option goes first with `(Recommended)` in the label. Use `preview` for code snippets or mockups. The user always has "Other" for free-text.
+- **>4 choices:** `AskUserQuestion` caps at 4 options. Use a numbered text list instead and let the user type their selection (e.g. "1", "3, 5"). This applies to dynamic lists like labels, branches, and projects.
 
 ## File Writing
 
