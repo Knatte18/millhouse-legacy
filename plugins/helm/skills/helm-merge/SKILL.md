@@ -167,9 +167,23 @@ Then release the merge lock. Run the **Notification Procedure** with `BLOCKED: M
 
 ## Notification Procedure
 
-Follow the Notification Procedure defined in `helm-go` SKILL.md. Same steps: status file → toast → Slack.
+### Step 1: Update status file (always)
 
-Merge completion is info-level (toast + status only). Merge failure/rollback is high-urgency (all channels).
+Write the event to `_helm/scratch/status.md`. For blocking events, ensure `blocked: true` and `blocked_reason:` are set. For completion events, ensure `phase: complete`. Status file updates are the calling skill's responsibility, not the script's.
+
+### Step 2: Send notification
+
+```bash
+bash "$(git rev-parse --show-toplevel)/plugins/helm/scripts/notify.sh" \
+  --event "<EVENT>" \
+  --branch "$(git branch --show-current)" \
+  --detail "<detail>" \
+  --urgency "<info|high>"
+```
+
+Urgency per event:
+- Merge successful → `--urgency info` (toast + status only, skip Slack)
+- Merge failed / rolled back → `--urgency high` (all channels)
 
 ---
 
