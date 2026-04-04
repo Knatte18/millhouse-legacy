@@ -15,13 +15,15 @@ Shows board summary, current status, and worktree overview. Also cleans up stale
 
 ### Step 1: Read the board
 
-Read `.kanban.md` from the repo root. If it does not exist, stop and tell the user to run `helm-setup` first.
+Check that `kanbans/` directory exists at the repo root. If it does not exist, stop and tell the user to run `helm-setup` first.
 
-Parse the file:
-- `##` headings are columns (e.g. Backlog, In Progress, Done, Blocked).
-- `###` headings are tasks within columns. A task heading may include a `[phase]` suffix (e.g. `### Fix bug [implementing]`).
+Read all 4 board files:
+- `kanbans/backlog.kanban.md`
+- `kanbans/processing.kanban.md`
+- `kanbans/done.kanban.md`
+- `kanbans/blocked.kanban.md`
 
-Count tasks per column. For columns with tasks that have a `[phase]` suffix in their heading, also count tasks per phase within that column.
+For each file, count `###` headings (tasks). For `kanbans/processing.kanban.md`, if tasks have `[phase]` suffixes in their headings, also count tasks per phase.
 
 ### Step 2: Read current status
 
@@ -55,14 +57,14 @@ Skip the main worktree (the first entry). For each additional worktree:
 Print the dashboard. Use this exact format:
 
 ```
-Board (.kanban.md):
+Board (kanbans/):
   Backlog:       N tasks
   In Progress:   N tasks (details per phase if present)
   Done:          N tasks
   Blocked:       N tasks
 ```
 
-Only show columns that exist in the board. For In Progress, if tasks have `[phase]` suffixes in their headings, show a parenthetical breakdown, e.g. `2 tasks (1 implementing, 1 reviewing)`.
+Only show columns that have tasks or are standard (all 4 are always shown). For In Progress, if tasks have `[phase]` suffixes in their headings, show a parenthetical breakdown, e.g. `2 tasks (1 implementing, 1 reviewing)`.
 
 If `_helm/scratch/status.md` exists and has a phase that is not `complete`:
 
@@ -97,7 +99,7 @@ Worktrees:
 ### Example output
 
 ```
-Board (.kanban.md):
+Board (kanbans/):
   Backlog:       2 tasks
   In Progress:   1 task
   Blocked:       0 tasks
