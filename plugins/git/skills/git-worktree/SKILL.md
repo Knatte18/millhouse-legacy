@@ -32,10 +32,12 @@ current_branch=$(git branch --show-current)
 
 **If no argument:** ask the user via AskUserQuestion with two options:
 
-- "Current branch (`<current_branch>`)" (Recommended) — check out the same branch in a new worktree
+- "Current branch (`<current_branch>`)" (Recommended) — create a new branch from the current HEAD
 - "New branch" — user types a new branch name
 
 If the user selects "New branch" or types a custom value via the built-in Other option, use their typed value as the branch name.
+
+**Important:** Git does not allow the same branch to be checked out in multiple worktrees. When "Current branch" is selected, you must create a **new branch** from HEAD. Derive the new branch name as `<current_branch>-wt` (e.g. `main` → `main-wt`). Use `git worktree add <path> -b <new-branch> HEAD`.
 
 ### 3. Derive slug and default directory name
 
@@ -44,7 +46,7 @@ Take the last `/`-separated segment of the branch name. If no `/` in the branch 
 Examples:
 - `feature/add-oauth` → `add-oauth`
 - `main` → `main`
-- `hanf/feature/long-branch-name-here` → `long-branch-name-here`
+- `hanf/feature/long-name-here` → `long-name-here`
 
 Default directory name: `<repo-name>-wt-<slug>`
 
@@ -61,13 +63,14 @@ If the user selects "Custom name" or types via the built-in Other option, use th
 
 Resolve the path as `../<chosen-name>` relative to the repo root.
 
-Check if the branch already exists:
+Check if the branch already exists and whether it's already checked out:
 
 ```bash
 git rev-parse --verify <branch> 2>/dev/null
 ```
 
-- **Branch exists:** `git worktree add <path> <branch>`
+- **Branch exists and is NOT checked out elsewhere:** `git worktree add <path> <branch>`
+- **Branch exists and IS checked out** (current worktree or another): `git worktree add <path> -b <branch>-wt HEAD` (create a new branch from HEAD)
 - **Branch does not exist:** `git worktree add <path> -b <branch> HEAD`
 
 If the command fails, report the error and stop.
@@ -84,7 +87,9 @@ Skip silently if no `.env*` files exist in the repo root.
 
 ### 7. Create .vscode/settings.json
 
-Create `.vscode/settings.json` in the worktree with a random title bar color and window title:
+First create the directory: `mkdir -p "<worktree-path>/.vscode"`
+
+Then write `.vscode/settings.json` with a random title bar color and window title:
 
 ```json
 {
@@ -109,7 +114,7 @@ Use `code.cmd` (not `code` — the wrapper is broken on Node 24+):
 code.cmd "$(cd <path> && pwd -W)"
 ```
 
-If `code.cmd` is not in PATH, use the full path: `"/c/Users/henri/AppData/Local/Programs/Microsoft VS Code/bin/code.cmd"`.
+If `code.cmd` is not in PATH, use the full path: `"/c/Users/henri/AppData/Local/Programs/Microsoft VS Code/bin/code.cmd"` (user-specific fallback).
 
 ### 9. Report
 
