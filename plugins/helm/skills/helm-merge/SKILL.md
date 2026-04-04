@@ -103,16 +103,21 @@ Determine the merge method:
 # Switch to parent in the parent worktree or repo root
 cd <parent-path>
 git merge --squash <worktree-branch>
-git commit -m "<task title>"
 ```
-Squash merge collapses all worktree commits into a single commit on the parent branch. The commit message should be the task title — implementation details stay in the worktree's git log.
+Then update `.kanban.md` in the parent: move the task block to `## Done`, update `[phase]` to `[complete]`. Validate per `doc/modules/validation.md`. Stage it:
+```bash
+git add .kanban.md
+git commit -m "<task title>"
+git push
+```
+Squash merge collapses all worktree commits + kanban update into a single commit on the parent branch.
 
 **PR** (parent is `main` or `master`):
 ```bash
 git push -u origin <worktree-branch>
 gh pr create --title "<task title>" --body "<generated description>"
 ```
-Note: PR merges should also use squash merge — configure this in GitHub repo settings or select "Squash and merge" in the PR UI.
+Note: PR merges should also use squash merge — configure this in GitHub repo settings or select "Squash and merge" in the PR UI. Kanban update happens after PR is merged.
 
 PR description generated from:
 - Knowledge files (`_helm/knowledge/`)
@@ -125,11 +130,7 @@ Report the PR URL to the user. Do NOT proceed to cleanup — wait for PR approva
 
 Run the **Notification Procedure** (same as helm-go — see below) with `COMPLETE: Merge successful for <branch>` (info-level — toast + status only, skip Slack).
 
-### 8. Kanban update
-
-Update `.kanban.md` in the parent worktree (after merge, you are on the parent branch). Move the task block to `## Done`. Update `[phase]` in the task's `###` heading to `[complete]`. Validate `.kanban.md` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop. Stage `.kanban.md` — include it in the squash merge commit (step 6), not as a separate commit.
-
-### 9. Cleanup
+### 8. Cleanup
 
 After successful direct merge (or after user confirms PR was merged):
 
@@ -144,7 +145,7 @@ If the branch was pushed to remote:
 git push origin --delete <worktree-branch>
 ```
 
-### 10. Release merge lock
+### 9. Release merge lock
 
 Delete `<parent-path>/_helm/scratch/merge.lock`.
 
