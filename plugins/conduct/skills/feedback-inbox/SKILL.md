@@ -5,7 +5,7 @@ description: Import open GitHub feedback issues into the local kanban board and 
 
 # feedback-inbox
 
-One-shot. Fetch open GitHub issues labeled `feedback` from Knatte18/millhouse, add each as a Backlog task in `kanbans/board.kanban.md`, and close the issues.
+One-shot. Fetch open GitHub issues labeled `feedback` from Knatte18/millhouse, add each as a Backlog task in `kanbans/backlog.kanban.md`, and close the issues.
 
 ---
 
@@ -19,26 +19,26 @@ gh issue list --repo Knatte18/millhouse --label feedback --state open --json num
 
 If the result is empty, report `No open feedback issues` and stop.
 
-### Step 2: Check board exists
+### Step 2: Check backlog exists
 
-If `kanbans/board.kanban.md` does not exist, stop and tell the user to run `helm-setup` first.
+If `kanbans/backlog.kanban.md` does not exist, stop and tell the user to run `helm-setup` first.
 
-### Step 3: Add tasks to board
+### Step 3: Add tasks to backlog
 
 For each issue returned in step 1:
 
-1. Read `kanbans/board.kanban.md`. Append a new task block under the `## Backlog` heading (before the next `##` heading or end of file):
+1. Read `kanbans/backlog.kanban.md`. Append a new task block under the `## Backlog` heading (before the next `##` heading or end of file):
 
 If no body:
 
 ```markdown
-### <issue title> [backlog]
+### <issue title>
 ```
 
 If the issue has a body, use an indented ` ```md ` code block (plain text descriptions are not parsed by the kanban.md extension and are destroyed on drag-and-drop):
 
 ```markdown
-### <issue title> [backlog]
+### <issue title>
 
     ```md
     <issue body>
@@ -47,7 +47,7 @@ If the issue has a body, use an indented ` ```md ` code block (plain text descri
 
 ### Step 4: Validate
 
-Validate `kanbans/board.kanban.md` per `plugins/helm/doc/modules/validation.md`. If validation fails, report the violation and stop.
+Validate `kanbans/backlog.kanban.md` per `plugins/helm/doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete). If validation fails, report the violation and stop.
 
 ### Step 5: Close issues on GitHub
 
@@ -57,9 +57,17 @@ For each issue processed:
 gh issue close <number> --repo Knatte18/millhouse
 ```
 
-Board changes are local-only (kanban files are gitignored). No commit or push needed.
+### Step 6: Commit and push
 
-### Step 6: Report
+Since backlog is git-tracked:
+
+```bash
+git add kanbans/backlog.kanban.md
+git commit -m "sync: import <N> feedback issues"
+git push
+```
+
+### Step 7: Report
 
 ```
 <N> issues processed and added to Backlog

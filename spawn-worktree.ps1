@@ -198,14 +198,15 @@ foreach ($f in $envFiles) {
 # --- .vscode/settings.json ---
 $vscodeDir = Join-Path $WorktreePath ".vscode"
 New-Item -ItemType Directory -Path $vscodeDir -Force | Out-Null
-$settingsObj = @{
-    "workbench.colorCustomizations" = @{
-        "titleBar.activeBackground" = $PickedColor
-        "titleBar.activeForeground" = "#ffffff"
-    }
-    "window.title" = '${rootName}'
+$settingsJson = @"
+{
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground": "$PickedColor",
+        "titleBar.activeForeground": "#ffffff"
+    },
+    "window.title": "`${rootName}"
 }
-$settingsJson = $settingsObj | ConvertTo-Json -Depth 3
+"@
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText((Join-Path $vscodeDir "settings.json"), $settingsJson, $utf8NoBom)
 

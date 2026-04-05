@@ -113,7 +113,7 @@ After plan approval, `helm-start` posts a summary of the plan (context + step li
 
 ## Handoff Brief Format
 
-When `helm-start -w` creates a worktree, it writes `_helm/scratch/briefs/handoff.md`. This is background context for the receiving `helm-start` session — not a plan, not an instruction.
+When `helm-spawn` creates a worktree, it writes `_helm/scratch/briefs/handoff.md` in the new worktree. This is background context for the receiving `helm-start` session — not a plan, not an instruction.
 
 ```markdown
 # Handoff: <task title>
@@ -129,11 +129,6 @@ Worktree: <parent-path>
 <Key points from the discussion so far. Decisions made, trade-offs considered,
 approaches rejected and why. If no discussion happened, just the task description
 from the GitHub issue body.>
-
-## Knowledge from Parent
-<Synthesized knowledge entries from parent's _helm/knowledge/.
-Include: relevant utilities, patterns, conventions, gotchas.
-If no knowledge: "No prior knowledge.">
 
 ## Relevant Codeguide Modules
 <List of codeguide module docs relevant to this task, identified during

@@ -4,7 +4,7 @@
 _helm/scratch/
 _git/
 .scratch/
-kanbans/
+kanbans/board.kanban.md
 *.local.*
 nul
 

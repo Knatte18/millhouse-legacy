@@ -13,11 +13,13 @@ Shows board summary, current status, and worktree overview. Also cleans up stale
 
 ## Steps
 
-### Step 1: Read the board
+### Step 1: Read the boards
 
-Check that `kanbans/board.kanban.md` exists. If it does not exist, stop and tell the user to run `helm-setup` first.
+Check that `kanbans/backlog.kanban.md` exists. If it does not exist, stop and tell the user to run `helm-setup` first.
 
-Read `kanbans/board.kanban.md`. For each `##` column, count `###` headings (tasks). For the `## In Progress` column, if tasks have `[phase]` suffixes in their headings, also count tasks per phase.
+Read `kanbans/backlog.kanban.md`. For each `##` column (Backlog, Spawn, Delete), count `###` headings (tasks).
+
+Read `kanbans/board.kanban.md` if it exists. For each `##` column (Discussing, Planned, Implementing, Testing, Reviewing, Blocked), count `###` headings (tasks). If `board.kanban.md` does not exist, show all work columns as 0 tasks.
 
 ### Step 2: Read current status
 
@@ -55,15 +57,21 @@ Skip the main worktree (the first entry). For each additional worktree:
 Print the dashboard. Use this exact format:
 
 ```
-Board (kanbans/board.kanban.md):
+Backlog (kanbans/backlog.kanban.md):
   Backlog:       N tasks
   Spawn:         N tasks
-  In Progress:   N tasks (details per phase if present)
-  Done:          N tasks
+  Delete:        N tasks
+
+Work (kanbans/board.kanban.md):
+  Discussing:    N tasks
+  Planned:       N tasks
+  Implementing:  N tasks
+  Testing:       N tasks
+  Reviewing:     N tasks
   Blocked:       N tasks
 ```
 
-All 5 columns are always shown. For In Progress, if tasks have `[phase]` suffixes in their headings, show a parenthetical breakdown, e.g. `2 tasks (1 implementing, 1 reviewing)`.
+All columns are always shown. Source of truth for phase: column position in the work board (not status.md).
 
 If `_helm/scratch/status.md` exists and has a phase that is not `complete`:
 
@@ -98,11 +106,17 @@ Worktrees:
 ### Example output
 
 ```
-Board (kanbans/board.kanban.md):
+Backlog (kanbans/backlog.kanban.md):
   Backlog:       2 tasks
   Spawn:         1 task
-  In Progress:   1 task
-  Done:          3 tasks
+  Delete:        0 tasks
+
+Work (kanbans/board.kanban.md):
+  Discussing:    0 tasks
+  Planned:       0 tasks
+  Implementing:  1 task
+  Testing:       0 tasks
+  Reviewing:     0 tasks
   Blocked:       0 tasks
 
 Current:

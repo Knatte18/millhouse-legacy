@@ -104,7 +104,7 @@ Always direct squash merge. Helm never creates PRs — that is the user's respon
 cd <parent-path>
 git merge --squash <worktree-branch>
 ```
-Then update the parent's local kanban (gitignored — not committed): in `kanbans/board.kanban.md`, cut the task block from the `## In Progress` column and paste it under the `## Done` column, update `[phase]` to `[complete]`. Validate per `doc/modules/validation.md`.
+Then update the **child worktree's** local kanban: remove the task block from `kanbans/board.kanban.md` entirely (search all phase columns: Discussing, Planned, Implementing, Testing, Reviewing, Blocked — remove from wherever found). There is no Done column — completed tasks are removed from the board. The **parent's** `board.kanban.md` does not contain this task and requires no update (parent has its own independent work-board). Validate per `doc/modules/validation.md` (6-column rules).
 ```bash
 git commit -m "<task title>"
 git push
@@ -176,4 +176,4 @@ Urgency per event:
 
 ## Kanban Updates
 
-- Merge complete → in parent's `kanbans/board.kanban.md`, cut task from `## In Progress` column, paste under `## Done` column, update `[complete]` in heading (local-only — board file is gitignored)
+- Merge complete → remove task from child worktree's `kanbans/board.kanban.md` entirely (no Done column — task is removed). Parent's board is independent and unaffected. Validate per `doc/modules/validation.md` (6-column rules).

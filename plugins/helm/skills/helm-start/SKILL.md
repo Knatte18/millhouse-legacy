@@ -18,7 +18,9 @@ For kanban.md file format details, see `plugins/helm/doc/modules/kanban-format.m
 
 Read `_helm/config.yaml`. If it does not exist, stop and tell the user to run `helm-setup` first.
 
-Read `kanbans/board.kanban.md`. If it does not exist, stop and tell the user to run `helm-setup` first.
+Read `kanbans/backlog.kanban.md`. If it does not exist, stop and tell the user to run `helm-setup` first or run from the correct worktree. Work-board (`kanbans/board.kanban.md`) absence is not an error at entry — it may not exist yet if no task has been claimed.
+
+**Child worktree guard:** If running in a non-main worktree (detect via `git worktree list --porcelain` — current path is not the first/main entry), warn: "helm-start in-place should be run from the parent worktree. Backlog in child worktrees may be stale and commits here create merge conflicts." Require user confirmation before proceeding.
 
 ---
 
@@ -38,39 +40,26 @@ helm-start proceeds through named phases. Report the current phase to the user a
 
 ### Phase: Select
 
-0. **Check for handoff brief.** Use the Read tool (not bash) to read `_helm/scratch/briefs/handoff.md`. If it exists, the brief's `## Issue` identifies the task --- select it directly (skip step 1). Read the task from the `## In Progress` column in `kanbans/board.kanban.md` (not Backlog — it was already moved before spawning). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain.
+0. **Check for handoff brief.** Use the Read tool (not bash) to read `_helm/scratch/briefs/handoff.md`. If it exists, the brief's `## Issue` identifies the task --- select it directly (skip step 1). Read the task from the `## Discussing` column in `kanbans/board.kanban.md` (not Backlog — it was already moved before spawning). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain.
 
-1. **Select task.** Read `kanbans/board.kanban.md`. Find all `###` headings under the `## Backlog` column. Each `###` heading is a task title.
+1. **Guard: active task check.** This guard applies only to paths 2/3/4 below — path 0 (handoff brief) short-circuits to Explore and skips the guard. Before claiming a task, check if `kanbans/board.kanban.md` already has a task in any non-empty column. If `board.kanban.md` does not exist, skip the guard (equivalent to empty board). If it exists and has a task, report "Work board already has an active task. Run helm-go or helm-abandon first." and stop.
 
-   - If zero tasks and no handoff brief: report "No tasks in Backlog. Run helm-add to create one." Stop.
-   - If one task: select it. Show the title and ask user to confirm.
-   - If 2+ tasks: print numbered list (follow conduct:conversation rules). User types the number.
+2. **Select task.** Read `kanbans/backlog.kanban.md`.
 
-2. **Worktree decision.** Ask the user: worktree or in-place?
-   - `-w` flag or user chooses worktree → **Worktree spawn flow** (see below). After spawning, stop. The user continues in the new VS Code window.
-   - No flag / in-place: continue below.
+   a. Find all `###` headings under the `## Spawn` column. If tasks exist: take the first one (topmost). Remove it from Spawn. This is the in-place equivalent of what helm-spawn does for worktrees — same "claim from Spawn" logic, without worktree creation.
 
-3. **Move to In Progress.** Cut the entire task block (from `### Title` to just before the next `###` or `##`) from the `## Backlog` column and paste it under the `## In Progress` column in `kanbans/board.kanban.md`. Update the `[phase]` in the `###` heading to `[discussing]`. Validate per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+   b. If Spawn is empty: find all `###` headings under the `## Backlog` column.
+      - If zero tasks: report "No tasks in Backlog or Spawn. Run helm-add to create one, or describe what you want to work on." If the user provides a description, create the task directly (add to backlog, then claim it).
+      - If one task: select it. Show the title and ask user to confirm.
+      - If 2+ tasks: print numbered list (follow conduct:conversation rules). User types the number.
 
-#### Worktree Spawn Flow
+3. **Move to Discussing.** Remove the selected task block from `kanbans/backlog.kanban.md`. Since backlog is git-tracked, commit and push: `spawn: <task-title>`. If running in a child worktree, use `git -C <parent-path>` for the backlog commit (resolve parent path via `git worktree list --porcelain`).
 
-When the user chooses `-w` (worktree mode):
+   If `kanbans/board.kanban.md` does not exist, create it with 6 columns (Discussing, Planned, Implementing, Testing, Reviewing, Blocked) before adding the task. Validate the created file per `doc/modules/validation.md` (6-column rules).
 
-1. **Move to In Progress first.** Cut the task block from the `## Backlog` column and paste it under the `## In Progress` column in `kanbans/board.kanban.md`, update `[phase]` in the `###` heading to `[discussing]`. Validate per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+   Add the task under `## Discussing` in `kanbans/board.kanban.md`. No `[phase]` suffix — the column is the phase. Validate backlog per `doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete). Validate work board per `doc/modules/validation.md` (6-column rules).
 
-2. **Write handoff brief.** Write `_helm/scratch/briefs/handoff.md` in the **parent's** `_helm/scratch/briefs/` directory using the Handoff Brief Format (see `plugins/helm/doc/modules/plans.md`). If no discussion has happened yet, populate `## Discussion Summary` with the task title and body from the `## In Progress` column. The spawn script will copy this file to the new worktree.
-
-3. **Run the spawn script.** Call `helm-spawn.ps1` with the task title, body, and current branch:
-   ```
-   pwsh -NoProfile -File "plugins/helm/scripts/helm-spawn.ps1" -TaskTitle "<title>" -TaskBody "<body>" -ParentBranch "<current-branch>"
-   ```
-   The script handles: git worktree add, _git/config.yaml (parent-branch + base-branch), .env copies, _helm/ structure, .vscode/settings.json (unique color + window.title), kanban board file, status.md, handoff brief copy, and VS Code launch.
-
-4. **Report.** Tell the user:
-    - Worktree created at `<path>` on branch `<branch>` (read from script output)
-    - "Run `helm-start` in the new VS Code window to continue planning."
-
-5. **Stop.** Do not continue to Explore or Discuss phases. The parent session is done with this task.
+   Write `phase: discussing` to `_helm/scratch/status.md`.
 
 ### Phase: Explore
 
@@ -217,19 +206,13 @@ When the user chooses `-w` (worktree mode):
 
    d. **Before reading the reviewer's findings**, invoke the `helm-receiving-review` skill via the Skill tool. This is **mandatory** --- it loads the decision tree into context before evaluation begins. Loading it after reading findings is useless; you will have already formed rationalizations.
 
-   e. Now read the reviewer's findings. Evaluate each finding through the receiving-review decision tree. For each finding, state:
-      1. The finding
-      2. Your VERIFY assessment (accurate / inaccurate / uncertain)
-      3. Your HARM CHECK result (which harm category, if any)
-      4. Your action: FIX or PUSH BACK (with cited evidence)
+   e. Now read the reviewer's findings. Spawn a **fixer agent** to apply BLOCKING fixes — do not fix inline yourself (fresh eyes catch systemic implications better). Pass the fixer: (1) full list of BLOCKING findings, (2) the plan file path, (3) instruction to check systemic implications across all steps.
 
-   f. Update the plan file with accepted changes.
+   f. If reviewer approved (no BLOCKING issues): proceed to Phase: Approve.
 
-   g. If reviewer approved (no BLOCKING issues): proceed to Phase: Approve.
+   g. If reviewer requested changes: after fixer applies changes, re-spawn the reviewer agent with the updated plan content. Report: **"Plan Review --- round N/&lt;max_review_rounds&gt;"**
 
-   h. If reviewer requested changes: update the plan file, re-spawn the reviewer agent with the updated plan content. Report: **"Plan Review --- round N/&lt;max_review_rounds&gt;"**
-
-   i. Max `max_review_rounds` rounds. If unresolved BLOCKING issues remain after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Present the remaining issues to the user for decision. The user may override, accept, or request further changes.
+   h. Max `max_review_rounds` rounds. If unresolved BLOCKING issues remain after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Present the remaining issues to the user for decision. The user may override, accept, or request further changes.
 
 ### Phase: Approve
 
@@ -247,7 +230,7 @@ When the user chooses `-w` (worktree mode):
     task: <task-title>
     ```
 
-    c. Update `[phase]` in the task's `###` heading to `[planned]` in the `## In Progress` column of `kanbans/board.kanban.md`. Task stays in In Progress (no column move). Validate per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+    c. Move the task from `## Discussing` to `## Planned` in `kanbans/board.kanban.md` (column move — no phase suffix). Validate per `doc/modules/validation.md` (6-column rules). If validation fails, report the issue to the user and stop.
 
     d. Report: "Plan approved. Task ready for `helm-go`."
 
@@ -264,19 +247,11 @@ When the user chooses `-w` (worktree mode):
 
 ---
 
-## Mid-discussion Worktree Switch
-
-If the user decides mid-discussion that they want a worktree:
-
-1. **Write handoff brief.** Write `_helm/scratch/briefs/handoff.md` in the parent's `_helm/scratch/briefs/` directory, summarizing the discussion so far — decisions made, approaches considered, relevant code explored.
-
-2. **Run the spawn script.** Call `helm-spawn.ps1` with the task title, body, and current branch (same as Worktree Spawn Flow step 3). The script copies the handoff brief to the new worktree.
-
-3. **Stop.** The user runs `helm-start` in the new VS Code window. The receiving session reads the brief and continues from Phase: Explore — it does not repeat the discussion, but it does run its own exploration and may ask follow-up questions.
-
----
-
 ## Kanban Updates
 
-- Task selected → cut from `## Backlog` column, paste under `## In Progress` column, update `[discussing]` in heading
-- Plan approved → update `[planned]` in heading (task stays under `## In Progress`, no column move)
+Backlog changes (`kanbans/backlog.kanban.md`) are git-tracked — commit and push after every write.
+
+Work board changes (`kanbans/board.kanban.md`) are local-only (gitignored). No staging needed.
+
+- Task claimed from backlog → remove from backlog (commit), add to `## Discussing` in work board
+- Plan approved → move from `## Discussing` to `## Planned` in work board (column move)

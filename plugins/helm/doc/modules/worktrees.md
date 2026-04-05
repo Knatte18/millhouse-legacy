@@ -28,16 +28,29 @@ repo root (main) — nobody works here directly
 
 ## Branch Naming
 
-Worktree branches use the `-wt-` separator pattern: `{parent-branch}-wt-{slug}`. This is handled by `spawn-worktree.ps1` with built-in logic — no configuration needed.
+Worktree branches follow a configurable template. Configured in `_helm/config.yaml` (tracked):
+
+```yaml
+worktree:
+  branch-template: "{parent-branch}-wt-{slug}"
+  path-template: "../{repo-name}-worktrees/{slug}"
+```
+
+Available placeholders:
+- `{slug}` — derived from task title (kebab-case, max 20 chars), or user-provided
+- `{parent-branch}` — full current branch name (e.g. `hanf/main`)
+- `{repo-name}` — basename of the repo root directory (e.g. `py-hanf`)
 
 The `-wt-` separator avoids git ref conflicts — branches with `/` (like `hanf/main`) can't have sub-branches (`hanf/main/slug` would conflict).
 
-Directory placement depends on the repo layout:
+Examples:
 
-- **Hub layout** (bare repo with worktrees): worktrees are siblings under the hub root.
-- **Non-hub layout** (regular repo): worktrees are siblings of the repo directory.
+| Template | Context | Slug | Result |
+|----------|---------|------|--------|
+| `"{parent-branch}-wt-{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | branch: `hanf/main-wt-auth` |
+| `"../{repo-name}-worktrees/{slug}"` | branch: `hanf/main`, repo: `py-hanf` | `auth` | path: `../py-hanf-worktrees/auth` |
 
-The slug is derived from the task title (kebab-case, max 20 chars).
+The `path-template` controls where the worktree directory is created on disk. Default places worktrees in a sibling directory named `<repo>-worktrees/` (e.g. repo at `C:\Code\py-hanf` → worktrees at `C:\Code\py-hanf-worktrees/auth`).
 
 ## When to Use a Worktree
 
@@ -50,22 +63,20 @@ The user always decides. CC never auto-spawns worktrees. Common reasons:
 | Hotfix while a feature is in progress | Yes |
 | Small task, CC is idle | No — do it in current context |
 
-Use `helm-start -w` to spawn a worktree, or `helm-start` to work in the current context. You can also switch mid-discussion: if you're discussing without a worktree and realize you want one, call `helm-start -w` and CC will write a brief with the discussion so far and spawn the worktree.
+Use `helm-spawn` to create a worktree (claims a task from the Spawn column in backlog), or `helm-start` to work in the current context (in-place).
 
 ## Lifecycle
 
 ### Creation
 
-When `helm-start -w` is called:
+When `helm-spawn` is called:
 
-1. `git worktree add <path> -b <branch-name> <parent-branch>`
-2. Create `_git/config.yaml` in the new worktree with `base-branch` (from source) and `parent-branch` (current branch). Gitignored, per-worktree.
-3. Copy gitignored environment files from repo root to worktree (`.env*`). Copies are used instead of symlinks because file symlinks on Windows require Developer Mode or admin elevation.
-4. Create `_helm/` directory structure in worktree (tracked: `knowledge/`, `changelog.md`, `config.yaml`; ignored: `scratch/`)
-5. Write `_helm/scratch/briefs/handoff.md` in the child worktree (see [plans.md](plans.md) Handoff Brief Format). If no discussion has happened, populate Discussion Summary from the task title.
-6. Ensure the task exists in the parent's `kanbans/board.kanban.md` (it should already be there from `helm-add`)
-7. `code <worktree-path>` — open VS Code in the new worktree
-8. Parent session continues with other work
+1. Read first task from `## Spawn` column in `kanbans/backlog.kanban.md`
+2. Call `helm-spawn.ps1` which calls `spawn-worktree.ps1`: `git worktree add`, `.env*` copies, VS Code color, VS Code launch
+3. `helm-spawn.ps1` creates `_helm/` directory structure and `kanbans/board.kanban.md` (6-column work board with task in `## Discussing`)
+4. Skill writes `_helm/scratch/briefs/handoff.md` and `_helm/scratch/status.md` to new worktree
+5. Skill removes task from Spawn in backlog, commits and pushes: `spawn: <task-title>`
+6. Parent session continues with other work
 
 ### Working
 
@@ -90,18 +101,10 @@ Never cleanup on failure — preserve the worktree for investigation.
 
 ## Status Tracking
 
-Each worktree has `_git/config.yaml` (gitignored, per-worktree) for git state and `_helm/scratch/status.md` for helm workflow state.
-
-`_git/config.yaml` — created by `spawn-worktree.ps1`:
-
-```yaml
-base-branch: main
-parent-branch: feature/auth
-```
-
-`_helm/scratch/status.md` — updated after every step by `helm-go`. Canonical format defined in `helm-go` SKILL.md. Key fields:
+Each worktree writes `_helm/scratch/status.md`, updated after every step (not just on errors). Canonical format defined in `helm-go` SKILL.md. Key fields:
 
 ```markdown
+parent: feature/auth
 phase: implementing
 issue: #57
 plan: _helm/scratch/plans/2026-04-01-120000-oauth.md

@@ -1,11 +1,11 @@
 ---
 name: helm-setup
-description: Initialize Helm for a repository. Creates kanban board file, config, and directory structure.
+description: Initialize Helm for a repository. Creates kanban board files, config, and directory structure.
 ---
 
 # helm-setup
 
-One-time initialization per repo. Creates the `kanbans/` directory with a single board file and writes `_helm/config.yaml`.
+One-time initialization per repo. Creates the `kanbans/` directory with two board files and writes `_helm/config.yaml`.
 
 For kanban.md file format details, see `plugins/helm/doc/modules/kanban-format.md`.
 
@@ -21,9 +21,11 @@ Run these steps in order. Stop on any failure and report the error.
 mkdir -p _helm/knowledge _helm/scratch/plans _helm/scratch/briefs kanbans
 ```
 
-### Step 2: Create kanban board file
+### Step 2: Create backlog board file
 
-If `kanbans/board.kanban.md` does not exist, create it. Do not overwrite an existing file.
+If `kanbans/backlog.kanban.md` already exists, skip creation (preserves existing backlog data on re-run).
+
+If it does not exist, create it:
 
 ```markdown
 # <REPO_NAME>
@@ -32,16 +34,36 @@ If `kanbans/board.kanban.md` does not exist, create it. Do not overwrite an exis
 
 ## Spawn
 
-## In Progress
+## Delete
+```
 
-## Done
+Validate per `doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete). If validation fails, report the issue to the user and stop.
+
+### Step 3: Create work board file
+
+If `kanbans/board.kanban.md` does not exist, create it:
+
+```markdown
+# <REPO_NAME>
+
+## Discussing
+
+## Planned
+
+## Implementing
+
+## Testing
+
+## Reviewing
 
 ## Blocked
 ```
 
-Validate the board file per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+If `board.kanban.md` already exists with old 5-column structure (detect by presence of `## In Progress`): skip creation but warn: "Existing board.kanban.md uses old format. Delete it and re-run helm-setup to migrate."
 
-### Step 3: Write config
+Validate per `doc/modules/validation.md` (6-column rules). If validation fails, report the issue to the user and stop.
+
+### Step 4: Write config
 
 Detect repo info:
 
@@ -53,6 +75,10 @@ REPO=$(gh repo view --json name --jq '.name' 2>/dev/null || basename "$(pwd)")
 Write `_helm/config.yaml`:
 
 ```yaml
+worktree:
+  branch-template: "{parent-branch}-wt-{slug}"
+  path-template: "../{repo-name}-worktrees/{slug}"
+
 models:
   session: opus
   plan-review: sonnet
@@ -74,42 +100,33 @@ No `github:` section by default. GitHub integration is optional --- run `helm-sy
 
 Validate `_helm/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
-### Step 3b: Create `_git/config.yaml`
+### Step 5: Update .gitignore
 
-If `_git/config.yaml` does not exist, create it:
+Add `_helm/scratch/` and `.scratch/` to `.gitignore` if not already present.
 
-```yaml
-base-branch: main
-parent-branch: ~
-```
+### Step 6: Update CLAUDE.md
 
-Create the `_git/` directory if needed. This provides the initial git config for `spawn-worktree.ps1` to read `base-branch` from.
-
-### Step 4: Update .gitignore
-
-Add `_helm/scratch/`, `.scratch/`, and `_git/` to `.gitignore` if not already present.
-
-### Step 5: Update CLAUDE.md
-
-If `CLAUDE.md` exists, append the following rules under a `## Kanban` section (if not already present):
+If `CLAUDE.md` exists, check for a `## Kanban` section. If the section exists but contains old content (e.g. "single board file with 5 columns"), replace the section content with the new template below. If no `## Kanban` section exists, append it.
 
 ```markdown
 ## Kanban
 
-- Task board: `kanbans/board.kanban.md` — single board file with 5 columns (kanban.md VS Code extension). Gitignored and local-only.
-- Batch related small changes into one commit. Don't commit trivial edits individually.
+- Backlog board: `kanbans/backlog.kanban.md` — git-tracked, 3 columns (Backlog, Spawn, Delete). Manual task entry.
+- Work board: `kanbans/board.kanban.md` — gitignored, 6 phase columns. Helm-managed. Each worktree gets its own copy (created by helm-spawn).
+- Run `helm-setup` to create board files after a fresh clone (safe to re-run; skips existing files).
+- Format reference: `plugins/helm/doc/modules/kanban-format.md`.
 ```
 
 If `CLAUDE.md` does not exist, create it with these rules.
 
-### Step 6: Report
+### Step 7: Report
 
 ```
 Helm initialized:
-  Board: kanbans/board.kanban.md (5 columns: Backlog, Spawn, In Progress, Done, Blocked)
+  Backlog: kanbans/backlog.kanban.md (3 columns: Backlog, Spawn, Delete) — git-tracked
+  Work board: kanbans/board.kanban.md (6 columns: Discussing through Blocked) — gitignored
   Config: _helm/config.yaml
-  Git config: _git/config.yaml
 
-Open kanbans/board.kanban.md in VS Code to see the board.
+Open kanbans/backlog.kanban.md in VS Code to see the backlog.
 Run helm-add to create your first task.
 ```

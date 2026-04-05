@@ -1,11 +1,11 @@
 ---
 name: helm-sync
-description: Sync local kanban board state to GitHub Projects and issues.
+description: Import GitHub issues into the local backlog.
 ---
 
 # helm-sync
 
-On-demand sync from local `kanbans/board.kanban.md` to GitHub Projects board. Optional --- Helm works fully offline without it.
+One-way import: GitHub issues with the `helm` label → `kanbans/backlog.kanban.md` Backlog column. Issues are closed after import to keep the inbox clean.
 
 ---
 
@@ -19,76 +19,81 @@ gh auth status
 
 If not authenticated, stop and tell the user to run `gh auth login`.
 
-Read `_helm/config.yaml`.
+Read `_helm/config.yaml`. If no `github:` section exists, detect repo:
 
----
+```bash
+gh repo view --json owner,name
+```
 
-## Steps
-
-### Step 1: Ensure GitHub config
-
-If `_helm/config.yaml` has no `github:` section (or it is incomplete), set it up now:
-
-1. Detect repo: `gh repo view --json owner,name`
-2. Check for existing projects: `gh project list --owner <owner> --format json`
-3. Ask user which to use or create new.
-4. Get the Status field ID: `gh project field-list <number> --owner <owner> --format json`
-5. Configure Helm columns via GraphQL mutation (Backlog, Spawn, In Progress, Done, Blocked).
-6. Get the Project Node ID via GraphQL query.
-7. Write all IDs to `_helm/config.yaml` under `github:`:
+Write `owner` and `repo` to `_helm/config.yaml` under `github:`:
 
 ```yaml
 github:
   owner: "<OWNER>"
   repo: "<REPO>"
-  project-number: <NUMBER>
-  project-node-id: "<PROJECT_NODE_ID>"
-  status-field-id: "<STATUS_FIELD_ID>"
-  columns:
-    backlog: "<OPTION_ID>"
-    spawn: "<OPTION_ID>"
-    in-progress: "<OPTION_ID>"
-    done: "<OPTION_ID>"
-    blocked: "<OPTION_ID>"
 ```
-
-If `github:` section already exists and is complete, skip this step.
 
 Validate `_helm/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
-### Step 2: Read local boards
+---
 
-Read `kanbans/board.kanban.md`. Collect all tasks with their column (derived from which `##` section the task is under).
+## Steps
 
-### Step 3: Sync tasks
+### Step 1: Fetch labeled issues
 
-For each task collected from the board:
+```bash
+gh issue list --repo <owner>/<repo> --label "helm" --state open --json number,title,body --limit 50
+```
 
-1. **Find or create GitHub issue.** Search for an existing issue with matching title:
-   ```bash
-   gh issue list --repo <owner>/<repo> --search "<title>" --json number,title --limit 5
-   ```
-   - If found: use that issue number.
-   - If not found: create one:
-     ```bash
-     gh issue create --title "<title>" --body "" --repo <owner>/<repo>
-     ```
+If no issues found: report "No open issues with label `helm`. Nothing to import." Stop.
 
-2. **Add to project board** (if not already):
-   ```bash
-   gh project item-add <project-number> --owner <owner> --url <issue-url> --format json
-   ```
+### Step 2: Deduplicate
 
-3. **Set column** to match local kanban column:
-   ```bash
-   gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <status-field-id> --single-select-option-id <column-option-id>
-   ```
+Read `kanbans/backlog.kanban.md`. Collect all `###` headings from all columns (Backlog, Spawn, Delete). Strip any `[phase]` suffix from headings before comparing.
 
-### Step 4: Report
+For each fetched issue: check if the title (case-insensitive) matches an existing task heading. If match found: skip import but still close the issue (already imported — keep inbox clean).
+
+### Step 3: Import new issues
+
+For each issue NOT already in backlog:
+
+Add a new task block under `## Backlog` in `kanbans/backlog.kanban.md`:
+
+```markdown
+### <Issue title>
+
+    ```md
+    <Issue body, or "Imported from GitHub issue #N" if body is empty>
+    ```
+```
+
+### Step 4: Close imported issues
+
+For each issue that was imported OR matched an existing task:
+
+```bash
+gh issue close <number> --repo <owner>/<repo>
+```
+
+### Step 5: Validate, commit, and push
+
+If zero new issues were imported (all fetched issues were duplicates), skip the commit and push — the backlog file is unchanged.
+
+Otherwise, validate `kanbans/backlog.kanban.md` per `doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete). If validation fails, report the issue to the user and stop before committing.
+
+Then commit and push:
+
+```bash
+git add kanbans/backlog.kanban.md
+git commit -m "sync: import <N> issues from GitHub"
+git push
+```
+
+### Step 6: Report
 
 ```
-Synced to GitHub:
-  Tasks synced: <count>
-  Issues created: <count>
-  Board: https://github.com/users/<owner>/projects/<project-number>
+Imported from GitHub:
+  New tasks:     <count>
+  Already in backlog: <count> (issues closed)
+  Total closed:  <count>
 ```

@@ -63,7 +63,7 @@ Each skill is defined in `plugins/helm/skills/<name>/SKILL.md`.
 | [modules/worktrees.md](modules/worktrees.md) | Worktree model, lifecycle, nesting, env setup |
 | [modules/plans.md](modules/plans.md) | Plan format, locking, staleness detection |
 | [modules/kanban-format.md](modules/kanban-format.md) | kanban.md file format reference |
-| [modules/knowledge.md](modules/knowledge.md) | Knowledge curation between tasks |
+| [modules/knowledge.md](modules/knowledge.md) | Knowledge curation — removed (see file for rationale) |
 | [modules/coherence.md](modules/coherence.md) | Why Helm doesn't use coherence audits |
 | [modules/codeguide.md](modules/codeguide.md) | Codeguide integration points |
 | [modules/constraints.md](modules/constraints.md) | Repo-specific invariants (CONSTRAINTS.md) |

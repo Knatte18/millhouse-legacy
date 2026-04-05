@@ -11,9 +11,11 @@ Test Helm in an existing repo (not millhouse). Run each step in order.
 ```
 
 **Verify:**
-- [ ] `kanbans/board.kanban.md` created with 5 columns (Backlog, Spawn, In Progress, Done, Blocked)
+- [ ] `kanbans/backlog.kanban.md` created with 3 columns (Backlog, Spawn, Delete) — git-tracked
+- [ ] `kanbans/board.kanban.md` created with 6 columns (Discussing, Planned, Implementing, Testing, Reviewing, Blocked) — gitignored
 - [ ] `_helm/config.yaml` created with defaults
 - [ ] `_helm/scratch/` added to `.gitignore`
+- [ ] CLAUDE.md updated with two-board kanban section
 
 ---
 
@@ -25,9 +27,9 @@ Test Helm in an existing repo (not millhouse). Run each step in order.
 ```
 
 **Verify:**
-- [ ] Tasks appear under `## Backlog` in `kanbans/board.kanban.md`
+- [ ] Tasks appear under `## Backlog` in `kanbans/backlog.kanban.md`
 - [ ] kanban.md extension shows them visually
-- [ ] Each task heading has `[backlog]` phase suffix (e.g. `### Fix input validation on API endpoint [backlog]`)
+- [ ] Backlog change committed and pushed (`add: <task-title>`)
 
 ---
 
@@ -40,11 +42,12 @@ Test Helm in an existing repo (not millhouse). Run each step in order.
 Select a task. Go through all phases: Discuss → Plan → Plan Review → Approve.
 
 **Verify:**
-- [ ] Task cut from `## Backlog` column, pasted under `## In Progress` column in `kanbans/board.kanban.md`
-- [ ] Phase set to `discussing`, then `planned` after approval
+- [ ] Task removed from `kanbans/backlog.kanban.md` (committed: `spawn: <task-title>`)
+- [ ] Task added to `## Discussing` column in `kanbans/board.kanban.md` (no `[phase]` suffix)
+- [ ] After plan approval, task moved to `## Planned` column (column move, no suffix)
 - [ ] Plan written to `_helm/scratch/plans/<timestamp>-<slug>.md`
 - [ ] Plan has `approved: true` in frontmatter
-- [ ] Plan reviewer ran and gave feedback
+- [ ] Plan reviewer ran and gave feedback (fixer agent applied fixes)
 - [ ] `_helm/scratch/status.md` has `plan:`, `phase:`, `task:` fields
 
 ---
@@ -59,10 +62,12 @@ Select a task. Go through all phases: Discuss → Plan → Plan Review → Appro
 - [ ] Reads plan from status.md
 - [ ] Checks `approved: true`
 - [ ] Reads CONSTRAINTS.md (if present)
+- [ ] Moves task from `## Planned` to `## Implementing` (column move)
 - [ ] Implements each step with commit + push
-- [ ] Code reviewer runs after implementation
+- [ ] Moves task through columns: Implementing → Testing → Reviewing
+- [ ] Code reviewer runs after implementation (fixer agent applies fixes)
 - [ ] Knowledge entry written to `_helm/knowledge/`
-- [ ] Task cut from `## In Progress` column, pasted under `## Done` column in `kanbans/board.kanban.md`
+- [ ] Task removed from `kanbans/board.kanban.md` entirely (no Done column)
 
 ---
 
@@ -73,30 +78,29 @@ Select a task. Go through all phases: Discuss → Plan → Plan Review → Appro
 ```
 
 **Verify:**
-- [ ] Shows board summary (task counts per column)
+- [ ] Shows backlog summary (task counts: Backlog, Spawn, Delete)
+- [ ] Shows work board summary (task counts: Discussing through Blocked)
 - [ ] Shows current task and phase
 - [ ] Shows worktree list (none if in-place)
 
 ---
 
-## 6. Start a task (worktree)
+## 6. Spawn a worktree
+
+Drag a task to the Spawn column in `kanbans/backlog.kanban.md` using the kanban extension.
 
 ```
-/helm-start
+/helm-spawn
 ```
-
-Select a task, choose worktree (`-w`).
 
 **Verify:**
-
-- [ ] Worktree created (hub layout: sibling under hub root; non-hub: sibling of repo)
-- [ ] Branch uses `-wt-` separator (e.g. `hanf/main-wt-fix-config`)
-- [ ] VS Code opens new window (via `code.cmd`)
-- [ ] `_git/config.yaml` in worktree has `base-branch:` and `parent-branch:`
-- [ ] `_helm/scratch/status.md` in worktree has `task:`, `phase:`
+- [ ] Task read from `## Spawn` in backlog
+- [ ] Worktree created (via `helm-spawn.ps1` → `spawn-worktree.ps1`)
+- [ ] VS Code opens new window
+- [ ] Task removed from Spawn in backlog (committed: `spawn: <task-title>`)
+- [ ] `_helm/scratch/status.md` in worktree has `parent:`, `task:`, `phase: discussing`
 - [ ] Handoff brief written to `_helm/scratch/briefs/handoff.md`
-- [ ] Parent `kanbans/board.kanban.md` updated (task under `## In Progress` with `[discussing]`)
-- [ ] Worktree `kanbans/board.kanban.md` has only the selected task under `## In Progress`; other columns are empty
+- [ ] Worktree `kanbans/board.kanban.md` has task under `## Discussing`; other columns empty
 
 ---
 
@@ -112,7 +116,7 @@ In the new VS Code window:
 - [ ] Reads handoff brief
 - [ ] Continues from Explore phase (doesn't repeat discussion)
 - [ ] Plan approved → run `/helm-go` (use `-r 0` for doc tasks, `-r 1` for quick tests)
-- [ ] `[phase]` in `kanbans/board.kanban.md` heading updates through phases (implementing → testing → reviewing)
+- [ ] Task moves through column phases in worktree's `board.kanban.md`
 - [ ] Implementation + review + knowledge works as in step 4
 
 ---
@@ -131,7 +135,8 @@ From the worktree:
 - [ ] Parent merged into worktree first
 - [ ] Verification passes
 - [ ] Squash merge into parent (one commit for entire task)
-- [ ] Parent `kanbans/board.kanban.md` updated, local-only (task under `## Done` with `[complete]`)
+- [ ] Task removed from child worktree's `kanbans/board.kanban.md` (no Done column)
+- [ ] Parent's `board.kanban.md` is unaffected (independent)
 - [ ] Merge lock released
 
 Note: helm-merge cannot delete the worktree directory while VS Code has it open. Cleanup happens in step 9.
@@ -149,13 +154,13 @@ Close the worktree VS Code window. Back in the parent:
 **Verify:**
 - [ ] Stale worktree detected and removed automatically
 - [ ] Branch deleted (local + remote)
-- [ ] Dashboard shows updated board
+- [ ] Dashboard shows updated boards
 
 ---
 
 ## 10. Test abandon (optional)
 
-Start a task in a worktree, then:
+Spawn a worktree, then:
 
 ```
 /helm-abandon
@@ -165,13 +170,44 @@ Start a task in a worktree, then:
 - [ ] Warns about uncommitted changes (if any)
 - [ ] Warns about unmerged commits (if any)
 - [ ] Requires explicit "abandon" confirmation
-- [ ] Parent `kanbans/board.kanban.md` updated (task under `## Backlog` with `[backlog]` in heading)
+- [ ] Task read from child's `board.kanban.md` BEFORE worktree deletion
+- [ ] Task added back to parent's `kanbans/backlog.kanban.md` `## Backlog` (committed: `revert: return <task> to backlog (abandoned)`)
 
 Note: worktree directory cleanup requires closing VS Code first, then `/helm-status` from parent.
 
 ---
 
-## 11. Test constraints (optional)
+## 11. Test sync (optional)
+
+Create a GitHub issue with label `helm` on the repo, then:
+
+```
+/helm-sync
+```
+
+**Verify:**
+- [ ] Issue imported to `## Backlog` in `kanbans/backlog.kanban.md`
+- [ ] Issue closed on GitHub
+- [ ] Backlog change committed and pushed
+
+---
+
+## 12. Test cleanup (optional)
+
+Drag a task to `## Delete` in backlog, then:
+
+```
+/helm-cleanup
+```
+
+**Verify:**
+- [ ] Task removed from Delete column
+- [ ] Backlog change committed and pushed
+- [ ] Reports number of tasks cleaned
+
+---
+
+## 13. Test constraints (optional)
 
 Create `CONSTRAINTS.md` in repo root with a test rule:
 
@@ -188,7 +224,7 @@ Delete `CONSTRAINTS.md` after testing.
 
 ---
 
-## 12. Test --rev parameter (optional)
+## 14. Test -r parameter (optional)
 
 ```
 /helm-go -r 0

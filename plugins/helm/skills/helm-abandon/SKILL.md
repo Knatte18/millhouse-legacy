@@ -64,7 +64,11 @@ Present all warnings together, then ask:
 
 Never auto-abandon. Never skip confirmation, even if there are no warnings.
 
-### 4. Remove worktree
+### 4. Capture task block from child board
+
+Read the full task block (title heading + body) from the child worktree's `kanbans/board.kanban.md` **before** the worktree is deleted. This is the only copy of the task body — `_helm/scratch/status.md` has only the title, not the body. Store the captured block in memory for use in Step 8 (Kanban update).
+
+### 5. Remove worktree
 
 The worktree must be removed from the parent repo context, not from within the worktree itself.
 
@@ -82,7 +86,7 @@ git worktree remove "$WORKTREE_PATH" --force
 
 If remove fails (e.g., locked), report the error and stop. Do not force-delete the directory.
 
-### 5. Delete branch
+### 6. Delete branch
 
 ```bash
 git branch -D <branch-name>
@@ -93,23 +97,32 @@ If the branch was pushed to remote:
 git push origin --delete <branch-name>
 ```
 
-### 6. Delete checkpoint branch
+### 7. Delete checkpoint branch
 
 If a checkpoint branch exists (`helm-checkpoint-<name>`):
 ```bash
 git branch -D helm-checkpoint-<name>
 ```
 
-### 7. Kanban update
+### 8. Kanban update
 
-Search for the task in the parent worktree's `kanbans/board.kanban.md` (using the parent branch and task title from Entry, already read from status.md before worktree removal; find the parent's path via `git worktree list --porcelain`). Search columns in order: `## In Progress` → `## Blocked` → `## Done` → `## Backlog` → `## Spawn`. Stop at first match. If the task is not found in any column, stop and report the error to the user.
+Use the task block (title + body) captured in Step 4.
 
-- Cut the task block from the source column and paste it under the `## Backlog` column.
-- Update `[phase]` in the task's `###` heading to `[backlog]` (or remove the `[...]` suffix entirely).
-- Validate per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
-- Kanban changes are local-only (gitignored). No staging needed.
+The child's `board.kanban.md` is destroyed with the worktree — no explicit removal needed.
 
-### 8. Report
+Add the task back to `## Backlog` column in the **parent's** `kanbans/backlog.kanban.md`. Locate parent worktree path via `git worktree list --porcelain` or `_helm/scratch/status.md` `parent:` field.
+
+Since backlog is git-tracked, check for modifications before committing: `git -C <parent-path> status --porcelain kanbans/backlog.kanban.md` — if output is non-empty, report the conflict and stop. Otherwise commit from parent context:
+
+```bash
+git -C <parent-path> add kanbans/backlog.kanban.md
+git -C <parent-path> commit -m "revert: return <task> to backlog (abandoned)"
+git -C <parent-path> push
+```
+
+Validate backlog per `doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete).
+
+### 9. Report
 
 > "Worktree `<path>` abandoned. Branch `<branch>` deleted. Task moved to Backlog."
 
@@ -117,4 +130,4 @@ Search for the task in the parent worktree's `kanbans/board.kanban.md` (using th
 
 ## Kanban Updates
 
-- Abandon → search parent's `kanbans/board.kanban.md` for the task, move to `## Backlog` column, update `[backlog]` in heading (local-only — board file is gitignored)
+- Abandon → child's `board.kanban.md` is destroyed with worktree. Task is added back to parent's `kanbans/backlog.kanban.md` `## Backlog` column (git-tracked — commit and push required).

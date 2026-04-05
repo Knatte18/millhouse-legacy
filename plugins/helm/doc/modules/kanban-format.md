@@ -4,28 +4,25 @@ Reference for the [kanban.md VS Code extension](https://marketplace.visualstudio
 
 Source: [wguilherme/kanban.md](https://github.com/wguilherme/kanban.md) — verified against `src/markdownParser.ts` (2026-04-03).
 
-## File Location
+## Board Files
 
-Single board file at the repo root:
+Helm uses two separate board files in `kanbans/`:
 
-```
-kanbans/board.kanban.md
-```
+| File | Git | Purpose | Columns |
+|------|-----|---------|---------|
+| `backlog.kanban.md` | Tracked | Manual task entry, user-managed | Backlog, Spawn, Delete |
+| `board.kanban.md` | Gitignored | Active work, Helm-managed | Discussing, Planned, Implementing, Testing, Reviewing, Blocked |
 
-The file contains one `#` project title and five `##` column headings. The `.kanban.md` extension triggers detection by the VS Code extension.
+### Backlog board (`backlog.kanban.md`)
 
-## Structure
-
-The board file follows this structure:
+The user's task inbox. Git-tracked so it syncs between PCs. The user adds tasks manually (via the kanban extension or `helm-add`), drags them to Spawn when ready, and `helm-start` or `helm-spawn` claims them. `helm-sync` imports GitHub issues here.
 
 ```markdown
 # Project Name
 
 ## Backlog
 
-### Task Title [phase]
-- priority: high
-- tags: [tag1, tag2]
+### Task Title
 
     ```md
     Description text here.
@@ -33,44 +30,60 @@ The board file follows this structure:
 
 ## Spawn
 
-## In Progress
+## Delete
+```
 
-## Done
+Columns:
+- **Backlog** — tasks that exist but aren't ready to start
+- **Spawn** — tasks ready to be claimed. `helm-start` (in-place) or `helm-spawn` (worktree) takes the first task from here.
+- **Delete** — tasks the user wants removed. `helm-cleanup` empties this column.
+
+### Work board (`board.kanban.md`)
+
+Active work state. Gitignored — local runtime state only. Each worktree gets its own independent copy. `helm-spawn` creates the file in new worktrees with the task pre-populated in `## Discussing`. No shared state between worktrees, no symlinks, no lockfile.
+
+```markdown
+# Project Name
+
+## Discussing
+
+### Task Title
+
+    ```md
+    Description text here.
+    ```
+
+## Planned
+
+## Implementing
+
+## Testing
+
+## Reviewing
 
 ## Blocked
 ```
 
-- `#` — project title (one per file, must be line 1)
-- `##` — column headings (five columns in order: Backlog, Spawn, In Progress, Done, Blocked)
-- `###` — tasks within a column, optionally with `[phase]` suffix
+Columns (each column IS the phase — no `[phase]` suffix needed):
+- **Discussing** — `helm-start` is planning the task
+- **Planned** — plan approved, ready for `helm-go`
+- **Implementing** — `helm-go` is writing code
+- **Testing** — tests running
+- **Reviewing** — code review in progress
+- **Blocked** — waiting on user input or upstream fix
 
-## Columns Helm Uses
+## Task Title Format
 
-| Column | Heading | Meaning |
-|--------|---------|---------|
-| **Backlog** | `## Backlog` | Task exists, not started |
-| **Spawn** | `## Spawn` | Ready to be spawned into a worktree |
-| **In Progress** | `## In Progress` | Active work (discussing, implementing, reviewing) |
-| **Done** | `## Done` | Completed |
-| **Blocked** | `## Blocked` | Needs user input or upstream fix |
+Task titles use `### Title` format. No `[phase]` suffix in the work board — the column determines the phase.
 
-Columns can have an `[Archived]` suffix (e.g. `## Done [Archived]`) to collapse them in the VS Code panel.
-
-## Task Title and Phase
-
-Task titles use the format `### Title [phase]` where `[phase]` is optional:
+In the backlog board, tasks may optionally use `[backlog]` phase or no phase at all:
 
 ```markdown
-### Fix input validation [implementing]
-### Add retry logic [backlog]
+### Fix input validation [backlog]
 ### Simple task
 ```
 
-Valid phase values: `backlog`, `discussing`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `complete`.
-
-To update phase: edit the `[phase]` in the `###` heading directly. To remove phase: remove the `[...]` suffix.
-
-Task identity is the title text *without* the `[phase]` suffix. `### Fix input validation [implementing]` → title = `Fix input validation`, phase = `implementing`.
+Task identity is the title text *without* any `[phase]` suffix. `### Fix input validation [backlog]` → title = `Fix input validation`.
 
 Slug for branch names: derived from title (without phase), lowercase, spaces to hyphens, remove special characters. "Fix input validation" → `fix-input-validation`.
 
@@ -136,7 +149,7 @@ The `- steps:` field enables checkbox parsing. Subtasks must be indented 2+ spac
 4. If the line starts with non-indented `- ` → it becomes a **new task card** with the field text as its title (e.g. a task titled "created: 2024-01-01").
 5. If the line is indented → it is silently ignored.
 
-This is worse than just losing metadata — it corrupts the board structure. Phase is tracked in the `###` heading, not as a metadata field.
+This is worse than just losing metadata — it corrupts the board structure.
 
 ## Descriptions
 
@@ -145,7 +158,7 @@ This is worse than just losing metadata — it corrupts the board structure. Pha
 ### Correct format
 
 ```markdown
-### Add OAuth Support [implementing]
+### Add OAuth Support
 - priority: high
 - tags: [auth, backend]
 
@@ -191,13 +204,13 @@ The parser skips empty lines unconditionally (`continue`). Blank lines are not r
 ### Minimal task (what helm-add creates)
 
 ```markdown
-### Add OAuth Support [backlog]
+### Add OAuth Support
 ```
 
 ### Full task
 
 ```markdown
-### Add OAuth Support [implementing]
+### Add OAuth Support
 - priority: high
 - tags: [auth, backend]
 - due: 2026-04-15
@@ -210,7 +223,7 @@ The parser skips empty lines unconditionally (`continue`). Blank lines are not r
 ### Task with steps
 
 ```markdown
-### Implement Auth [implementing]
+### Implement Auth
 - priority: high
 - steps:
   - [x] Setup JWT tokens
@@ -218,15 +231,18 @@ The parser skips empty lines unconditionally (`continue`). Blank lines are not r
   - [ ] Write security tests
 ```
 
-## How Helm Uses the Board
+## How Helm Uses the Boards
 
-| Operation | What Helm does |
-|-----------|---------------|
-| **Create task** (helm-add) | Add `### Title [backlog]` under the `## Backlog` column in `kanbans/board.kanban.md` |
-| **List tasks** (helm-start) | Read all `###` headings under the target `##` column |
-| **Move task** | Cut the task block from one `##` column section, paste under another `##` column section (same file) |
-| **Update phase** | Edit the `[phase]` suffix in the `###` heading |
-| **Update task** | Edit content within the task block directly |
+| Operation | Board | What Helm does |
+|-----------|-------|---------------|
+| **Create task** (helm-add) | backlog | Add `### Title` under `## Backlog` in `backlog.kanban.md` |
+| **Import issues** (helm-sync) | backlog | Add new issues under `## Backlog` in `backlog.kanban.md` |
+| **Claim task** (helm-start/helm-spawn) | both | Remove from `## Spawn` in backlog, add to `## Discussing` in work board |
+| **Phase transition** (helm-go) | work | Move task between columns in `board.kanban.md` |
+| **Complete task** (helm-go/helm-merge) | work | Remove task from `board.kanban.md` entirely |
+| **Abandon task** (helm-abandon) | both | Remove from work board, add back to `## Backlog` in backlog |
+| **Clean up** (helm-cleanup) | backlog | Remove all tasks from `## Delete` in backlog |
+| **Dashboard** (helm-status) | both | Read both boards, display combined counts |
 
 ## Task Block Boundaries
 
@@ -238,10 +254,18 @@ A column section starts at `## Column Name` and ends immediately before the next
 
 ## Write Rules
 
-- The board file is **gitignored and local-only**. It is not tracked by git.
-  - **Parent worktree / main repo:** full board with all tasks distributed across the 5 columns.
-  - **Task worktree** (spawned by `helm-start -w`): board file created by `helm-spawn.ps1` — the spawned task under `## In Progress`, other columns empty (+ any sub-tasks created during work).
-  - **Fresh clone:** no board file exists. Run `helm-setup` to create it.
-- Each worktree updates its own `kanbans/board.kanban.md`. Never reach into another worktree's filesystem to edit its board.
+- **Backlog board** (`backlog.kanban.md`):
+  - Git-tracked. Writes must be committed and pushed (skills that modify backlog handle this).
+  - Single source of truth across all worktrees (via git).
+  - Columns: Backlog, Spawn, Delete.
+
+- **Work board** (`board.kanban.md`):
+  - Gitignored, local-only per worktree.
+  - **Parent worktree / main repo:** work board for in-place tasks (created by `helm-setup` or `helm-start`).
+  - **Task worktree** (spawned by `helm-spawn`): board created by `helm-spawn.ps1` with the spawned task under `## Discussing`, other columns empty.
+  - **Fresh clone:** no work board exists. Run `helm-setup` to create it, or `helm-start` creates it on first task claim.
+  - Columns: Discussing, Planned, Implementing, Testing, Reviewing, Blocked.
+
+- Each worktree updates its own `kanbans/board.kanban.md`. No shared state between worktrees.
 - Only use extension-supported metadata fields (tags, priority, workload, due, defaultExpanded, steps).
 - Descriptions use indented ` ```md ` code blocks — never plain text.

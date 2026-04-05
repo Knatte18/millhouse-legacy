@@ -45,7 +45,13 @@ On entry, check if this is a resume (prior work exists):
 1. Check `git log --oneline` for commits matching plan step `Commit:` messages.
 2. For each matching commit: mark that step as already done --- skip it.
 3. Read `_helm/scratch/status.md` for `phase:`, `current_step:`, and retry counts under `retries:`.
-4. Continue from the first incomplete step.
+4. Determine current phase from the task's column position in `kanbans/board.kanban.md`:
+   - Task in `## Planned` → Phase: Setup (about to start)
+   - Task in `## Implementing` → Phase: Implement (resume from current_step)
+   - Task in `## Testing` → Phase: Test
+   - Task in `## Reviewing` → Phase: Review
+   - Task in `## Blocked` → report blocker from status.md and stop
+5. Continue from the first incomplete step.
 
 Do NOT redo completed work. Do NOT re-run tests for steps that already committed successfully.
 
@@ -77,13 +83,19 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 2. **Staleness check.** Run `git log --since=<started> -- <file1> <file2> ...` using the `started:` timestamp from plan frontmatter and files from `## Files`.
    - No changes: proceed.
    - Minor changes (formatting, comments, unrelated areas): log warning in status.md, proceed.
-   - Major changes (files restructured, APIs changed, interfaces modified): halt. Update `[phase]` in the task's `###` heading to `[backlog]`, cut the task block from the `## In Progress` column and paste it under the `## Backlog` column in `kanbans/board.kanban.md`. Validate per `doc/modules/validation.md`. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `helm-start`.
+   - Major changes (files restructured, APIs changed, interfaces modified): halt. Plan-stale revert:
+     1. Resolve parent worktree path via `git worktree list --porcelain` or `_helm/scratch/status.md` `parent:` field.
+     2. Check for modifications: `git -C <parent-path> status --porcelain kanbans/backlog.kanban.md` — if output is non-empty, report the conflict and stop. Task remains on work-board (no data loss).
+     3. Add task back to `## Backlog` in the **parent's** `kanbans/backlog.kanban.md`. Commit and push from parent context: `git -C <parent-path> add kanbans/backlog.kanban.md && git -C <parent-path> commit -m "revert: return <task> to backlog (plan stale)" && git -C <parent-path> push`
+     4. Only after the backlog commit succeeds: remove task from `kanbans/board.kanban.md`.
+     5. Recovery: if the backlog write/commit fails at step 3, stop and report the error. The task stays on the work-board — no data is lost. The user can retry or manually move the task.
+     6. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `helm-start`.
 
 3. **Explore.** Read code following each step's `Explore:` targets. Read accumulated knowledge from `_helm/knowledge/` if the directory has entries — if `_helm/knowledge/summary.md` exists, read only the summary (not individual entries); otherwise read all entries. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
 
 4. **Read constraints.** Resolve repo root: `git rev-parse --show-toplevel`. Read `CONSTRAINTS.md` from repo root if it exists. These are hard invariants — never write code that violates them. If the file does not exist, proceed without it.
 
-5. **Move to In Progress.** Ensure task block is under `## In Progress` in `kanbans/board.kanban.md` (it should already be there from helm-start). Update `[phase]` in the task's `###` heading to `[implementing]`. Validate per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+5. **Move to Implementing.** Move task from `## Planned` to `## Implementing` in `kanbans/board.kanban.md` (column move — no phase suffix). Validate per `doc/modules/validation.md` (6-column rules: Discussing, Planned, Implementing, Testing, Reviewing, Blocked). If validation fails, report the issue to the user and stop.
 
    Update `_helm/scratch/status.md`:
    ```
@@ -116,9 +128,9 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
       2. Track retry count in `_helm/scratch/status.md` under `retries:` as `step_<N>: <count>`.
       3. Max 3 retries per step.
       4. After 3 retries: classify the failure and route:
-         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Update `[phase]` in heading to `[blocked]`. Cut task block from `## In Progress` column, paste under `## Blocked` column in `kanbans/board.kanban.md`. Validate per `doc/modules/validation.md`. Stop.
-         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Update `[phase]` in heading to `[blocked]`. Cut task block from `## In Progress` column, paste under `## Blocked` column in `kanbans/board.kanban.md`. Validate per `doc/modules/validation.md`. Stop.
-         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Update `[phase]` in heading to `[blocked]`. Cut task block from `## In Progress` column, paste under `## Blocked` column in `kanbans/board.kanban.md`. Validate per `doc/modules/validation.md`. Stop.
+         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Move task from current column to `## Blocked` in `kanbans/board.kanban.md`. Validate per `doc/modules/validation.md` (6-column rules). Stop.
+         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Move task to `## Blocked`. Validate. Stop.
+         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Move task to `## Blocked`. Validate. Stop.
 
    f. **Commit and push after each successful step** using the step's `Commit:` message:
       - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
@@ -130,15 +142,15 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 ### Phase: Test
 
-7. Update `[phase]` in the task's `###` heading to `[testing]` in `kanbans/board.kanban.md` (no column move). Update `_helm/scratch/status.md`:
+7. Move task from `## Implementing` to `## Testing` in `kanbans/board.kanban.md` (column move). Validate per `doc/modules/validation.md` (6-column rules). Update `_helm/scratch/status.md`:
    ```
-   phase: test
+   phase: testing
    ```
 
    **Full verification.** Run the complete verify command from plan frontmatter (lint, type-check, build, test --- whatever the command includes).
    - All tests must pass --- not just tests related to this task.
    - Compare failures against `_helm/scratch/test-baseline.md` to distinguish pre-existing failures from new regressions.
-   - If new failures: debug and fix using the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: block (same flow as step failure above).
+   - If new failures: debug and fix using the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: move task to `## Blocked`, update status.md, run Notification Procedure, stop.
 
    **If `max_review_rounds` is `0`:** skip Phase: Review and Phase: Resolve entirely. Proceed directly to Phase: Finalize.
 
@@ -149,7 +161,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
    phase: reviewing
    ```
 
-   Update `[phase]` in the task's `###` heading to `[reviewing]` in `kanbans/board.kanban.md` (no column move).
+   Move task from `## Testing` to `## Reviewing` in `kanbans/board.kanban.md` (column move). Validate per `doc/modules/validation.md` (6-column rules).
 
 9. **Spawn code-reviewer Agent.** Use the Agent tool with `model: sonnet`. Report to user: **"Review --- round 1/&lt;max_review_rounds&gt;"**
 
@@ -214,7 +226,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 10. **Before reading the reviewer's findings**, invoke the `helm-receiving-review` skill via the Skill tool. This is **mandatory** --- it loads the decision tree into context before evaluation begins. Loading it after reading findings is useless; you will have already formed rationalizations.
 
-11. Read the reviewer's findings. Verify the reviewer's verdict is substantiated --- output must contain per-file observations. A bare "APPROVE" without per-file analysis is treated as a failed review; re-spawn the reviewer.
+11. Read the reviewer's findings. Verify the reviewer's verdict is substantiated --- output must contain per-file observations. A bare "APPROVE" without per-file analysis is treated as a failed review; re-spawn the reviewer. Spawn a **fixer agent** to apply BLOCKING fixes — do not fix inline yourself (fresh eyes catch systemic implications better).
 
 12. If reviewer **approves** (no BLOCKING issues): proceed to Phase: Finalize.
 
@@ -222,17 +234,13 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
 
 13. If reviewer **requests changes**: report **"Resolve --- round N/&lt;max_review_rounds&gt;"**
 
-14. Evaluate each finding through the receiving-review decision tree. For each finding, state:
-    1. The finding
-    2. Your VERIFY assessment (accurate / inaccurate / uncertain)
-    3. Your HARM CHECK result (which harm category, if any)
-    4. Your action: FIX or PUSH BACK (with cited evidence)
+14. Spawn a fixer agent with: (1) full list of BLOCKING findings, (2) affected file paths, (3) instruction to check systemic implications. The fixer applies fixes directly. Do not fix inline yourself.
 
-15. Fix accepted issues. Re-run full verification (the verify command from plan frontmatter).
+15. Re-run full verification (the verify command from plan frontmatter).
 
 16. Re-spawn code-reviewer Agent with the updated diff (`git diff <plan_start_hash>..HEAD`). Report: **"Review --- round N/&lt;max_review_rounds&gt;"**
 
-17. Max `max_review_rounds` rounds. If unresolved BLOCKING issues after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after <max_review_rounds> rounds — likely design flaw`. Update `[phase]` in heading to `[blocked]`. Cut task block from `## In Progress` column, paste under `## Blocked` column in `kanbans/board.kanban.md`. Validate per `doc/modules/validation.md`. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after <max_review_rounds> rounds`. Report both sides to user:
+17. Max `max_review_rounds` rounds. If unresolved BLOCKING issues after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after <max_review_rounds> rounds — likely design flaw`. Move task to `## Blocked` in `kanbans/board.kanban.md`. Validate per `doc/modules/validation.md` (6-column rules). Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after <max_review_rounds> rounds`. Report both sides to user:
     ```
     Code reviewer flagged: "<finding>"
     Implementing agent's position: "<reasoning>"
@@ -287,7 +295,7 @@ helm-go proceeds through named phases. Each phase updates `_helm/scratch/status.
     phase: complete
     ```
 
-23. **Move task to Done:** Cut the task block from the `## In Progress` column and paste it under the `## Done` column in `kanbans/board.kanban.md`. Update `[phase]` in heading to `[complete]`. Validate per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
+23. **Remove task from board.** Remove the task block from `kanbans/board.kanban.md` entirely — do not move to a Done column (there is none). Validate per `doc/modules/validation.md` (6-column rules). If validation fails, report the issue to the user and stop.
 
 24. **Knowledge synthesis.** If `_helm/knowledge/` contains more than 5 entries (excluding `decisions.md` and `summary.md`):
     1. Read all entries.
@@ -320,17 +328,19 @@ When no more planned tasks remain:
 
 ## Kanban Updates
 
-All kanban updates are local-only (`kanbans/board.kanban.md` is gitignored). No git staging needed for kanban changes.
+Work board changes (`kanbans/board.kanban.md`) are local-only (gitignored). No git staging needed.
 
-Column moves (cut task block from one `##` column, paste under another in `kanbans/board.kanban.md`):
-- Execution starts → task should be under `## In Progress` (already moved by helm-start)
-- Task complete → `## In Progress` → `## Done`
-- Plan stale → `## In Progress` → `## Backlog`
-- Blocked → `## In Progress` → `## Blocked`
+Backlog changes (`kanbans/backlog.kanban.md`) are git-tracked — commit and push after every write. Use `git -C <parent-path>` when writing from a child worktree.
 
-Phase updates (edit `[phase]` in `###` heading, no column move):
-- `[implementing]` → `[testing]` → `[reviewing]` → `[complete]`
-- Any failure → `[blocked]`
+Column moves in `kanbans/board.kanban.md` (no `[phase]` suffixes — column IS the phase):
+- Setup starts → task in `## Planned` (already moved by helm-start), move to `## Implementing`
+- Implement → Test → move from `## Implementing` to `## Testing`
+- Test → Review → move from `## Testing` to `## Reviewing`
+- Finalize → remove task from board entirely (no Done column)
+- Plan stale → remove from board, add back to parent's `backlog.kanban.md` `## Backlog` (with git commit)
+- Blocked → move to `## Blocked` from whatever current column
+
+Validate per `doc/modules/validation.md` (6-column rules) after every board write.
 
 ---
 
@@ -446,7 +456,7 @@ When a step fails after exhausting retries, classify before escalating:
 On any failure that blocks progress:
 
 1. Update `_helm/scratch/status.md` with `blocked: true` and `blocked_reason:`.
-2. Update `[phase]` in heading to `[blocked]`. Cut task block from `## In Progress` column, paste under `## Blocked` column in `kanbans/board.kanban.md`.
+2. Move task to `## Blocked` in `kanbans/board.kanban.md` from whatever current column. Validate per `doc/modules/validation.md` (6-column rules).
 3. Preserve all state --- do not clean up, do not rollback automatically.
 4. Run the **Notification Procedure** (see section above) with the BLOCKED event.
 5. Report the blocker to the user.
