@@ -8,43 +8,23 @@
   },
   "plugins": [
     {
-      "name": "taskmill",
-      "description": "Task management and workflow orchestration for Claude Code",
+      "name": "mill",
+      "description": "Task orchestration, code quality, git workflow, and documentation for Claude Code",
       "version": "1.0.0",
       "author": {
         "name": "Knatte18"
       },
-      "source": "./plugins/taskmill",
+      "source": "./plugins/mill",
       "category": "productivity"
     },
     {
-      "name": "codeguide",
-      "description": "Navigation-first documentation system for AI-assisted codebases",
+      "name": "taskmill-legacy",
+      "description": "Legacy task management (archived — replaced by mill)",
       "version": "1.0.0",
       "author": {
         "name": "Knatte18"
       },
-      "source": "./plugins/codeguide",
-      "category": "productivity"
-    },
-{
-      "name": "code",
-      "description": "Code quality, CLI, linting, and testing standards",
-      "version": "1.0.0",
-      "author": {
-        "name": "Knatte18"
-      },
-      "source": "./plugins/code",
-      "category": "productivity"
-    },
-    {
-      "name": "git",
-      "description": "Git workflow rules",
-      "version": "1.0.0",
-      "author": {
-        "name": "Knatte18"
-      },
-      "source": "./plugins/git",
+      "source": "./plugins/taskmill-legacy",
       "category": "productivity"
     },
     {
@@ -65,26 +45,6 @@
         "name": "Knatte18"
       },
       "source": "./plugins/csharp",
-      "category": "productivity"
-    },
-    {
-      "name": "conduct",
-      "description": "Response style, behavior rules, skill routing, and language detection",
-      "version": "1.0.0",
-      "author": {
-        "name": "Knatte18"
-      },
-      "source": "./plugins/conduct",
-      "category": "productivity"
-    },
-    {
-      "name": "helm",
-      "description": "Worktree-based task orchestration for Claude Code",
-      "version": "1.0.0",
-      "author": {
-        "name": "Knatte18"
-      },
-      "source": "./plugins/helm",
       "category": "productivity"
     },
     {

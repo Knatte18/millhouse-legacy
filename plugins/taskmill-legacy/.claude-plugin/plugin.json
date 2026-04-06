@@ -1,0 +1,9 @@
+{
+  "name": "taskmill-legacy",
+  "description": "Legacy task management (archived — replaced by mill)",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Knatte18"
+  }
+}

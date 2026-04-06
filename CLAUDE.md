@@ -3,24 +3,21 @@ Instructions for Claude Code when working in this repository.
 
 ## Background
 - This repo is based on a repo by Craig Motlin. When referring to "what Motlin does", I am referring to his code and repo. The repo can be found here: "C:\Code\motlin-claude-code-plugins".
+- Willie Tran's Autoboard is a reference system for autonomous agent orchestration. When referring to "what Tran does", I am referring to his code and repo. The repo can be found here: "C:\Code\autoboard".
 
 ## Repository structure
 
-Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `plugins/<name>/`.
+Millhouse is a multi-plugin marketplace for Claude Code. The core plugin is `mill`, with optional language-specific plugins.
 
 ### Plugins
 
 | Directory | Plugin | Description |
 |-----------|--------|-------------|
-| `plugins/taskmill/` | taskmill | Task management and workflow orchestration (legacy — being replaced by helm) |
-| `plugins/codeguide/` | codeguide | Navigation-first documentation system for AI-assisted codebases |
-| `plugins/conduct/` | conduct | Response style, behavior rules, skill routing, language detection |
-| `plugins/helm/` | helm | Worktree-based task orchestration |
+| `plugins/mill/` | mill | Task orchestration, code quality, git workflow, and documentation |
 | `plugins/weblens/` | weblens | Fetch blocked/restricted web pages and output readable markdown |
-| `plugins/code/` | code | Code quality, CLI, linting, and testing standards |
-| `plugins/git/` | git | Git workflow rules, commit, issue creation |
 | `plugins/python/` | python | Python build, comments, and testing conventions |
 | `plugins/csharp/` | csharp | C# build, comments, and testing conventions |
+| `plugins/taskmill-legacy/` | taskmill-legacy | Legacy task management (archived — replaced by mill) |
 
 ### Adding a new plugin
 
@@ -41,10 +38,10 @@ Millhouse is a multi-plugin marketplace for Claude Code. Each plugin lives in `p
 
 ## Kanban
 
-- Backlog board: `kanbans/backlog.kanban.md` — git-tracked, 3 columns (Backlog, Spawn, Delete). Manual task entry.
-- Work board: `kanbans/board.kanban.md` — gitignored, 6 phase columns (Discussing, Planned, Implementing, Testing, Reviewing, Blocked). Helm-managed. Each worktree gets its own copy.
-- Run `helm-setup` to create both board files after a fresh clone (safe to re-run; skips existing files).
-- Format reference: `plugins/helm/doc/modules/kanban-format.md`.
+- Backlog board: `_millhouse/backlog.kanban.md` — git-tracked, 3 columns (Backlog, Spawn, Delete). Manual task entry.
+- Work board: `_millhouse/scratch/board.kanban.md` — gitignored, 6 phase columns (Discussing, Planned, Implementing, Testing, Reviewing, Blocked). Mill-managed. Each worktree gets its own copy.
+- Run `mill-setup` to create both board files after a fresh clone (safe to re-run; skips existing files).
+- Format reference: `plugins/mill/doc/modules/kanban-format.md`.
 - Work board uses columns as phases — no `[phase]` suffix in task headings.
 - Only extension-supported metadata fields (priority, tags, workload, due).
 - Descriptions use indented ` ```md ` code blocks, never plain text.

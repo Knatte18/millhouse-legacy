@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Skill(helm:*)",
-      "SlashCommand(/helm:*)"
-    ]
-  }
-}

@@ -1,13 +1,3 @@
-# Claude Code Files
-**/.llm/
-**/_codeguide/runtime/
-_helm/scratch/
-_git/
-.scratch/
-kanbans/board.kanban.md
-*.local.*
-nul
-
 # Node
 **/node_modules/
 **/ca-bundle.pem
@@ -16,3 +6,9 @@ nul
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+
+# VS Code
+**/.vscode/
+
+*.local.*
+nul

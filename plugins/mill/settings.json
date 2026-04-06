@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(mill:*)",
+      "SlashCommand(/mill:*)",
+      "Skill(python:*)",
+      "Skill(csharp:*)",
+      "WebFetch",
+      "WebSearch"
+    ]
+  }
+}

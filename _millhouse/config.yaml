@@ -1,0 +1,29 @@
+git:
+  base-branch: main
+  parent-branch: main
+  auto-merge: true
+
+repo:
+  short-name: ""
+  branch-prefix: ~
+
+reviews:
+  discussion: 2
+  plan: 3
+  code: 3
+
+models:
+  session: opus
+  plan-review: sonnet
+  code-review: sonnet
+  plan-fixer: sonnet
+  code-fixer: sonnet
+  explore: haiku
+
+notifications:
+  slack:
+    enabled: false
+    webhook: ""
+    channel: ""
+  toast:
+    enabled: true
