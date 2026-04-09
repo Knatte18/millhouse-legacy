@@ -31,6 +31,14 @@ dotnet test
 
 > Customize per project. Specify which solution/project to build and test.
 
+### Test discovery
+
+Before running tests, verify the project is testable:
+
+1. **Solution file:** Look for `*.sln` files in the project root. If found, `dotnet build` and `dotnet test` operate on the solution (discovers all projects automatically).
+2. **Test projects:** If no solution file, look for `*.csproj` files. Test projects follow naming conventions: `*.Tests.csproj`, `*.Test.csproj`, or `*Tests.csproj`. Check for test framework package references (`xunit`, `NUnit`, `MSTest`) to confirm a project is a test project.
+3. **No tests:** If no test projects are found, report "No test projects found" rather than running `dotnet test` on a non-test project.
+
 ### Defaults
 
 - Build the solution or project in the current working directory.

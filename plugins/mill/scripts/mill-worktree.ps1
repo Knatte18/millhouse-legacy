@@ -10,18 +10,29 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [string]$Branch,
+    [string]$WorktreeName,
 
-    [string]$TaskName = "",
+    [Parameter(Mandatory)]
+    [string]$BranchName,
 
+    # Override: callers may pass DirName to decouple directory name from WorktreeName.
+    # If not provided, DirName defaults to WorktreeName.
     [string]$DirName = "",
 
     [switch]$NoOpen,
+
+    [switch]$Terminal,
 
     [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
+
+# --- Validate WorktreeName ---
+if ($WorktreeName -match '/') {
+    Write-Error "WorktreeName must not contain '/'. Got: '$WorktreeName'"
+    exit 1
+}
 
 # --- Capture source branch (before any worktree operations) ---
 $SourceBranch = (git branch --show-current 2>&1).Trim()
@@ -66,24 +77,10 @@ $ProjectSubdir = $PWD.Path.Substring($RepoRoot.Length).TrimStart('\', '/')
 # Hub detection: bare repo sits as .bare sibling to worktrees
 $HubRoot = Split-Path $RepoRoot -Parent
 $IsHub = (Test-Path (Join-Path $HubRoot ".bare"))
-$WorktreeName = Split-Path $RepoRoot -Leaf
 
 # --- Derive directory name if not provided ---
 if (-not $DirName) {
-    # Flatten branch name: replace / with - (e.g. "henrik/explore" → "henrik-explore")
-    $BranchSlug = $Branch -replace '/', '-'
-
-    if ($IsHub -and $WorktreeName -eq "main") {
-        # From main worktree in hub: just the flattened branch name
-        $DirName = $BranchSlug
-    } elseif ($IsHub) {
-        # From a non-main worktree in hub: parent-wt-slug
-        $DirName = "$WorktreeName-wt-$BranchSlug"
-    } else {
-        # Regular repo: reponame-wt-slug
-        $RepoName = $WorktreeName
-        $DirName = "$RepoName-wt-$BranchSlug"
-    }
+    $DirName = $WorktreeName
 }
 
 if ($IsHub) {
@@ -118,23 +115,23 @@ if (Test-Path $WorktreePath) {
 
 # --- Resolve branch ---
 $ErrorActionPreference = "Continue"
-git rev-parse --verify $Branch 2>$null | Out-Null
+git rev-parse --verify $BranchName 2>$null | Out-Null
 $branchExists = ($LASTEXITCODE -eq 0)
 
 $branchCheckedOut = $false
 if ($branchExists) {
-    $match = git worktree list --porcelain 2>$null | Select-String "^branch refs/heads/$Branch$"
+    $match = git worktree list --porcelain 2>$null | Select-String "^branch refs/heads/$BranchName$"
     $branchCheckedOut = ($null -ne $match)
 }
 $ErrorActionPreference = "Stop"
 
 # Determine the actual branch name and git command
 if ($branchExists -and -not $branchCheckedOut) {
-    $ActualBranch = $Branch
-    $gitArgs = @("worktree", "add", $WorktreePath, $Branch)
+    $ActualBranch = $BranchName
+    $gitArgs = @("worktree", "add", $WorktreePath, $BranchName)
 } elseif ($branchExists -and $branchCheckedOut) {
     # Branch checked out — derive a new name
-    $candidate = "$Branch-wt"
+    $candidate = "$BranchName-wt"
     $n = 2
     while ($true) {
         $ErrorActionPreference = "Continue"
@@ -147,25 +144,25 @@ if ($branchExists -and -not $branchCheckedOut) {
         }
         $ErrorActionPreference = "Stop"
         if (-not $candExists -and -not $candCheckedOut) { break }
-        $candidate = "$Branch-wt$n"
+        $candidate = "$BranchName-wt$n"
         $n++
     }
     $ActualBranch = $candidate
     $gitArgs = @("worktree", "add", $WorktreePath, "-b", $candidate, "HEAD")
 } else {
     # Branch does not exist locally — check remote
-    $ActualBranch = $Branch
+    $ActualBranch = $BranchName
     $ErrorActionPreference = "Continue"
-    git rev-parse --verify "origin/$Branch" 2>$null | Out-Null
+    git rev-parse --verify "origin/$BranchName" 2>$null | Out-Null
     $remoteExists = ($LASTEXITCODE -eq 0)
     $ErrorActionPreference = "Stop"
 
     if ($remoteExists) {
         # Create local branch tracking the remote
-        $gitArgs = @("worktree", "add", "--track", "-b", $Branch, $WorktreePath, "origin/$Branch")
+        $gitArgs = @("worktree", "add", "--track", "-b", $BranchName, $WorktreePath, "origin/$BranchName")
     } else {
         # No local or remote — create new branch from HEAD
-        $gitArgs = @("worktree", "add", $WorktreePath, "-b", $Branch, "HEAD")
+        $gitArgs = @("worktree", "add", $WorktreePath, "-b", $BranchName, "HEAD")
     }
 }
 
@@ -183,12 +180,8 @@ if (Test-Path $configForTitle) {
     }
 }
 
-if ($ShortName -and $TaskName) {
-    $WindowTitle = "$ShortName`: $TaskName"
-} elseif ($ShortName) {
-    # Humanize branch name: replace / and - with spaces
-    $HumanBranch = $Branch -replace '[/\-]', ' '
-    $WindowTitle = "$ShortName`: $HumanBranch"
+if ($ShortName) {
+    $WindowTitle = "$ShortName`: $WorktreeName"
 } else {
     $WindowTitle = "`${rootName}"
 }
@@ -216,7 +209,7 @@ if ($DryRun) {
 
     Write-Host "[DryRun] Would write: _millhouse/config.yaml (at $ProjectPath)"
     Write-Host "[DryRun] Would write: .vscode/settings.json (at $ProjectPath)"
-    if (-not $NoOpen) { Write-Host "[DryRun] Would open VS Code at: $ProjectPath" }
+    if (-not $NoOpen -and -not $Terminal) { Write-Host "[DryRun] Would open VS Code at: $ProjectPath" }
     Write-Output $ProjectPath
     exit 0
 }
@@ -249,7 +242,7 @@ if (Test-Path $sourceConfig) {
 git:
   base-branch: main
   parent-branch: $SourceBranch
-  auto-merge: true
+  auto-merge: false
 
 repo:
   short-name: ""
@@ -292,7 +285,9 @@ $settingsJson = @"
 {
     "workbench.colorCustomizations": {
         "titleBar.activeBackground": "$PickedColor",
-        "titleBar.activeForeground": "#ffffff"
+        "titleBar.activeForeground": "#ffffff",
+        "titleBar.inactiveBackground": "$PickedColor",
+        "titleBar.inactiveForeground": "#ffffffaa"
     },
     "window.title": "$WindowTitle"
 }
@@ -303,7 +298,7 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 Write-Host "Title bar color: $PickedColor"
 
 # --- Open VS Code (at project path) ---
-if (-not $NoOpen) {
+if (-not $NoOpen -and -not $Terminal) {
     Write-Host "Opening VS Code..."
     $codeCmdPath = Get-Command "code.cmd" -ErrorAction SilentlyContinue
     if ($codeCmdPath) {

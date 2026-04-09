@@ -22,6 +22,7 @@ timestamp: <UTC YYYY-MM-DD-HHMMSS>
 ---
 ```
 
+- `timestamp:` must be generated via shell `date -u +"%Y%m%d-%H%M%S"` (see `@mill:cli` timestamp rules — never guess timestamps).
 - `worktree:` must be written using the output of `git rev-parse --show-toplevel` (forward-slash, even on Windows). `mill-go` compares this value against its own working directory to detect worktree mismatches.
 - `parent:` is the parent branch for merge operations. Required as a fallback for `mill-merge` and plan-stale revert when `_millhouse/config.yaml` is absent.
 - The discussion file does NOT have an `approved:` field. The completion signal is `phase: discussed` in `status.md`.
@@ -110,16 +111,52 @@ After `mill-start` completes (Phase: Handoff), `status.md` must contain:
 discussion: _millhouse/scratch/discussion.md
 phase: discussed
 task: <task-title>
+task_description: |
+  <multi-line task description>
 parent: <parent-branch>
 ```
 
 - `phase: discussed` is the completion sentinel. `mill-go` checks for exactly this value on entry to confirm `mill-start` completed normally.
 - `parent:` is the fallback for `mill-merge` and plan-stale revert when `_millhouse/config.yaml` is absent.
+- `task_description:` stores the task body text (migrated from tasks.md). Written by `mill-start` (in-place flow) and `mill-spawn.ps1` (worktree flow).
 
 After `mill-go` Plan Review completes and sets `approved: true` in the plan frontmatter, `mill-go` adds:
 
 ```yaml
-plan: _millhouse/scratch/plans/<filename>.md
+plan: _millhouse/scratch/plan.md
 ```
 
 The `approved:` field lives in the plan frontmatter, not in `status.md`.
+
+### Valid phase values
+
+`discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `complete`.
+
+The `phase:` field is the authoritative source of truth for the current workflow phase.
+
+## Timeline Section
+
+`status.md` includes an append-only `## Timeline` section that records chronological phase history. Each phase transition appends one line via shell `echo >>`:
+
+```
+## Timeline
+discussing              2026-04-08T10:23:15Z
+discussion-review-r1    2026-04-08T10:45:00Z
+discussed               2026-04-08T11:00:00Z
+planned                 2026-04-08T11:05:00Z
+implementing            2026-04-08T11:10:00Z
+step-1                  2026-04-08T11:15:00Z
+step-2                  2026-04-08T11:30:00Z
+testing                 2026-04-08T11:45:00Z
+reviewing               2026-04-08T11:50:00Z
+code-review-r1          2026-04-08T12:00:00Z
+complete                2026-04-08T12:10:00Z
+```
+
+Rules:
+- Format: `<phase-name>  <ISO-8601-timestamp>` (two spaces between name and timestamp).
+- Timestamps must be generated via shell `date -u +"%Y-%m-%dT%H:%M:%SZ"` (see `@mill:cli` timestamp rules).
+- Review rounds get individual entries: `plan-review-r1`, `plan-fix-r1`, `code-review-r1`, `code-fix-r1`, etc.
+- Implementation steps get entries: `step-1`, `step-2`, etc.
+- Unstarted phases have no entry (no `~` placeholders).
+- The timeline is history, not current state. The `phase:` field at the top is the authoritative current phase.

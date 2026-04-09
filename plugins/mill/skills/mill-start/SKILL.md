@@ -10,17 +10,15 @@ You are a collaborative solution designer. Your job is to help the user understa
 
 Interactive. Pick a task and design the solution.
 
-For kanban.md file format details, see `plugins/mill/doc/modules/kanban-format.md`.
-
 ---
 
 ## Entry
 
 Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
 
-Read `_millhouse/backlog.kanban.md`. If it does not exist, stop and tell the user to run `mill-setup` first or run from the correct worktree. Work-board (`_millhouse/scratch/board.kanban.md`) absence is not an error at entry — it may not exist yet if no task has been claimed.
+Read `tasks.md` at the repo root (resolve via `git rev-parse --show-toplevel`). If it does not exist, stop and tell the user to run `mill-setup` first or create `tasks.md` manually.
 
-**Child worktree guard:** If running in a non-main worktree (detect via `git worktree list --porcelain` — current path is not the first/main entry), warn: "mill-start in-place should be run from the parent worktree. Backlog in child worktrees may be stale and commits here create merge conflicts." Require user confirmation before proceeding.
+**Child worktree guard:** If running in a non-main worktree (detect via `git worktree list --porcelain` — current path is not the first/main entry), warn: "mill-start in-place should be run from the parent worktree. Commits in a child worktree create merge conflicts with the parent." Require user confirmation before proceeding.
 
 ---
 
@@ -40,26 +38,32 @@ mill-start proceeds through named phases. Report the current phase to the user a
 
 ### Phase: Select
 
-0. **Check for handoff brief.** Use the Read tool (not bash) to read `_millhouse/handoff.md`. If it exists, the brief's `## Issue` identifies the task --- select it directly (skip step 1). Read the task from the `## Discussing` column in `_millhouse/scratch/board.kanban.md` (not Backlog — it was already moved before spawning). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain. After extracting task info from the handoff brief, delete `_millhouse/handoff.md`, commit the deletion with message `spawn-consume: <task-title>`, and push. This prevents stale handoff detection on subsequent in-place mill-start runs.
+0. **Check for handoff brief.** Use the Read tool (not bash) to read `_millhouse/handoff.md`. If it exists, the brief's `## Issue` identifies the task --- select it directly (skip step 1). Read `task:` and `task_description:` from `_millhouse/scratch/status.md` for the task details (written by mill-spawn before spawning). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain. After extracting task info from the handoff brief, delete `_millhouse/handoff.md`. This prevents stale handoff detection on subsequent in-place mill-start runs.
 
-1. **Guard: active task check.** This guard applies only to paths 2/3/4 below — path 0 (handoff brief) short-circuits to Explore and skips the guard. Before claiming a task, check if `_millhouse/scratch/board.kanban.md` already has a task in any non-empty column. If `_millhouse/scratch/board.kanban.md` does not exist, skip the guard (equivalent to empty board). If it exists and has a task, report "Work board already has an active task. Run mill-go or mill-abandon first." and stop.
+1. **Guard: active task check.** This guard applies only to paths 2/3/4 below — path 0 (handoff brief) short-circuits to Explore and skips the guard. Before claiming a task, read `_millhouse/scratch/status.md` if it exists. If `phase:` is set and is not `complete`, report "An active task is already in progress (phase: `<phase>`). Run mill-go or mill-abandon first." and stop.
 
-2. **Select task.** Read `_millhouse/backlog.kanban.md`.
+2. **Select task.** Read `tasks.md` at the repo root (resolve via `git rev-parse --show-toplevel`).
 
-   a. Find all `###` headings under the `## Spawn` column. If tasks exist: take the first one (topmost). Remove it from Spawn. This is the in-place equivalent of what mill-spawn does for worktrees — same "claim from Spawn" logic, without worktree creation.
+   a. Find all `## ` headings. Unmarked headings (no `[phase]` marker) are available tasks. Headings with a `[phase]` marker are already claimed — skip them.
 
-   b. If Spawn is empty: find all `###` headings under the `## Backlog` column.
-      - If zero tasks: report "No tasks in Backlog or Spawn. Run mill-add to create one, or describe what you want to work on." If the user provides a description, create the task directly (add to backlog, then claim it).
-      - If one task: select it. Show the title and ask user to confirm.
-      - If 2+ tasks: print numbered list (follow mill:conversation rules). User types the number.
+   b. If zero available tasks: report "No unclaimed tasks in tasks.md. Run mill-add to create one, or describe what you want to work on." If the user provides a description, create the task directly (add to tasks.md, commit and push, then claim it).
 
-3. **Move to Discussing.** Remove the selected task block from `_millhouse/backlog.kanban.md`. Since backlog is git-tracked, commit and push: `spawn: <task-title>`. If running in a child worktree, use `git -C <parent-path>` for the backlog commit (resolve parent path via `git worktree list --porcelain`).
+   c. If one available task: select it. Show the title and ask user to confirm.
 
-   If `_millhouse/scratch/board.kanban.md` does not exist, create it with 6 columns (Discussing, Planned, Implementing, Testing, Reviewing, Blocked) before adding the task. Validate the created file per `doc/modules/validation.md` (6-column rules).
+   d. If 2+ available tasks: print numbered list (follow mill:conversation rules). User types the number.
 
-   Add the task under `## Discussing` in `_millhouse/scratch/board.kanban.md`. No `[phase]` suffix — the column is the phase. Validate backlog per `doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete). Validate work board per `doc/modules/validation.md` (6-column rules).
+3. **Move to Discussing.** Add `[discussing]` marker to the selected task's heading in `tasks.md`. E.g., `## Task Title` becomes `## [discussing] Task Title`. Stage, commit, and push `tasks.md` immediately.
 
-   Write `phase: discussing` to `_millhouse/scratch/status.md`.
+   Validate tasks.md per `doc/modules/validation.md` (tasks.md structural rules).
+
+   Write to `_millhouse/scratch/status.md`:
+   ```
+   phase: discussing
+   task: <task-title>
+   task_description: |
+     <task description from tasks.md>
+   ```
+   Append `discussing  <timestamp>` to `## Timeline` in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
 ### Phase: Explore
 
@@ -79,7 +83,7 @@ mill-start proceeds through named phases. Report the current phase to the user a
    **Question categories.** You must cover all of these. For each category, explore the codebase first — only ask the user about what you cannot determine from the code.
 
    - **Scope** --- What's in, what's out? Define explicit boundaries. Hammer out the exact scope: what you plan to change and what you plan not to change.
-   - **Constraints** --- Performance requirements? Compatibility with existing systems? Existing patterns to follow? Check `CONSTRAINTS.md` if it exists.
+   - **Constraints** --- Performance requirements? Compatibility with existing systems? Existing patterns to follow? Check `CONSTRAINTS.md` at the repo root (resolve via `git rev-parse --show-toplevel`) if it exists.
    - **Architecture** --- Module design, interfaces, dependencies. Which modules will be built or modified? Look for opportunities to follow existing deep module patterns (small interface, large implementation). Check for existing utilities before proposing new ones.
    - **Edge cases** --- What happens when it fails? Concurrent access? Empty state? Invalid input? Partial failures?
    - **Security** --- Trust boundaries, input validation, auth implications? Only if relevant to the task.
@@ -126,7 +130,11 @@ mill-start proceeds through named phases. Report the current phase to the user a
 
    d. If reviewer **approved** (no GAPs): proceed to Phase: Handoff.
 
-   e. If reviewer found **gaps**: read the review findings file. Ask the user follow-up questions to resolve the gaps. Update the discussion file with the new information. Re-spawn the reviewer with the **updated discussion file only**. Do NOT pass prior review findings to the reviewer. The reviewer always starts fresh from the updated discussion alone, with no context from prior rounds.
+   e. If reviewer found **gaps**: read the review findings file.
+
+      **MANDATORY: You MUST NOT update the discussion file based on review findings without asking the user questions first. Every GAP requires the user's answer before it can be closed.** Do not auto-fix gaps, do not infer answers, do not fill in gaps from codebase context alone. Present each gap to the user and wait for their response.
+
+      Ask the user follow-up questions to resolve the gaps. Update the discussion file with the new information only after the user has answered. Re-spawn the reviewer with the **updated discussion file only**. Do NOT pass prior review findings to the reviewer. The reviewer always starts fresh from the updated discussion alone, with no context from prior rounds.
 
    f. Max `max_review_rounds` rounds. If unresolved gaps remain after all rounds: present the remaining gaps to the user for decision. The user may override (proceed anyway) or provide more information.
 
@@ -145,7 +153,7 @@ mill-start proceeds through named phases. Report the current phase to the user a
 
    Resolve `<parent-branch>` from `_millhouse/config.yaml` (`git.parent-branch` key) if it exists, otherwise from the branch that the worktree was created from (detect via `git worktree list --porcelain`), otherwise default to `main`.
 
-   b. Move the task from `## Discussing` to `## Planned` in `_millhouse/scratch/board.kanban.md` (column move — no phase suffix). Validate per `doc/modules/validation.md` (6-column rules). If validation fails, report the issue to the user and stop.
+   b. Append `discussed  <timestamp>` to `## Timeline` in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
    c. Report: "Discussion complete. Discussion file written to `_millhouse/scratch/discussion.md`. Run `mill-go` to start autonomous execution."
 
@@ -170,11 +178,11 @@ If you use TodoWrite to track your own progress, only include mill-start phases:
 
 ---
 
-## Kanban Updates
+## Board Updates
 
-Backlog changes (`_millhouse/backlog.kanban.md`) are git-tracked — commit and push after every write.
+tasks.md changes require commit and push (tasks.md is git-tracked).
 
-Work board changes (`_millhouse/scratch/board.kanban.md`) are local-only (gitignored). No staging needed.
+Phase transitions are tracked via `phase:` in `_millhouse/scratch/status.md` and the append-only `## Timeline` section.
 
-- Task claimed from backlog → remove from backlog (commit), add to `## Discussing` in work board
-- Discussion complete → move from `## Discussing` to `## Planned` in work board (column move)
+- Task claimed from tasks.md -> add `[discussing]` marker (commit + push), write `phase: discussing` + `task_description:` to status.md
+- Discussion complete -> write `phase: discussed` to status.md, append to timeline

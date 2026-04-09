@@ -1,38 +1,30 @@
 # Validation Rules
 
-Post-write validation for the kanban board files and `_millhouse/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
+Post-write validation for `tasks.md`, `_millhouse/scratch/status.md`, and `_millhouse/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
 
-## Backlog Board (`_millhouse/backlog.kanban.md`)
-
-### File validation
-
-1. **File must exist.** `_millhouse/backlog.kanban.md` must exist. It is git-tracked. On fresh clones, the file exists from git checkout. If missing, run `mill-setup`.
-
-### Structural validation
-
-After writing the backlog board, verify all of the following:
-
-1. **Single project heading.** Exactly one `#` heading, at line 1.
-2. **All three columns present.** Exactly three `##` headings, in order: `## Backlog`, `## Spawn`, `## Delete`.
-3. **No extra columns.** No `##` headings beyond the three designated columns.
-4. **Tasks under columns.** Every `###` heading appears after a `##` heading (no orphaned tasks before the first column).
-5. **No stray content.** No non-blank lines between the `#` heading and the first `##` heading.
-
-## Work Board (`_millhouse/scratch/board.kanban.md`)
+## tasks.md (repo root)
 
 ### File validation
 
-1. **File must exist** (when validating after a write). `_millhouse/scratch/board.kanban.md` is gitignored and local-only. On fresh clones, the file will not exist until `mill-setup` is run or `mill-start` creates it on first task claim.
+1. **File must exist.** `tasks.md` must exist at the repository root (resolve via `git rev-parse --show-toplevel`). Created by `mill-setup`. If missing, run `mill-setup`.
 
 ### Structural validation
 
-After writing the work board, verify all of the following:
+After writing tasks.md, verify all of the following:
 
-1. **Single project heading.** Exactly one `#` heading, at line 1.
-2. **All six columns present.** Exactly six `##` headings, in order: `## Discussing`, `## Planned`, `## Implementing`, `## Testing`, `## Reviewing`, `## Blocked`.
-3. **No extra columns.** No `##` headings beyond the six designated columns.
-4. **Tasks under columns.** Every `###` heading appears after a `##` heading (no orphaned tasks before the first column).
-5. **No stray content.** No non-blank lines between the `#` heading and the first `##` heading.
+1. **Single project heading.** Exactly one `# ` heading, at line 1 (e.g., `# Tasks`).
+2. **Tasks use `## ` headings.** All task entries are `## ` headings (not `###` or deeper).
+3. **Valid phase markers.** If a `## ` heading contains a `[phase]` marker, the phase must be one of: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `spawn`. Format: `## [phase] Title`.
+4. **No orphaned content.** No non-blank lines before the first `## ` heading (except the `# ` project heading).
+
+## status.md (`_millhouse/scratch/status.md`)
+
+### Field validation
+
+After writing status.md, verify:
+
+1. **`phase:` is valid.** Must be one of: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `complete`. Empty/missing `phase:` is allowed only if no task is active.
+2. **`task:` is non-empty when phase is set.** If `phase:` has a value, `task:` must also have a non-empty value.
 
 ## _millhouse/config.yaml
 

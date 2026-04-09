@@ -1,13 +1,11 @@
 ---
 name: mill-abandon
-description: Discard a worktree and move the task back to Backlog.
+description: Discard a worktree and unmark the task in tasks.md.
 ---
 
 # mill-abandon
 
-Discard a worktree and all its work. Moves the associated task back to Backlog. This is a destructive operation — always require explicit user confirmation.
-
-For kanban.md file format details, see `plugins/mill/doc/modules/kanban-format.md`.
+Discard a worktree and all its work. Removes the phase marker from the task in `tasks.md`, making it available again. This is a destructive operation — always require explicit user confirmation.
 
 ---
 
@@ -29,7 +27,9 @@ git branch --show-current
 
 Read `_millhouse/scratch/status.md` if it exists to identify the task title.
 
-Read `_millhouse/config.yaml` if it exists; extract `git.parent-branch`. If not found, fall back to `parent:` in `_millhouse/scratch/status.md`. If neither exists, ask the user which branch to merge into. The resolved parent-branch must be in memory before Step 4 removes the worktree.
+Read `_millhouse/config.yaml` if it exists; extract `git.parent-branch`. If not found, fall back to `parent:` in `_millhouse/scratch/status.md`. If neither exists, ask the user which branch to merge into.
+
+Resolve the parent worktree path: run `git worktree list --porcelain` and find the entry whose `branch` field matches the parent branch name. Extract its `worktree` path and store it. This path is used in Steps 5, 6, and 9. The resolved parent-branch and parent-path must be in memory before Step 4 removes the worktree.
 
 ---
 
@@ -64,11 +64,19 @@ Present all warnings together, then ask:
 
 Never auto-abandon. Never skip confirmation, even if there are no warnings.
 
-### 4. Capture task block from child board
+### 4. Capture task info from status.md
 
-Read the full task block (title heading + body) from the child worktree's `_millhouse/scratch/board.kanban.md` **before** the worktree is deleted. This is the only copy of the task body — `_millhouse/scratch/status.md` has only the title, not the body. Store the captured block in memory for use in Step 8 (Kanban update).
+Read `task:` and `task_description:` from the child worktree's `_millhouse/scratch/status.md` **before** the worktree is deleted. Store the task title in memory for use in Step 9 (tasks.md update).
 
-### 5. Remove worktree
+### 5. Update parent's child registry
+
+Resolve the parent worktree path (already resolved at Entry via `git.parent-branch`). If `<parent-path>/_millhouse/children/` exists, find the child registry file whose YAML frontmatter contains `branch: <BRANCH_NAME>` (the branch name captured at Entry). If found:
+- Update `status: active` to `status: abandoned`
+- Add `abandoned: <UTC ISO 8601 timestamp>` field to the frontmatter
+
+If `_millhouse/children/` does not exist in the parent, skip silently (backward compatibility). If no matching file is found, skip silently.
+
+### 6. Remove worktree
 
 The worktree must be removed from the parent repo context, not from within the worktree itself.
 
@@ -86,7 +94,7 @@ git worktree remove "$WORKTREE_PATH" --force
 
 If remove fails (e.g., locked), report the error and stop. Do not force-delete the directory.
 
-### 6. Delete branch
+### 7. Delete branch
 
 ```bash
 git branch -D <branch-name>
@@ -97,37 +105,31 @@ If the branch was pushed to remote:
 git push origin --delete <branch-name>
 ```
 
-### 7. Delete checkpoint branch
+### 8. Delete checkpoint branch
 
 If a checkpoint branch exists (`mill-checkpoint-<name>`):
 ```bash
 git branch -D mill-checkpoint-<name>
 ```
 
-### 8. Kanban update
+### 9. Update tasks.md
 
-Use the task block (title + body) captured in Step 4.
+Resolve the parent worktree path (already resolved at Entry). Read `<parent-path>/tasks.md`. Find the task's `## ` heading (match by task title captured in Step 4). Remove the `[phase]` marker from the heading, making the task unclaimed again. E.g., `## [implementing] Fix login` becomes `## Fix login`.
 
-The child's `board.kanban.md` is destroyed with the worktree — no explicit removal needed.
-
-Add the task back to `## Backlog` column in the **parent's** `_millhouse/backlog.kanban.md`. Locate parent worktree path via `git worktree list --porcelain` or `_millhouse/scratch/status.md` `parent:` field.
-
-Since backlog is git-tracked, check for modifications before committing: `git -C <parent-path> status --porcelain _millhouse/backlog.kanban.md` — if output is non-empty, report the conflict and stop. Otherwise commit from parent context:
-
+Stage, commit, and push from the parent worktree:
 ```bash
-git -C <parent-path> add _millhouse/backlog.kanban.md
-git -C <parent-path> commit -m "revert: return <task> to backlog (abandoned)"
-git -C <parent-path> push
+cd <parent-path>
+git add tasks.md
+git commit -m "task: abandon <task-title>"
+git push
 ```
 
-Validate backlog per `doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete).
+### 10. Report
 
-### 9. Report
-
-> "Worktree `<path>` abandoned. Branch `<branch>` deleted. Task moved to Backlog."
+> "Worktree `<path>` abandoned. Branch `<branch>` deleted. Task unmarked in tasks.md."
 
 ---
 
-## Kanban Updates
+## Board Updates
 
-- Abandon → child's `board.kanban.md` is destroyed with worktree. Task is added back to parent's `_millhouse/backlog.kanban.md` `## Backlog` column (git-tracked — commit and push required).
+- Abandon -> task's `[phase]` marker is removed from `tasks.md` (commit + push from parent worktree).

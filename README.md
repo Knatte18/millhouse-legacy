@@ -22,14 +22,14 @@ See [INSTALL.md](INSTALL.md) for setup instructions.
 | Skill | Purpose |
 |-------|---------|
 | mill-setup | Initialize Mill for a repository |
-| mill-add | Create a new task on the backlog |
+| mill-add | Create a new task in tasks.md |
 | mill-start | Interactive discussion before execution |
 | mill-go | Autonomous plan, implement, review, merge |
 | mill-spawn | Create worktree and claim task |
-| mill-inbox | Import GitHub issues to backlog |
+| mill-inbox | Import GitHub issues to tasks.md |
 | mill-merge | Merge completed worktree to parent |
-| mill-abandon | Discard worktree, move task back |
-| mill-cleanup | Remove tasks from Delete column |
+| mill-merge-in | Merge parent branch into current branch |
+| mill-abandon | Discard worktree, unmark task |
 | mill-status | Dashboard of all worktrees |
 
 ### Code Quality

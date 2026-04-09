@@ -1,13 +1,13 @@
 ---
 name: mill-spawn
-description: Add a task to the backlog Spawn column and create a worktree for it in one command.
+description: Add a task to tasks.md and create a worktree for it in one command.
 ---
 
 # mill-spawn
 
-One-shot. Add a task to `## Spawn` in `_millhouse/backlog.kanban.md`, commit, then call `mill-spawn.ps1` to claim it and create a worktree.
+One-shot. Add a task with `[spawn]` marker to `tasks.md`, commit, then call `mill-spawn.ps1` to claim it and create a worktree.
 
-For kanban.md file format details, see `plugins/mill/doc/modules/kanban-format.md`.
+For tasks.md file format details, see `plugins/mill/doc/modules/backlog-format.md`.
 
 ---
 
@@ -24,9 +24,9 @@ Text before the first colon is the title. Text after is the body (description). 
 
 ## Steps
 
-### Step 1: Check backlog exists
+### Step 1: Check tasks.md exists
 
-If `_millhouse/backlog.kanban.md` does not exist, stop and tell the user to run `mill-setup` first.
+Resolve the repo root via `git rev-parse --show-toplevel`. If `tasks.md` does not exist at the repo root, stop and tell the user to run `mill-setup` first.
 
 ### Step 2: Parse input
 
@@ -35,37 +35,33 @@ Split the argument on the first `:` character.
 - Left side (trimmed) -> task title
 - Right side (trimmed) -> task description (may be empty)
 
-### Step 3: Add task to Spawn column
+### Step 3: Add task with spawn marker
 
-Read `_millhouse/backlog.kanban.md`. Add a new task block at the **top** of the `## Spawn` column (immediately after the `## Spawn` heading, before any existing Spawn tasks). This ensures `mill-spawn.ps1` claims this task (it always takes the first `###` in Spawn).
+Read `tasks.md`. Append a new task block at the end of the file with the `[spawn]` marker:
 
 If no description:
 
 ```markdown
-### <Title>
+## [spawn] <Title>
 ```
 
-If description provided, use an indented ` ```md ` code block:
+If description provided:
 
 ```markdown
-### <Title>
-
-    ```md
-    <Description>
-    ```
+## [spawn] <Title>
+- <Description>
 ```
 
 ### Step 4: Validate
 
-Validate `_millhouse/backlog.kanban.md` per `doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete). If validation fails, report the issue to the user and stop.
+Validate `tasks.md` per `doc/modules/validation.md` (tasks.md structural rules). If validation fails, report the issue to the user and stop.
 
-### Step 5: Commit (no push)
-
-Commit the backlog change locally. Do **not** push — mill-spawn.ps1 will push its own `spawn: <task>` commit which supersedes this one (it removes the task from Spawn and adds the handoff). If mill-spawn.ps1 fails, the task remains in Spawn locally and can be retried.
+### Step 5: Commit and push
 
 ```bash
-git add _millhouse/backlog.kanban.md
-git commit -m "add: <title>"
+git add tasks.md
+git commit -m "task: spawn <title>"
+git push
 ```
 
 ### Step 6: Call mill-spawn.ps1
@@ -82,7 +78,7 @@ Run via bash:
 pwsh -File "<resolved-path>"
 ```
 
-The script reads the first task from Spawn, claims it (removes from backlog, writes handoff, commits), creates the worktree via `mill-worktree.ps1`, and writes status/board in the new worktree.
+The script reads the first `## [spawn] ` task from `tasks.md`, claims it (removes the task block, commits), creates the worktree via `mill-worktree.ps1` (passing `WorktreeName` and `BranchName`), writes status/board in the new worktree, and writes a child registry entry to the parent's `_millhouse/children/` directory. The `children/` folder is excluded from copy-on-spawn (alongside `scratch/`). Like all of `_millhouse/`, the `children/` folder is gitignored — registry entries are local to each clone/worktree.
 
 ### Step 7: Report
 

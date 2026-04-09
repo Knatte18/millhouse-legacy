@@ -1,6 +1,6 @@
 # Handoff Brief Format
 
-The handoff brief is written by `mill-spawn.ps1` into the **parent** worktree at `_millhouse/handoff.md` (git-tracked). The new worktree inherits it via git. It provides background context for the receiving `mill-start` session.
+The handoff brief is written by `mill-spawn.ps1` into the **parent** worktree at `_millhouse/handoff.md` (local, gitignored). The new worktree receives it via the `_millhouse/` copy during spawn. It provides background context for the receiving `mill-start` session.
 
 Canonical source: `plugins/mill/scripts/mill-spawn.ps1` (the script generates the file directly).
 
@@ -10,9 +10,9 @@ Canonical source: `plugins/mill/scripts/mill-spawn.ps1` (the script generates th
 
 ## File Location
 
-`_millhouse/handoff.md` (git-tracked).
+`_millhouse/handoff.md` (local, gitignored).
 
-The file is overwritten on each spawn and deleted by `mill-start` after consumption (committed as `spawn-consume: <task>`). Each spawn commit (`spawn: <task>`) includes both `_millhouse/backlog.kanban.md` and `_millhouse/handoff.md`.
+The file is overwritten on each spawn and deleted by `mill-start` after consumption. The spawn script copies `_millhouse/` (excluding `scratch/`) to the new worktree, so the handoff brief is available there immediately.
 
 ## Format
 

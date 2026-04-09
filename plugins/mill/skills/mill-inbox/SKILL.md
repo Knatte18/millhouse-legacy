@@ -1,11 +1,11 @@
 ---
 name: mill-inbox
-description: Review fetched GitHub issues and select which to import into the backlog.
+description: Review fetched GitHub issues and select which to import into tasks.md.
 ---
 
 # mill-inbox
 
-Interactive. Review issues fetched by `fetch-issues.ps1` and select which ones to import into the local backlog. Selected issues are added to `_millhouse/backlog.kanban.md` and closed on GitHub.
+Interactive. Review issues fetched by `fetch-issues.ps1` and select which ones to import into `tasks.md`. Selected issues are added to `tasks.md` and closed on GitHub.
 
 ---
 
@@ -19,7 +19,7 @@ gh auth status
 
 If not authenticated, stop and tell the user to run `gh auth login`.
 
-Verify `_millhouse/backlog.kanban.md` exists. If not, stop and tell the user to run `mill-setup` first.
+Verify `tasks.md` exists at the repo root (resolve via `git rev-parse --show-toplevel`). If not, stop and tell the user to run `mill-setup` first.
 
 Read `_millhouse/scratch/issues.json`. If the file does not exist, stop and tell the user:
 
@@ -42,7 +42,7 @@ Issues fetched at: <fetchedAt>
 
 ### Step 2: Deduplicate
 
-Read `_millhouse/backlog.kanban.md`. Collect all `###` headings from all columns (Backlog, Spawn, Delete). Strip any `[phase]` suffix from headings before comparing.
+Read `tasks.md` at the repo root. Collect all `## ` headings. Strip any `[phase] ` prefix from headings before comparing.
 
 For each issue in `issues.json`: check if the title (case-insensitive) matches an existing task heading. Deduplicated issues are silently excluded from the selection list and are NOT closed on GitHub.
 
@@ -68,44 +68,36 @@ The user types:
 
 ### Step 4: Import selected issues
 
-For each selected issue, append a task block under `## Backlog` in `_millhouse/backlog.kanban.md`:
+For each selected issue, append a task block at the end of `tasks.md`:
 
-If the issue has labels (the `labels` field is a non-empty array of objects with `name` properties), add a `- tags:` metadata line after the heading. Extract label names and format as `- tags: [label1, label2]`. If no labels, omit the tags line.
+If the issue has labels (the `labels` field is a non-empty array of objects with `name` properties), add a `- tags:` line after the heading:
 
-If the issue body is empty or whitespace-only, with labels:
+With labels and body:
 
 ```markdown
-### <issue title>
+## <issue title>
+- tags: [label1, label2]
+- <first paragraph of issue body>
+```
+
+With labels, no body:
+
+```markdown
+## <issue title>
 - tags: [label1, label2]
 ```
 
-Without labels:
+Without labels, with body:
 
 ```markdown
-### <issue title>
+## <issue title>
+- <first paragraph of issue body>
 ```
 
-If the issue has a non-empty body, use an indented ` ```md ` code block (plain text descriptions are not parsed by the kanban.md extension and are destroyed on drag-and-drop). Tags go between the heading and the description block:
-
-With labels:
+Without labels, no body:
 
 ```markdown
-### <issue title>
-- tags: [label1, label2]
-
-    ```md
-    <issue body>
-    ```
-```
-
-Without labels:
-
-```markdown
-### <issue title>
-
-    ```md
-    <issue body>
-    ```
+## <issue title>
 ```
 
 ### Step 5: Close selected issues on GitHub
@@ -118,20 +110,20 @@ gh issue close <number> --repo <repo>
 
 Where `<repo>` is the `repo` field from `issues.json`.
 
-### Step 6: Validate, commit, and push
+### Step 6: Validate
 
-Validate `_millhouse/backlog.kanban.md` per `plugins/mill/doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete). If validation fails, report the violation and stop.
+Validate `tasks.md` per `plugins/mill/doc/modules/validation.md` (tasks.md structural rules). If validation fails, report the violation and stop.
 
-Since backlog is git-tracked:
+### Step 7: Commit and push
 
 ```bash
-git add _millhouse/backlog.kanban.md
-git commit -m "sync: import <N> issues from inbox"
+git add tasks.md
+git commit -m "task: import <N> issues from GitHub"
 git push
 ```
 
-### Step 7: Report
+### Step 8: Report
 
 ```
-<N> issues imported to Backlog, <N> closed on GitHub.
+<N> issues imported to tasks.md, <N> closed on GitHub.
 ```

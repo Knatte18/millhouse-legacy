@@ -68,6 +68,12 @@ def test_classify_number(input_value, expected):
 - Tests live in a `tests/` directory at the project root, mirroring the source structure.
 - Each source module `src/foo/bar.py` has a corresponding `tests/foo/test_bar.py`.
 
+### conftest.py discovery
+
+- Root `conftest.py` (in `tests/` or project root): shared fixtures available to all tests.
+- Subdirectory `conftest.py` files: scoped fixtures for that directory tree.
+- Before writing new fixtures, check existing `conftest.py` files for reusable fixtures — avoid duplication.
+
 ### Conventions to specify per project
 
 - Test directory path (if not `tests/`)

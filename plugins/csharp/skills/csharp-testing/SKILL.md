@@ -40,6 +40,15 @@ public class CsvExporterTests
 }
 ```
 
+### Framework discovery
+
+Detect the test framework from the test project's `*.csproj` file:
+- **xUnit:** `<PackageReference Include="xunit" .../>` — uses `[Fact]`, `[Theory]`, `Assert.*`.
+- **NUnit:** `<PackageReference Include="NUnit" .../>` — uses `[Test]`, `[TestCase]`, `Assert.*`.
+- **MSTest:** `<PackageReference Include="MSTest.TestFramework" .../>` — uses `[TestMethod]`, `[DataRow]`, `Assert.*`.
+
+Follow the conventions of whichever framework the project uses. Do not mix frameworks within a test project.
+
 ### Conventions to specify per project
 
 - Test framework: xUnit / NUnit / MSTest

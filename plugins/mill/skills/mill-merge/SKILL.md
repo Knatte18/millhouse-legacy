@@ -7,8 +7,6 @@ description: Merge a completed worktree back to its parent branch.
 
 You are an integration engineer. Your job is to merge a feature branch back to its parent branch safely. You never force-merge, never pass a defect downstream, and never lose work. If something goes wrong, you roll back to the checkpoint and escalate.
 
-For kanban.md file format details, see `plugins/mill/doc/modules/kanban-format.md`.
-
 ---
 
 ## Entry
@@ -49,75 +47,57 @@ If the lock file already exists:
 - If stale (process dead): remove and acquire.
 - If active: report "Another merge is in progress (<branch>). Waiting..." Retry every 10 seconds, max 5 minutes. If timeout: stop and tell the user.
 
-### 2. Create checkpoint
+### 2. Sync with parent
 
-```bash
-git branch mill-checkpoint-$(git rev-parse --abbrev-ref HEAD | tr '/' '-')
-```
+Invoke `mill-merge-in` via the Skill tool. This handles:
+- No-op detection (already up to date)
+- Checkpoint creation
+- Merging parent into worktree
+- Conflict resolution
+- Verification
+- Codeguide update
 
-Record the checkpoint branch name. If anything goes wrong after this point, roll back to the checkpoint.
+If mill-merge-in succeeds, capture the checkpoint branch name it reports (needed for rollback if steps 3–6 fail).
 
-### 3. Merge parent into worktree
+If mill-merge-in fails (reports rollback or unresolvable conflicts): release the merge lock (step 7) and report the failure to the user. Do not proceed.
 
-```bash
-git merge <parent-branch>
-```
-
-This catches up the worktree with changes on the parent since the worktree was created.
-
-**If conflicts occur:**
-1. List conflicting files: `git diff --name-only --diff-filter=U`
-2. For each file:
-   - Whitespace/formatting only → accept worktree version
-   - Package lock files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) → accept worktree version, then regenerate with the install command
-   - Other generated files (build artifacts) → accept worktree version
-   - Real code conflicts → attempt resolution based on understanding both sides
-3. If conflicts are unresolvable: roll back to checkpoint, release lock, escalate to user with the list of conflicting files.
-
-Never use `-X theirs` or `-X ours` on real code conflicts.
-
-### 4. Verify
-
-Run full verification (the `verify` command from the plan frontmatter, or the project's standard build/test command).
-
-If verification fails:
-- Diagnose and fix. Max 3 attempts.
-- If unresolvable after 3 attempts: roll back to checkpoint, release lock, escalate to user.
-
-### 5. Codeguide update
-
-If `_codeguide/Overview.md` exists, run `codeguide-update` scoped to the checkpoint diff:
-```bash
-git diff mill-checkpoint-<name>..HEAD
-```
-
-This captures all changes introduced by the worktree, including conflict resolutions. Must run BEFORE merging the worktree INTO the parent (step 6).
-
-### 6. Merge into parent
+### 3. Merge into parent
 
 Determine the merge method:
 
 Always direct squash merge. Mill never creates PRs — that is the user's responsibility via `/git-pr` or manually.
+
+**Important:** Capture the child branch name before switching context — it is needed in Step 4:
+```bash
+CHILD_BRANCH=$(git branch --show-current)
+```
 
 ```bash
 # Switch to parent in the parent worktree or repo root
 cd <parent-path>
 git merge --squash <worktree-branch>
 ```
-Then update the **child worktree's** local kanban: remove the task block from `_millhouse/scratch/board.kanban.md` entirely (search all phase columns: Discussing, Planned, Implementing, Testing, Reviewing, Blocked — remove from wherever found). There is no Done column — completed tasks are removed from the board. The **parent's** `board.kanban.md` does not contain this task and requires no update (parent has its own independent work-board). Validate per `doc/modules/validation.md` (6-column rules).
 ```bash
 git commit -m "<task title>"
 git push
 ```
 Squash merge collapses all worktree commits into a single commit on the parent branch.
 
-### 7. Notify
+### 4. Update parent's child registry
+
+If `<parent-path>/_millhouse/children/` exists, find the child registry file whose YAML frontmatter contains `branch: <CHILD_BRANCH>` (search all `.md` files in the folder). If found:
+- Update `status: active` to `status: merged`
+- Add `merged: <UTC ISO 8601 timestamp>` field to the frontmatter
+
+If `_millhouse/children/` does not exist in the parent, skip silently (backward compatibility with pre-change worktrees). If no matching file is found, skip silently.
+
+### 5. Notify
 
 Run the **Notification Procedure** (same as mill-go — see below) with `COMPLETE: Merge successful for <branch>` (info-level — toast + status only, skip Slack).
 
-### 8. Cleanup
+### 6. Cleanup
 
-After successful direct merge (already running in `<parent-path>` from step 6):
+After successful direct merge (already running in `<parent-path>` from step 3):
 
 ```bash
 git worktree remove <worktree-path>
@@ -146,7 +126,7 @@ If the branch was pushed to remote:
 git push origin --delete <worktree-branch>
 ```
 
-### 9. Release merge lock
+### 7. Release merge lock
 
 Delete `<parent-path>/_millhouse/scratch/merge.lock`.
 
@@ -156,7 +136,7 @@ This step runs in ALL exit paths — success, failure, or rollback. Use trap/fin
 
 ## Rollback
 
-If any step fails after checkpoint creation:
+If any step fails after step 2 (sync with parent) has succeeded, use the checkpoint branch name captured from mill-merge-in's output in step 2:
 
 ```bash
 git reset --hard mill-checkpoint-<name>
@@ -183,11 +163,11 @@ bash "$(git rev-parse --show-toplevel)/plugins/mill/scripts/notify.sh" \
 ```
 
 Urgency per event:
-- Merge successful → `--urgency info` (toast + status only, skip Slack)
-- Merge failed / rolled back → `--urgency high` (all channels)
+- Merge successful -> `--urgency info` (toast + status only, skip Slack)
+- Merge failed / rolled back -> `--urgency high` (all channels)
 
 ---
 
-## Kanban Updates
+## Board Updates
 
-- Merge complete → remove task from child worktree's `_millhouse/scratch/board.kanban.md` entirely (no Done column — task is removed). Parent's board is independent and unaffected. Validate per `doc/modules/validation.md` (6-column rules).
+- Merge complete -> no board update needed. The child worktree's `status.md` already has `phase: complete`.

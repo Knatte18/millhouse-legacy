@@ -1,13 +1,13 @@
 ---
 name: mill-setup
-description: Initialize Mill for a repository. Creates kanban boards, config, directory structure, and forwarding wrappers.
+description: Initialize Mill for a repository. Creates tasks.md, config, directory structure, and forwarding wrappers.
 ---
 
 # mill-setup
 
-One-time initialization per repo. Creates the `_millhouse/` directory structure with config, kanban boards, scratch space, and forwarding wrapper scripts. Idempotent — safe to re-run (skips existing files).
+One-time initialization per repo. Creates `tasks.md` at the repo root, the `_millhouse/` directory structure with config, scratch space, forwarding wrapper scripts, and VS Code color settings. Idempotent — safe to re-run (skips existing files).
 
-For kanban.md file format details, see `plugins/mill/doc/modules/kanban-format.md`.
+For tasks.md file format details, see `plugins/mill/doc/modules/backlog-format.md`.
 
 ---
 
@@ -18,69 +18,40 @@ Run these steps in order. Stop on any failure and report the error.
 ### Step 1: Create directory structure
 
 ```bash
-mkdir -p _millhouse/scratch/plans _millhouse/scratch/reviews
+mkdir -p _millhouse/scratch/reviews
 ```
 
-### Step 2: Create .gitignore
+### Step 2: Add gitignore entries for local state
 
-If `_millhouse/.gitignore` already exists, skip creation.
+Check the repo's root `.gitignore` for an entry matching `**/_millhouse/`. If not present, append it. If already present, skip.
 
-If it does not exist, write `_millhouse/.gitignore`:
+### Step 3: Create tasks.md
 
-```
-scratch/
-*.ps1
-```
-
-### Step 3: Create backlog board file
-
-If `_millhouse/backlog.kanban.md` already exists, skip creation (preserves existing backlog data on re-run).
+If `tasks.md` already exists at the repo root, skip creation (preserves existing task data on re-run).
 
 If it does not exist, create it:
 
 ```markdown
-# <REPO_NAME>
-
-## Backlog
-
-## Spawn
-
-## Delete
+# Tasks
 ```
 
-Validate per `doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete). If validation fails, report the issue to the user and stop.
+After creating, stage, commit, and push:
 
-### Step 4: Create work board file
-
-If `_millhouse/scratch/board.kanban.md` does not exist, create it:
-
-```markdown
-# <REPO_NAME>
-
-## Discussing
-
-## Planned
-
-## Implementing
-
-## Testing
-
-## Reviewing
-
-## Blocked
+```bash
+git add tasks.md
+git commit -m "chore: initialize tasks.md"
+git push
 ```
 
-If `_millhouse/scratch/board.kanban.md` already exists with old 5-column structure (detect by presence of `## In Progress`): skip creation but warn: "Existing board.kanban.md uses old format. Delete it and re-run mill-setup to migrate."
+Validate per `doc/modules/validation.md` (tasks.md structural rules). If validation fails, report the issue to the user and stop.
 
-Validate per `doc/modules/validation.md` (6-column rules). If validation fails, report the issue to the user and stop.
+### Step 4: Write config
 
-### Step 5: Write config
-
-**5a: Prompt for repo short-name.**
+**4a: Prompt for repo short-name.**
 
 Ask the user: "Repo short-name for window titles (default: `<directory-name>`):" where `<directory-name>` is the name of the current working directory. If the user provides a value, use it. If the user presses enter or skips, use the directory name. Store the result as `<SHORT_NAME>`.
 
-**5b: Create or upgrade config.**
+**4b: Create or upgrade config.**
 
 If `_millhouse/config.yaml` does not exist, write it with the full template below.
 
@@ -92,7 +63,7 @@ Full config template (used for new creation):
 git:
   base-branch: main
   parent-branch: main
-  auto-merge: true
+  auto-merge: false
 
 repo:
   short-name: "<SHORT_NAME>"
@@ -107,8 +78,6 @@ models:
   session: opus
   plan-review: sonnet
   code-review: sonnet
-  plan-fixer: sonnet
-  code-fixer: sonnet
   explore: haiku
 
 notifications:
@@ -122,11 +91,11 @@ notifications:
 
 Validate `_millhouse/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
-### Step 6: Create forwarding wrappers
+### Step 5: Create forwarding wrappers
 
 Create the following forwarding wrappers in `_millhouse/`. For each wrapper, skip creation if the file already exists. If old-named wrappers exist at cwd (`helm-spawn.ps1`, `millhouse-worktree.ps1`, `mill-spawn.ps1`, `fetch-issues.ps1`, `mill-worktree.ps1`), remove them from cwd.
 
-#### 6a: mill-spawn.ps1
+#### 5a: mill-spawn.ps1
 
 Write `_millhouse/mill-spawn.ps1` with the following content:
 
@@ -160,7 +129,7 @@ if (-not (Test-Path $Script)) {
 & $Script @args
 ```
 
-#### 6b: fetch-issues.ps1
+#### 5b: fetch-issues.ps1
 
 Write `_millhouse/fetch-issues.ps1` with the following content:
 
@@ -194,7 +163,7 @@ if (-not (Test-Path $Script)) {
 & $Script @args
 ```
 
-#### 6c: mill-worktree.ps1
+#### 5c: mill-worktree.ps1
 
 Write `_millhouse/mill-worktree.ps1` with the following content:
 
@@ -228,20 +197,38 @@ if (-not (Test-Path $Script)) {
 & $Script @args
 ```
 
+### Step 6: Write VS Code settings
+
+If `.vscode/settings.json` already exists, skip (preserves existing color settings on re-run).
+
+If it does not exist, create `.vscode/` directory and write `.vscode/settings.json`:
+
+```json
+{
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground": "#2d7d46",
+        "titleBar.activeForeground": "#ffffff",
+        "titleBar.inactiveBackground": "#2d7d46",
+        "titleBar.inactiveForeground": "#ffffffaa"
+    },
+    "window.title": "<SHORT_NAME> — ${activeEditorShort}"
+}
+```
+
+Where `<SHORT_NAME>` is the value from Step 4a.
+
 ### Step 7: Update CLAUDE.md
 
-If `CLAUDE.md` exists, check for a `## Kanban` section. If the section exists but contains old content (e.g. references to `helm-setup` or `_millhouse/board.kanban.md`), replace the section content with the new template below. If no `## Kanban` section exists, append it.
+If `CLAUDE.md` exists, check for a `## Kanban` or `## Tasks` section. If either section exists, replace the section content with the new template below. If neither section exists, append it.
 
 ```markdown
-## Kanban
+## Tasks
 
-- Backlog board: `_millhouse/backlog.kanban.md` — git-tracked, 3 columns (Backlog, Spawn, Delete). Manual task entry.
-- Work board: `_millhouse/scratch/board.kanban.md` — gitignored, 6 phase columns (Discussing through Blocked). Mill-managed. Each worktree gets its own copy (created by mill-spawn).
-- Run `mill-setup` to create both board files after a fresh clone (safe to re-run; skips existing files).
-- Format reference: `plugins/mill/doc/modules/kanban-format.md`.
-- Work board uses columns as phases — no `[phase]` suffix in task headings.
-- Only extension-supported metadata fields (priority, tags, workload, due).
-- Descriptions use indented ` ```md ` code blocks, never plain text.
+- Task list: `tasks.md` at repo root — git-tracked, `## ` headings for tasks, optional `[phase]` markers.
+- Phase tracking: `_millhouse/scratch/status.md` — `phase:` field is the authoritative source. `## Timeline` section records chronological phase history.
+- `_millhouse/` is gitignored. On spawn, it is copied (excluding `scratch/`) from parent to new worktree.
+- Run `mill-setup` to initialize after a fresh clone (safe to re-run; skips existing files).
+- Format reference: `plugins/mill/doc/modules/backlog-format.md` (tasks.md format).
 ```
 
 If `CLAUDE.md` does not exist, create it with these rules.
@@ -250,10 +237,11 @@ If `CLAUDE.md` does not exist, create it with these rules.
 
 ```
 Mill initialized:
-  Backlog: _millhouse/backlog.kanban.md (3 columns: Backlog, Spawn, Delete) — git-tracked
-  Work board: _millhouse/scratch/board.kanban.md (6 columns: Discussing through Blocked) — gitignored
+  Tasks: tasks.md (git-tracked, ## headings for tasks)
+  Status: _millhouse/scratch/status.md (phase tracking + timeline)
   Config: _millhouse/config.yaml
+  Git: _millhouse/ is gitignored — local to each clone/worktree
 
-Open _millhouse/backlog.kanban.md in VS Code to see the backlog.
-Run mill-add to create your first task.
+Edit tasks.md to add tasks, or run mill-add.
+Run mill-start to pick a task and begin.
 ```

@@ -71,7 +71,9 @@ End with an overall verdict: **APPROVE** or **GAPS_FOUND**.
 - APPROVE means: the discussion is complete enough to write a plan. NOTEs are recorded but do not block.
 - GAPS_FOUND means: one or more GAPs must be resolved before plan writing.
 
-Write your full review report to `_millhouse/scratch/reviews/<timestamp>-discussion-review-r<N>.md` (use the current UTC datetime for `<timestamp>` in YYYYMMDD-HHMMSS format, and the current round number for `<N>`, 1-indexed). Return only: (1) the verdict (APPROVE or GAPS_FOUND), and (2) the file path. No preamble, no additional content.
+Generate the timestamp for the filename via shell: `date -u +"%Y%m%d-%H%M%S"` (see `@mill:cli` timestamp rules — never guess timestamps).
+
+Write your full review report to `_millhouse/scratch/reviews/<timestamp>-discussion-review-r<N>.md` (using the shell-generated timestamp and the current round number for `<N>`, 1-indexed). Return only: (1) the verdict (APPROVE or GAPS_FOUND), and (2) the file path. No preamble, no additional content.
 
 ---
 

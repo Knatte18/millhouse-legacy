@@ -1,13 +1,13 @@
 ---
 name: mill-add
-description: Create a new task on the local kanban board.
+description: Create a new task in tasks.md.
 ---
 
 # mill-add
 
-One-shot. Add a task to the `## Backlog` column in `_millhouse/backlog.kanban.md`.
+One-shot. Add a task to `tasks.md` at the repo root.
 
-For kanban.md file format details, see `plugins/mill/doc/modules/kanban-format.md`.
+For tasks.md file format details, see `plugins/mill/doc/modules/backlog-format.md`.
 
 ---
 
@@ -22,48 +22,43 @@ Text before the first colon is the title. Text after is the body. No colon means
 
 ## Steps
 
-### Step 1: Check backlog exists
+### Step 1: Check tasks.md exists
 
-If `_millhouse/backlog.kanban.md` does not exist, stop and tell the user to run `mill-setup` first.
+Resolve the repo root via `git rev-parse --show-toplevel`. If `tasks.md` does not exist at the repo root, stop and tell the user to run `mill-setup` first.
 
 ### Step 2: Parse input
 
 Split the argument on the first `:` character.
 
-- Left side (trimmed) → task title
-- Right side (trimmed) → task description (may be empty)
+- Left side (trimmed) -> task title
+- Right side (trimmed) -> task description (may be empty)
 
-### Step 3: Add task to backlog
+### Step 3: Add task to tasks.md
 
-Read `_millhouse/backlog.kanban.md`. Add a new task block under the `## Backlog` column (before the next `##` heading or end of file):
+Read `tasks.md`. Append a new task block at the end of the file:
 
 If no description:
 
 ```markdown
-### <Title>
+## <Title>
 ```
 
-If description provided, use an indented ` ```md ` code block (plain text descriptions are not parsed by the kanban.md extension and are destroyed on drag-and-drop):
+If description provided:
 
 ```markdown
-### <Title>
-
-    ```md
-    <Description>
-    ```
+## <Title>
+- <Description>
 ```
 
 ### Step 4: Validate
 
-Validate `_millhouse/backlog.kanban.md` per `doc/modules/validation.md` (3-column rules: Backlog, Spawn, Delete). If validation fails, report the issue to the user and stop.
+Validate `tasks.md` per `doc/modules/validation.md` (tasks.md structural rules). If validation fails, report the issue to the user and stop.
 
 ### Step 5: Commit and push
 
-Since backlog is git-tracked, commit and push:
-
 ```bash
-git add _millhouse/backlog.kanban.md
-git commit -m "add: <title>"
+git add tasks.md
+git commit -m "task: add <title>"
 git push
 ```
 

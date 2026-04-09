@@ -12,3 +12,6 @@ __pycache__/
 
 *.local.*
 nul
+
+# Mill local state
+**/_millhouse/

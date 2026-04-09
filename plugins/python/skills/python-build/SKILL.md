@@ -70,6 +70,15 @@ import utils_file_io as fio
 
 > Customize per project. Specify test paths, ruff config, and virtual environment setup.
 
+### Test discovery
+
+Before running tests, verify the project is testable:
+
+1. **Virtual environment:** Check for `venv/`, `.venv/`, or `env/` directories. If present, activate before running commands. Check `pyproject.toml` for `[tool.poetry]` (use `poetry run`) or `Pipfile` (use `pipenv run`).
+2. **Test configuration:** Check `pyproject.toml` for `[tool.pytest.ini_options]` — it may specify `testpaths`, `addopts`, or custom markers. Also check for `pytest.ini`, `setup.cfg` `[tool:pytest]`, or `tox.ini`.
+3. **Test directory:** Verify `tests/` (or the configured test path) exists and contains `test_*.py` files. If no test files exist, report "No tests found" rather than running pytest on an empty directory.
+4. **Ruff configuration:** Check for `ruff.toml`, `.ruff.toml`, or `[tool.ruff]` in `pyproject.toml` for project-specific lint rules.
+
 ### Defaults
 
 - Run `ruff check .` from the project root.

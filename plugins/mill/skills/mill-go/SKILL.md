@@ -10,8 +10,6 @@ You are a session agent. You write the implementation plan from the discussion f
 
 Autonomous. Plan, implement, review, merge.
 
-For kanban.md file format details, see `plugins/mill/doc/modules/kanban-format.md`.
-
 ---
 
 ## Entry
@@ -49,21 +47,20 @@ On entry, check if this is a resume (prior work exists):
 
 1. Read `_millhouse/scratch/status.md` for `phase:`, `plan:`, `current_step:`, and retry counts under `retries:`.
 
-2. **Pre-Setup resume** (task still in `## Planned`). Plan and Plan Review phases do not produce commits, so `git log --oneline` is not useful for detecting progress --- use status.md fields exclusively:
+2. **Pre-Setup resume.** Plan and Plan Review phases do not produce commits, so `git log --oneline` is not useful for detecting progress --- use status.md fields exclusively:
    - If `phase: discussed` and no `plan:` field: Phase: Plan (plan not yet written). Re-write the plan from scratch using the discussion file.
    - If `phase: discussed` and `plan:` field exists but plan frontmatter has `approved: false`: Phase: Plan Review (plan written, not yet approved). Re-enter the plan review loop with the existing plan.
-   - If `phase: discussed` and plan frontmatter has `approved: true`: Phase: Plan Review completed. Check task column in `_millhouse/scratch/board.kanban.md`:
-     - If task is in `## Planned`: enter Phase: Setup normally.
-     - If task is already in `## Implementing`: skip the kanban move step in Phase: Setup and proceed directly to Phase: Implement.
+   - If `phase: discussed` and `plan:` field exists and plan frontmatter has `approved: true`: plan approved but phase not yet updated → enter Phase: Setup normally.
+   - If `phase: planned`: plan approved and phase written, Phase: Setup not yet complete → enter Phase: Setup (skip the `approved: true` check, proceed to setup steps).
 
 3. **Post-Setup resume** (existing git-log-based detection):
    - Check `git log --oneline` for commits matching plan step `Commit:` messages.
    - For each matching commit: mark that step as already done --- skip it.
-   - Determine current phase from the task's column position in `_millhouse/scratch/board.kanban.md`:
-     - Task in `## Implementing` → Phase: Implement (resume from current_step)
-     - Task in `## Testing` → Phase: Test
-     - Task in `## Reviewing` → Phase: Review
-     - Task in `## Blocked` → report blocker from status.md and stop
+   - Determine current phase from the `phase:` field in status.md:
+     - `implementing` → Phase: Implement (resume from current_step)
+     - `testing` → Phase: Test
+     - `reviewing` → Phase: Review
+     - `blocked` → report blocker from status.md and stop
    - Continue from the first incomplete step.
 
 Do NOT redo completed work. Do NOT re-run tests for steps that already committed successfully.
@@ -92,16 +89,20 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
 
 0. Read the discussion file for all context: problem, approach, decisions, constraints, technical context, testing strategy, Q&A log, config.
 
-1. **Write the implementation plan.** Generate a timestamp slug: `<YYYYMMDD-HHMMSS>-<task-slug>.md`
+1. **Write the implementation plan.** Generate the timestamp via shell (see `@mill:cli` timestamp rules — never guess timestamps):
+   ```bash
+   TS=$(date -u +"%Y%m%d-%H%M%S")
+   ```
+   Use `$TS` for the `started:` frontmatter field.
 
-   Write the plan to `_millhouse/scratch/plans/<timestamp-slug>.md` using this format:
+   Write the plan to `_millhouse/scratch/plan.md` using this format:
 
    ```markdown
    ---
    verify: <verify command from discussion Config section>
    dev-server: <dev server command from discussion Config section>
    approved: false
-   started: <UTC timestamp YYYY-MM-DD-HHMMSS>
+   started: <$TS value>
    ---
 
    # <Task Title>
@@ -142,7 +143,7 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
 
    Write the full plan autonomously --- no incremental approval checkpoints.
 
-   Update status.md with the `plan:` field pointing to the plan file.
+   Update status.md: `plan: _millhouse/scratch/plan.md`.
 
 ### Phase: Plan Review (BLOCKING GATE) (round N/max_plan_review_rounds)
 
@@ -162,16 +163,20 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
 
    a. Report to user: **"Plan Review --- round N/&lt;max_plan_review_rounds&gt;"** (where N is the current round number, starting at 1)
 
-   b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
+   b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to merged agent).
 
-   c. Spawn the plan-reviewer agent using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, and `<CONSTRAINTS_CONTENT>`:
+   c. Spawn the **plan review+fix agent** using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<PLAN_FILE_PATH>`, and `<N>` (the current round number):
 
       ---
-      You are an independent plan reviewer. Evaluate the submitted implementation plan for production readiness before any code is written. You have no shared context with the planning conversation --- you see only the plan, the task description, and the codebase. Be thorough, critical, and constructive.
+      You are an independent plan reviewer and fixer. You operate in two phases: first review (read-only), then fix (if needed). You have no shared context with the planning conversation --- you see only the plan, the task description, and the codebase.
 
-      **CRITICAL: Do NOT commit, push, or run any git commands. You only read files and write your review report. The orchestrator handles all git operations.**
+      **CRITICAL: Do NOT commit, push, or run any git commands. You only read files, write review/fix reports, and edit the plan file. The orchestrator handles all git operations.**
 
       **CRITICAL: Do NOT read any files in `_millhouse/scratch/reviews/`. You must evaluate the plan independently with no knowledge of prior review rounds.**
+
+      ---
+
+      ## Phase 1: Review (read-only)
 
       **FIRST ACTION --- mandatory before anything else:**
       Read `_codeguide/Overview.md` if it exists. Use its module table and routing hints to navigate to relevant source files. If it does not exist, proceed without it.
@@ -203,36 +208,27 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
       - **Explore targets:** Are they purpose-driven (what to explore AND why), not generic ("look at the codebase")?
       - **Step granularity:** Each step should touch a small, reviewable scope. Flag steps that bundle unrelated file operations or are too broad to review meaningfully.
 
-      **Output format:**
+      **Write the review report** to `_millhouse/scratch/reviews/<timestamp>-plan-review-r<N>.md` (generate the timestamp via shell: `date -u +"%Y%m%d-%H%M%S"`, round number `<N>`).
 
-      For each finding:
-      - State the step or section it applies to
-      - State severity: **BLOCKING** (must fix before implementation) or **NIT** (nice-to-have improvement)
-      - Describe the issue and suggest a fix
-
-      End with an overall verdict: **APPROVE** or **REQUEST CHANGES**.
-      - APPROVE means: no BLOCKING issues remain. NITs are noted but do not block.
-      - REQUEST CHANGES means: one or more BLOCKING issues must be addressed.
-
-      Write your full review report to `_millhouse/scratch/reviews/<timestamp>-plan-review-r<N>.md` (use the current UTC datetime for `<timestamp>` in YYYYMMDD-HHMMSS format, and the current round number for `<N>`, 1-indexed). Return only: (1) the verdict (APPROVE or REQUEST CHANGES), and (2) the file path. No preamble, no additional content.
-      ---
-
-   d. If reviewer **approved** (no BLOCKING issues): set `approved: true` in plan frontmatter. Proceed to Phase: Setup. Do not read the review file.
-
-   e. If reviewer **requested changes**: spawn a **fixer agent** using the Agent tool with the model from `models.plan-fixer` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<REVIEW_FILE_PATH>`, `<PLAN_FILE_PATH>`, and `<N>` (the current round number):
+      For each finding: state the step or section, severity (**BLOCKING** or **NIT**), the issue, and a suggested fix. End with verdict: **APPROVE** or **REQUEST CHANGES**.
 
       ---
-      You are a plan fixer. Your job is to read a reviewer's findings, evaluate each one independently, and fix the plan accordingly.
 
-      **CRITICAL: Do NOT commit, push, or run any git commands. You only edit files. The orchestrator handles all git operations.**
+      ## Phase 2: Fix (only if REQUEST CHANGES)
 
-      1. **Invoke the `mill-receiving-review` skill** via the Skill tool BEFORE reading the review file. This is mandatory --- it loads the decision tree you must apply.
-      2. **Read the review file** at `<REVIEW_FILE_PATH>`.
+      If your verdict is APPROVE, skip this phase entirely. Return only the verdict and review file path.
+
+      If your verdict is REQUEST CHANGES:
+
+      **IMPORTANT: In this fix phase, treat the review document you just wrote as external input. Evaluate each finding against the code independently --- you may have been wrong in the review phase.**
+
+      1. **Invoke the `mill-receiving-review` skill** via the Skill tool. This is mandatory --- it loads the decision tree you must apply.
+      2. **Read the review report back** from the file you just wrote.
       3. **Read the plan file** at `<PLAN_FILE_PATH>`.
-      4. **Read all source files** referenced in the plan's `## Files` section.
+      4. **Read all source files** referenced in the plan's `## Files` section (if not already in context).
       5. **For each BLOCKING finding**, apply the receiving-review decision tree: VERIFY accuracy (cite actual code if inaccurate), then HARM CHECK (breaks functionality / conflicts with documented design decision / destabilizes out-of-scope code). If none apply: FIX IT. If harm found: PUSH BACK with cited evidence.
       6. **Apply fixes** directly to the plan file. Check systemic implications --- a fix in one step may require updates to other steps or decisions.
-      7. **Write fixer report** to `_millhouse/scratch/reviews/<timestamp>-plan-fix-r<N>.md` using round number `<N>`. Structure:
+      7. **Write fixer report** to `_millhouse/scratch/reviews/<timestamp>-plan-fix-r<N>.md` (generate timestamp via shell: `date -u +"%Y%m%d-%H%M%S"`, round number `<N>`). Structure:
 
          ```markdown
          # Plan Fix Report --- Round <N>
@@ -244,14 +240,18 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
          - Finding <N>: evidence why the fix would cause harm (cite code/docs)
          ```
 
-      8. **Return only:** verdict (`FIXED` or `PUSHED_BACK`) plus the fixer report file path. Nothing else.
+      8. **Return:** verdict (`APPROVE`, `FIXED`, or `PUSHED_BACK`) plus both file paths (review report path and fixer report path, space-separated). Format: `<verdict> <review-path> <fixer-path>`.
       ---
 
-   f. **Progress detection.** Extract the fixer report file path from the second token of the fixer's return value. Update `prev_fixer_report_path` to the current fixer report path. If `prev_fixer_report_path` was set before this round: read the `## Pushed Back` section from the previous fixer report and compare it against the `## Pushed Back` section from the current fixer report. If the pushed-back findings are identical (same finding numbers and descriptions), non-progress is detected: write non-progress details to `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason: Plan review non-progress — fixer pushed back identical findings in consecutive rounds`, including which findings were repeatedly pushed back. Move task to `## Blocked` in `_millhouse/scratch/board.kanban.md`. Validate per `doc/modules/validation.md` (6-column rules). Run the **Notification Procedure** with `BLOCKED: Plan review non-progress after consecutive fixer rounds`. Escalate to user immediately rather than spending remaining rounds.
+   d. If agent **approved** (no BLOCKING issues): set `approved: true` in plan frontmatter. Update status.md: `phase: planned`. Append `planned  <timestamp>` to `## Timeline` (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`). Proceed to Phase: Setup. Do not read the review file.
 
-   g. Re-spawn the reviewer agent with the **updated plan content only**. Do NOT pass the fixer report path to the reviewer. The reviewer always starts fresh from the updated plan alone, with no context from prior rounds. Report: **"Plan Review --- round N/&lt;max_plan_review_rounds&gt;"**
+   e. If agent **fixed or pushed back**: extract the fixer report file path from the agent's return value.
 
-   h. Max `max_plan_review_rounds` rounds. If unresolved BLOCKING issues remain after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Update status.md with `blocked: true`, `blocked_reason: Plan review dispute after <max_plan_review_rounds> rounds`. Move task to `## Blocked`. Validate per `doc/modules/validation.md`. Run the **Notification Procedure** with `BLOCKED: Plan review dispute after <max_plan_review_rounds> rounds`. Present remaining BLOCKING issues to user for decision.
+   f. **Progress detection.** Update `prev_fixer_report_path` to the current fixer report path. If `prev_fixer_report_path` was set before this round: read the `## Pushed Back` section from the previous fixer report and compare it against the `## Pushed Back` section from the current fixer report. If the pushed-back findings are identical (same finding numbers and descriptions), non-progress is detected: write non-progress details to `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason: Plan review non-progress — agent pushed back identical findings in consecutive rounds`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run the **Notification Procedure** with `BLOCKED: Plan review non-progress after consecutive rounds`. Escalate to user immediately rather than spending remaining rounds.
+
+   g. Re-spawn the review+fix agent with the **updated plan content only**. Do NOT pass the fixer report path to the agent. The agent always starts fresh from the updated plan alone, with no context from prior rounds. Report: **"Plan Review --- round N/&lt;max_plan_review_rounds&gt;"**
+
+   h. Max `max_plan_review_rounds` rounds. If unresolved BLOCKING issues remain after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Update status.md with `blocked: true`, `blocked_reason: Plan review dispute after <max_plan_review_rounds> rounds`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run the **Notification Procedure** with `BLOCKED: Plan review dispute after <max_plan_review_rounds> rounds`. Present remaining BLOCKING issues to user for decision.
 
 ### Phase: Setup
 
@@ -264,23 +264,21 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
    - Minor changes (formatting, comments, unrelated areas): log warning in status.md, proceed.
    - Major changes (files restructured, APIs changed, interfaces modified): halt. Plan-stale revert:
      1. Resolve parent worktree path via `git worktree list --porcelain` or `_millhouse/scratch/status.md` `parent:` field.
-     2. Check for modifications: `git -C <parent-path> status --porcelain _millhouse/backlog.kanban.md` — if output is non-empty, report the conflict and stop. Task remains on work-board (no data loss).
-     3. Add task back to `## Backlog` in the **parent's** `_millhouse/backlog.kanban.md`. Commit and push from parent context: `git -C <parent-path> add _millhouse/backlog.kanban.md && git -C <parent-path> commit -m "revert: return <task> to backlog (plan stale)" && git -C <parent-path> push`
-     4. Only after the backlog commit succeeds: remove task from `_millhouse/scratch/board.kanban.md`.
-     5. Recovery: if the backlog write/commit fails at step 3, stop and report the error. The task stays on the work-board — no data is lost. The user can retry or manually move the task.
-     6. Update status.md with `blocked: true` and `blocked_reason: Plan stale --- files changed since plan was written`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `mill-start`.
+     2. Remove the `[phase]` marker from the task's heading in the parent's `tasks.md` (resolve parent path via `git worktree list --porcelain`). Stage, commit, and push `tasks.md` from the parent worktree.
+     3. Update status.md with `blocked: true`, `blocked_reason: Plan stale --- files changed since plan was written`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `mill-start`.
 
 6. **Explore.** Read code following each step's `Explore:` targets. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
 
 7. **Read constraints.** Resolve repo root: `git rev-parse --show-toplevel`. Read `CONSTRAINTS.md` from repo root if it exists. These are hard invariants — never write code that violates them. If the file does not exist, proceed without it.
 
-8. **Move to Implementing.** Move task from `## Planned` to `## Implementing` in `_millhouse/scratch/board.kanban.md` (column move — no phase suffix). Validate per `doc/modules/validation.md` (6-column rules: Discussing, Planned, Implementing, Testing, Reviewing, Blocked). If validation fails, report the issue to the user and stop.
-
-   Update `_millhouse/scratch/status.md`:
+8. **Move to Implementing.** Update `_millhouse/scratch/status.md`:
    ```
    phase: implementing
    current_step: 1
    ```
+   Append `implementing  <timestamp>` to `## Timeline` (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
+
+   **Update tasks.md phase marker.** Resolve the parent worktree path via `git worktree list --porcelain`. In the parent's `tasks.md`, update the task's heading from `## [discussing] <Task Title>` (or `## [planned] <Task Title>`) to `## [implementing] <Task Title>`. Stage, commit, and push `tasks.md` from the parent worktree. If running in-place (main worktree), resolve via `git rev-parse --show-toplevel` instead.
 
 ### Phase: Implement
 
@@ -307,9 +305,9 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
       2. Track retry count in `_millhouse/scratch/status.md` under `retries:` as `step_<N>: <count>`.
       3. Max 3 retries per step.
       4. After 3 retries: classify the failure and route:
-         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`. Move task from current column to `## Blocked` in `_millhouse/scratch/board.kanban.md`. Validate per `doc/modules/validation.md` (6-column rules). Stop.
-         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md. Move task to `## Blocked`. Validate. Stop.
-         - **Upstream dependency error** (import from non-existent file, API not available): update status.md. Move task to `## Blocked`. Validate. Stop.
+         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Stop.
+         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Stop.
+         - **Upstream dependency error** (import from non-existent file, API not available): update status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Stop.
 
    f. **Commit and push after each successful step** using the step's `Commit:` message:
       - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
@@ -317,23 +315,26 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
       - Push: `git push`
       - This enables resume on crash.
 
-   On any block (after 3 retries, permission error, upstream dependency): after updating status.md and kanban, run the **Notification Procedure** with the appropriate BLOCKED event.
+   On any block (after 3 retries, permission error, upstream dependency): after updating status.md and timeline, run the **Notification Procedure** with the appropriate BLOCKED event.
 
 ### Phase: Test
 
-10. Move task from `## Implementing` to `## Testing` in `_millhouse/scratch/board.kanban.md` (column move). Validate per `doc/modules/validation.md` (6-column rules). Update `_millhouse/scratch/status.md`:
+10. Update `_millhouse/scratch/status.md`:
     ```
     phase: testing
     ```
+    Append `testing  <timestamp>` to `## Timeline` (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
+
+    **Update tasks.md phase marker.** Resolve the parent worktree path (or repo root if in-place). Update the task's heading in `tasks.md` to `## [testing] <Task Title>`. Stage, commit, and push from the parent worktree.
 
     **Full verification.** Run the complete verify command from plan frontmatter (lint, type-check, build, test --- whatever the command includes).
     - All tests must pass --- not just tests related to this task.
     - Compare failures against `_millhouse/scratch/test-baseline.md` to distinguish pre-existing failures from new regressions.
-    - If new failures: debug and fix using the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: move task to `## Blocked`, update status.md, run Notification Procedure, stop.
+    - If new failures: debug and fix using the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: update status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run Notification Procedure, stop.
 
     **If verify is `N/A`:** check the discussion file's `## Testing Strategy` section. If it specifies tests, there is a contradiction --- stop and report to user. Otherwise skip verification and proceed directly.
 
-    **If `max_code_review_rounds` is `0`:** skip Phase: Review and Phase: Resolve entirely. Proceed directly to Phase: Finalize.
+    **If `max_code_review_rounds` is `0`:** skip Phase: Review entirely. Proceed directly to Phase: Finalize.
 
 ### Phase: Review (round N/max_code_review_rounds)
 
@@ -341,119 +342,117 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
     ```
     phase: reviewing
     ```
+    Append `reviewing  <timestamp>` to `## Timeline` (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
-    Move task from `## Testing` to `## Reviewing` in `_millhouse/scratch/board.kanban.md` (column move). Validate per `doc/modules/validation.md` (6-column rules).
+    **Update tasks.md phase marker.** Resolve the parent worktree path (or repo root if in-place). Update the task's heading in `tasks.md` to `## [reviewing] <Task Title>`. Stage, commit, and push from the parent worktree.
 
     **Setup:** Ensure `_millhouse/scratch/reviews/` directory exists (`mkdir -p` if not). Initialize `prev_fixer_report_path` to empty (no previous fixer report on first round).
 
-12. **Spawn code-reviewer Agent.** Use the Agent tool with the model from `models.code-review` in `_millhouse/config.yaml`. Report to user: **"Review --- round N/&lt;max_code_review_rounds&gt;"** (where N is the current round number, starting at 1)
+12. **Code review loop:**
 
-    Compute the diff: `git diff <plan_start_hash>..HEAD`
+    a. Report to user: **"Review --- round N/&lt;max_code_review_rounds&gt;"** (where N is the current round number, starting at 1)
 
-    Read `_codeguide/Overview.md` if it exists (pass content to reviewer). Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
+    b. Compute the diff: `git diff <plan_start_hash>..HEAD`
 
-    Pass the following prompt verbatim, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, and `<CONSTRAINTS_CONTENT>`:
+    c. Read `_codeguide/Overview.md` if it exists (pass content to agent). Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to agent).
 
-    ---
-    You are an independent code reviewer. Evaluate the submitted diff for production readiness. You have no shared context with the implementing agent --- you see only the diff, the plan, and the quality standards. Be thorough, critical, and constructive.
+    d. Spawn the **code review+fix agent** using the Agent tool with the model from `models.code-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`:
 
-    **CRITICAL: Do NOT commit, push, or run any git commands. You only read files and write your review report. The orchestrator handles all git operations.**
+       ---
+       You are an independent code reviewer and fixer. You operate in two phases: first review (read-only), then fix (if needed). You have no shared context with the implementing agent --- you see only the diff, the plan, and the quality standards.
 
-    **CRITICAL: Do NOT read any files in `_millhouse/scratch/reviews/`. You must evaluate the diff independently with no knowledge of prior review rounds.**
+       **CRITICAL: Do NOT commit, push, or run any git commands. You only read files, write review/fix reports, and edit source files. The orchestrator handles all git operations.**
 
-    **FIRST ACTION --- mandatory before anything else:**
-    Read `_codeguide/Overview.md` if it exists. Use its module table and routing hints to navigate to relevant source files. If it does not exist, proceed without it.
+       **CRITICAL: Do NOT read any files in `_millhouse/scratch/reviews/`. You must evaluate the diff independently with no knowledge of prior review rounds.**
 
-    **Context provided:**
+       ---
 
-    1. The approved plan:
-    <PLAN_CONTENT>
+       ## Phase 1: Review (read-only)
 
-    2. Codeguide Overview (if available):
-    <OVERVIEW_CONTENT>
+       **FIRST ACTION --- mandatory before anything else:**
+       Read `_codeguide/Overview.md` if it exists. Use its module table and routing hints to navigate to relevant source files. If it does not exist, proceed without it.
 
-    3. Repository constraints (if available):
-    <CONSTRAINTS_CONTENT>
+       **Context provided:**
 
-    4. The diff to review:
-    <DIFF>
+       1. The approved plan:
+       <PLAN_CONTENT>
 
-    **Evaluate the diff against these criteria:**
+       2. Codeguide Overview (if available):
+       <OVERVIEW_CONTENT>
 
-    - **Plan alignment:** Does the code match the plan? Are there steps in the plan that the diff doesn't implement, or code in the diff that the plan doesn't describe?
-    - **Design intent:** For each `### Decision:` subsection in the plan's `## Context`, verify the implementation reflects the stated choice and does not silently deviate. Flag deviations as BLOCKING.
-    - **Correctness:** Bugs, logic errors, off-by-one errors, null/undefined handling?
-    - **Dead code:** Unused exports, unimported files, unreachable branches?
-    - **Test thoroughness** (enforce `@mill:testing` rules):
-      - Happy-path-only tests -> BLOCKING. Error paths and edge cases from plan's `Key test scenarios` must be covered.
-      - Implementation-mirroring tests (testing internal state instead of observable behavior) -> BLOCKING.
-      - Shallow assertions (`assert result`, `assert result is not None`) -> BLOCKING.
-      - TDD-marked steps where diff shows implementation committed without a preceding failing test -> BLOCKING.
-    - **Utility duplication** (BLOCKING): For every new function, helper, or utility in the diff, grep the codebase for existing implementations with similar names or purposes. Use the codeguide Overview to identify which modules to check. If an existing utility covers the same functionality, flag the reimplementation as BLOCKING with a pointer to the existing implementation.
-    - **Constraint violations** (BLOCKING): Check every constraint in the constraints section. If the diff introduces code that violates any constraint, flag as BLOCKING with the constraint heading and the violating code.
-    - **Pattern consistency:** Check that new code follows the same patterns as existing code in the same area --- naming conventions, error handling style, authentication patterns on endpoints.
-    - **Codebase consistency:** Does the code follow existing patterns in the codebase?
+       3. Repository constraints (if available):
+       <CONSTRAINTS_CONTENT>
 
-    **Output format:**
+       4. The diff to review:
+       <DIFF>
 
-    For each finding:
-    - State the file and line(s) it applies to
-    - State severity: **BLOCKING** (must fix before merge) or **NIT** (nice-to-have improvement)
-    - Describe the issue and suggest a fix
+       **Evaluate the diff against these criteria:**
 
-    End with per-file observations (one sentence per file changed) and an overall verdict: **APPROVE** or **REQUEST CHANGES**.
-    - APPROVE means: no BLOCKING issues remain. NITs are noted but do not block. Must include per-file observations --- a bare "APPROVE" without per-file analysis is invalid.
-    - REQUEST CHANGES means: one or more BLOCKING issues must be addressed.
+       - **Plan alignment:** Does the code match the plan? Are there steps in the plan that the diff doesn't implement, or code in the diff that the plan doesn't describe?
+       - **Design intent:** For each `### Decision:` subsection in the plan's `## Context`, verify the implementation reflects the stated choice and does not silently deviate. Flag deviations as BLOCKING.
+       - **Correctness:** Bugs, logic errors, off-by-one errors, null/undefined handling?
+       - **Dead code:** Unused exports, unimported files, unreachable branches?
+       - **Test thoroughness** (enforce `@mill:testing` rules):
+         - Happy-path-only tests -> BLOCKING. Error paths and edge cases from plan's `Key test scenarios` must be covered.
+         - Implementation-mirroring tests (testing internal state instead of observable behavior) -> BLOCKING.
+         - Shallow assertions (`assert result`, `assert result is not None`) -> BLOCKING.
+         - TDD-marked steps where diff shows implementation committed without a preceding failing test -> BLOCKING.
+       - **Utility duplication** (BLOCKING): For every new function, helper, or utility in the diff, grep the codebase for existing implementations with similar names or purposes. Use the codeguide Overview to identify which modules to check. If an existing utility covers the same functionality, flag the reimplementation as BLOCKING with a pointer to the existing implementation.
+       - **Constraint violations** (BLOCKING): Check every constraint in the constraints section. If the diff introduces code that violates any constraint, flag as BLOCKING with the constraint heading and the violating code.
+       - **Pattern consistency:** Check that new code follows the same patterns as existing code in the same area --- naming conventions, error handling style, authentication patterns on endpoints.
+       - **Codebase consistency:** Does the code follow existing patterns in the codebase?
 
-    Write your full review report to `_millhouse/scratch/reviews/<timestamp>-code-review-r<N>.md` (use the current UTC datetime for `<timestamp>` in YYYYMMDD-HHMMSS format, and the current round number for `<N>`, 1-indexed). Return only: (1) the verdict (APPROVE or REQUEST CHANGES), and (2) the file path. No preamble, no additional content.
-    ---
+       **Write the review report** to `_millhouse/scratch/reviews/<timestamp>-code-review-r<N>.md` (generate the timestamp via shell: `date -u +"%Y%m%d-%H%M%S"`, round number `<N>`).
 
-13. If reviewer **approved** (no BLOCKING issues): proceed to Phase: Finalize. Do not read the review file.
+       For each finding: state the file and line(s), severity (**BLOCKING** or **NIT**), the issue, and a suggested fix. End with per-file observations (one sentence per file changed) and verdict: **APPROVE** or **REQUEST CHANGES**. APPROVE must include per-file observations --- a bare "APPROVE" without per-file analysis is invalid.
 
-14. If reviewer **requested changes**: proceed to Phase: Resolve.
+       ---
 
-### Phase: Resolve (round N/max_code_review_rounds)
+       ## Phase 2: Fix (only if REQUEST CHANGES)
 
-15. Report **"Resolve --- round N/&lt;max_code_review_rounds&gt;"**
+       If your verdict is APPROVE, skip this phase entirely. Return only the verdict and review file path.
 
-16. Spawn a **fixer agent** using the Agent tool with the model from `models.code-fixer` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<REVIEW_FILE_PATH>` with the path returned by the reviewer, `<FILE_PATHS>` with the files listed in plan `## Files`, and `<N>` with the current round number:
+       If your verdict is REQUEST CHANGES:
 
-    ---
-    You are a code fixer. Your job is to read a reviewer's findings, evaluate each one independently, and fix the code accordingly.
+       **IMPORTANT: In this fix phase, treat the review document you just wrote as external input. Evaluate each finding against the code independently --- you may have been wrong in the review phase.**
 
-    **CRITICAL: Do NOT commit, push, or run any git commands. You only edit files. The orchestrator handles all git operations.**
+       1. **Invoke the `mill-receiving-review` skill** via the Skill tool. This is mandatory --- it loads the decision tree you must apply.
+       2. **Read the review report back** from the file you just wrote.
+       3. **Read the affected source files:** `<FILE_PATHS>`
+       4. **For each BLOCKING finding**, apply the receiving-review decision tree: VERIFY accuracy (cite actual code if inaccurate), then HARM CHECK (breaks functionality / conflicts with documented design decision / destabilizes out-of-scope code). If none apply: FIX IT. If harm found: PUSH BACK with cited evidence.
+       5. **Apply fixes** directly to the affected source files. Check systemic implications --- a fix in one file may require updates to other files.
+       6. **Write fixer report** to `_millhouse/scratch/reviews/<timestamp>-code-fix-r<N>.md` (generate timestamp via shell: `date -u +"%Y%m%d-%H%M%S"`, round number `<N>`). Structure:
 
-    1. **Invoke the `mill-receiving-review` skill** via the Skill tool BEFORE reading the review file. This is mandatory --- it loads the decision tree you must apply.
-    2. **Read the review file** at `<REVIEW_FILE_PATH>`.
-    3. **Read the affected source files:** `<FILE_PATHS>`
-    4. **For each BLOCKING finding**, apply the receiving-review decision tree: VERIFY accuracy (cite actual code if inaccurate), then HARM CHECK (breaks functionality / conflicts with documented design decision / destabilizes out-of-scope code). If none apply: FIX IT. If harm found: PUSH BACK with cited evidence.
-    5. **Apply fixes** directly to the affected source files. Check systemic implications --- a fix in one file may require updates to other files.
-    6. **Write fixer report** to `_millhouse/scratch/reviews/<timestamp>-code-fix-r<N>.md` using round number `<N>`. Structure:
+          ```markdown
+          # Code Fix Report --- Round <N>
 
-       ```markdown
-       # Code Fix Report --- Round <N>
+          ## Fixed
+          - Finding <N>: what was changed and where in which file
 
-       ## Fixed
-       - Finding <N>: what was changed and where in which file
+          ## Pushed Back
+          - Finding <N>: evidence why the fix would cause harm (cite code/docs)
+          ```
 
-       ## Pushed Back
-       - Finding <N>: evidence why the fix would cause harm (cite code/docs)
-       ```
+       7. **Return:** verdict (`APPROVE`, `FIXED`, or `PUSHED_BACK`) plus both file paths (review report path and fixer report path, space-separated). Format: `<verdict> <review-path> <fixer-path>`.
+       ---
 
-    7. **Return only:** verdict (`FIXED` or `PUSHED_BACK`) plus the fixer report file path. Nothing else.
-    ---
+    e. If agent **approved** (no BLOCKING issues): proceed to Phase: Finalize. Do not read the review file.
 
-17. **Progress detection.** Extract the fixer report file path from the second token of the fixer's return value. Update `prev_fixer_report_path` to the current fixer report path. If `prev_fixer_report_path` was set before this round: read the `## Pushed Back` section from the previous fixer report and compare it against the `## Pushed Back` section from the current fixer report. If the pushed-back findings are identical (same finding numbers and descriptions), non-progress is detected: update `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason: Review non-progress — fixer pushed back identical findings in consecutive rounds`. Move task to `## Blocked` in `_millhouse/scratch/board.kanban.md`. Validate per `doc/modules/validation.md` (6-column rules). Run the **Notification Procedure** with `BLOCKED: Review non-progress after consecutive fixer rounds`. Escalate to user immediately rather than spending remaining rounds.
+    f. If agent **fixed or pushed back**: extract the fixer report file path from the agent's return value.
 
-18. Re-run full verification (the verify command from plan frontmatter).
+    g. **Progress detection.** Update `prev_fixer_report_path` to the current fixer report path. If `prev_fixer_report_path` was set before this round: read the `## Pushed Back` section from the previous fixer report and compare it against the `## Pushed Back` section from the current fixer report. If the pushed-back findings are identical (same finding numbers and descriptions), non-progress is detected: update `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason: Review non-progress — agent pushed back identical findings in consecutive rounds`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run the **Notification Procedure** with `BLOCKED: Review non-progress after consecutive rounds`. Escalate to user immediately rather than spending remaining rounds.
 
-19. Re-spawn code-reviewer Agent with the **updated diff only** (`git diff <plan_start_hash>..HEAD`). Do NOT pass the fixer report path to the reviewer. The reviewer always starts fresh from the updated diff alone, with no context from prior rounds. Report: **"Review --- round N/&lt;max_code_review_rounds&gt;"**
+    h. **Re-verify.** Re-run full verification (the verify command from plan frontmatter). If verification fails after the fix phase, treat as a blocked state (same as Phase: Test failure handling).
 
-20. Max `max_code_review_rounds` rounds. If unresolved BLOCKING issues after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after <max_code_review_rounds> rounds — likely design flaw`. Move task to `## Blocked` in `_millhouse/scratch/board.kanban.md`. Validate per `doc/modules/validation.md` (6-column rules). Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after <max_code_review_rounds> rounds`. Present remaining BLOCKING issues to user for decision.
+    i. Re-spawn the review+fix agent with the **updated diff only** (`git diff <plan_start_hash>..HEAD`). Do NOT pass the fixer report path to the agent. The agent always starts fresh from the updated diff alone, with no context from prior rounds. Report: **"Review --- round N/&lt;max_code_review_rounds&gt;"**
+
+    j. Max `max_code_review_rounds` rounds. If unresolved BLOCKING issues after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after <max_code_review_rounds> rounds — likely design flaw`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after <max_code_review_rounds> rounds`. Present remaining BLOCKING issues to user for decision.
 
 ### Phase: Finalize
 
 Phase: Finalize is not resumable at the step level; on crash-resume, mill-go re-enters Phase: Finalize from the beginning. mill-merge's idempotency via its checkpoint branch ensures the merge is not duplicated.
+
+20. **Remove task from tasks.md.** Resolve the parent worktree path via `git worktree list --porcelain` (or repo root if in-place). Remove the task's entire `## ` block from `tasks.md` (from the `## [phase] <Task Title>` heading to the next `## ` or EOF). Completed tasks are in git history — no need to keep them in the file. Stage, commit, and push `tasks.md` from the parent worktree.
 
 21. **Codeguide update.** If `_codeguide/Overview.md` exists, invoke the `mill:codeguide-update` skill (no arguments --- it defaults to the current git diff).
 
@@ -466,10 +465,9 @@ Phase: Finalize is not resumable at the step level; on crash-resume, mill-go re-
     ```
     phase: complete
     ```
+    Append `complete  <timestamp>` to `## Timeline` (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
-24. **Remove task from board.** Remove the task block from `_millhouse/scratch/board.kanban.md` entirely — do not move to a Done column (there is none). Validate per `doc/modules/validation.md` (6-column rules). If validation fails, report the issue to the user and stop.
-
-25. **Auto-merge.** First, read `git.auto-merge` from `_millhouse/config.yaml` (already read at Entry). If `auto-merge` is `false`, skip mill-merge entirely: run the **Notification Procedure** with `COMPLETE: Task done, auto-merge disabled` (info-level --- toast + status only, skip Slack). Report: "Execution complete. Auto-merge disabled --- run `/mill-merge` when ready." Then stop (do not proceed to the child/in-place merge logic below).
+24. **Auto-merge.** First, read `git.auto-merge` from `_millhouse/config.yaml` (already read at Entry). If `auto-merge` is `false`, skip mill-merge entirely: run the **Notification Procedure** with `COMPLETE: Task done, auto-merge disabled` (info-level --- toast + status only, skip Slack). Report: "Execution complete. Auto-merge disabled --- run `/mill-merge` when ready." Then stop (do not proceed to the child/in-place merge logic below).
 
     If `auto-merge` is `true` (or not set), check whether mill-go is running in a child worktree or in-place on the main worktree. Detect using `git worktree list --porcelain` — if the current path is the first/main entry, it is in-place; otherwise it is a child worktree.
     - **Child worktree:** invoke `mill-merge` via the Skill tool. If mill-merge fails (conflicts, etc.): update status.md with `blocked: true`, `blocked_reason: Merge failed`. Run the **Notification Procedure** with `BLOCKED: Merge failed`. Report to user and stop.
@@ -497,21 +495,15 @@ For in-place runs: mill-go sets `phase: complete` and sends the completion notif
 
 ---
 
-## Kanban Updates
+## Board Updates
 
-Work board changes (`_millhouse/scratch/board.kanban.md`) are local-only (gitignored). No git staging needed.
+tasks.md changes require commit and push (tasks.md is git-tracked). When running from a child worktree, resolve the parent worktree path via `git worktree list --porcelain` and modify the parent's `tasks.md`.
 
-Backlog changes (`_millhouse/backlog.kanban.md`) are git-tracked — commit and push after every write. Use `git -C <parent-path>` when writing from a child worktree.
+Phase transitions are tracked via `phase:` in `_millhouse/scratch/status.md` and the append-only `## Timeline` section. See `doc/modules/discussion-format.md` for the status.md schema and timeline format.
 
-Column moves in `_millhouse/scratch/board.kanban.md` (no `[phase]` suffixes — column IS the phase):
-- Plan review passes → task stays in `## Planned` (moved there by mill-start), move to `## Implementing` at end of Phase: Setup
-- Implement → Test → move from `## Implementing` to `## Testing`
-- Test → Review → move from `## Testing` to `## Reviewing`
-- Finalize → remove task from board entirely (no Done column)
-- Plan stale → remove from board, add back to parent's `backlog.kanban.md` `## Backlog` (with git commit)
-- Blocked → move to `## Blocked` from whatever current column
-
-Validate per `doc/modules/validation.md` (6-column rules) after every board write.
+- Phase transitions → update `[phase]` marker in parent's `tasks.md`, commit and push
+- Plan stale → remove `[phase]` marker from task in parent's `tasks.md`, commit and push
+- Task complete → remove task's `## ` block from parent's `tasks.md`, commit and push
 
 ---
 
@@ -630,8 +622,7 @@ When a step fails after exhausting retries, classify before escalating:
 
 On any failure that blocks progress:
 
-1. Update `_millhouse/scratch/status.md` with `blocked: true` and `blocked_reason:`.
-2. Move task to `## Blocked` in `_millhouse/scratch/board.kanban.md` from whatever current column. Validate per `doc/modules/validation.md` (6-column rules).
-3. Preserve all state --- do not clean up, do not rollback automatically.
-4. Run the **Notification Procedure** (see section above) with the BLOCKED event.
-5. Report the blocker to the user.
+1. Update `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason:`, and `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`.
+2. Preserve all state --- do not clean up, do not rollback automatically.
+3. Run the **Notification Procedure** (see section above) with the BLOCKED event.
+4. Report the blocker to the user.

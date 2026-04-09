@@ -36,12 +36,10 @@ Millhouse is a multi-plugin marketplace for Claude Code. The core plugin is `mil
 - Always push immediately after every commit. Never ask — just do it.
 - Batch related small changes into one commit. Don't commit trivial edits individually — accumulate doc fixes, settings tweaks, and minor adjustments, then commit them together as one logical unit.
 
-## Kanban
+## Tasks
 
-- Backlog board: `_millhouse/backlog.kanban.md` — git-tracked, 3 columns (Backlog, Spawn, Delete). Manual task entry.
-- Work board: `_millhouse/scratch/board.kanban.md` — gitignored, 6 phase columns (Discussing, Planned, Implementing, Testing, Reviewing, Blocked). Mill-managed. Each worktree gets its own copy.
-- Run `mill-setup` to create both board files after a fresh clone (safe to re-run; skips existing files).
-- Format reference: `plugins/mill/doc/modules/kanban-format.md`.
-- Work board uses columns as phases — no `[phase]` suffix in task headings.
-- Only extension-supported metadata fields (priority, tags, workload, due).
-- Descriptions use indented ` ```md ` code blocks, never plain text.
+- Task list: `tasks.md` at repo root — git-tracked, `## ` headings for tasks, optional `[phase]` markers.
+- Phase tracking: `_millhouse/scratch/status.md` — `phase:` field is the authoritative source. `## Timeline` section records chronological phase history.
+- `_millhouse/` is gitignored. On spawn, it is copied (excluding `scratch/`) from parent to new worktree.
+- Run `mill-setup` to initialize after a fresh clone (safe to re-run; skips existing files).
+- Format reference: `plugins/mill/doc/modules/backlog-format.md` (tasks.md format).
