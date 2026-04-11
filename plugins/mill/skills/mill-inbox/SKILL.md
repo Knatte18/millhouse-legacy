@@ -19,7 +19,7 @@ gh auth status
 
 If not authenticated, stop and tell the user to run `gh auth login`.
 
-Verify `tasks.md` exists at the repo root (resolve via `git rev-parse --show-toplevel`). If not, stop and tell the user to run `mill-setup` first.
+Verify `tasks.md` exists in the project root (the working directory where `_millhouse/` lives). If not, stop and tell the user to run `mill-setup` first.
 
 Read `_millhouse/scratch/issues.json`. If the file does not exist, stop and tell the user:
 
@@ -42,7 +42,7 @@ Issues fetched at: <fetchedAt>
 
 ### Step 2: Deduplicate
 
-Read `tasks.md` at the repo root. Collect all `## ` headings. Strip any `[phase] ` prefix from headings before comparing.
+Read `tasks.md` in the project root. Collect all `## ` headings. Strip any `[phase] ` prefix from headings before comparing.
 
 For each issue in `issues.json`: check if the title (case-insensitive) matches an existing task heading. Deduplicated issues are silently excluded from the selection list and are NOT closed on GitHub.
 

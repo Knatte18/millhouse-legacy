@@ -4,7 +4,7 @@ Reference for the `tasks.md` file at the repository root. This is the git-tracke
 
 ## File Location
 
-`tasks.md` at the repository root (resolve via `git rev-parse --show-toplevel`). Git-tracked — changes require commit and push.
+`tasks.md` in the project root (the working directory where `_millhouse/` lives). Git-tracked — changes require commit and push.
 
 Created by `mill-setup`. Must have a `# Tasks` heading on line 1.
 
@@ -47,10 +47,11 @@ Format: `## [phase] Task Title`
 ## [reviewing] Add OAuth Support
 ```
 
-Valid phase values: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `spawn`.
+Valid phase values: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `done`, `>`.
 
 - No marker = unclaimed / available for pickup
-- `[spawn]` = ready to be claimed by `mill-spawn.ps1` (transient — removed when claimed)
+- `[>]` = ready to be claimed by `mill-spawn.ps1` (changed to `[discussing]` when claimed)
+- `[done]` = merged but not yet cleaned up — set by `mill-merge`, removed by `mill-cleanup.ps1`
 - Other markers = active work in progress
 
 Task identity is the title text *without* any `[phase]` prefix. `## [implementing] Add OAuth Support` -> title = `Add OAuth Support`.
@@ -68,9 +69,9 @@ A task block starts at `## Title` (with or without `[phase]`) and ends immediate
 | **Create task** (mill-add) | Append `## Title` at end of file, commit + push |
 | **Import issues** (mill-inbox) | Append `## Title` blocks at end of file, commit + push |
 | **Claim task** (mill-start) | Add `[discussing]` marker to heading, commit + push |
-| **Spawn task** (mill-spawn) | Add `## [spawn] Title`, commit + push; script claims it |
+| **Spawn task** (mill-spawn) | Add `## [>] Title`, commit + push; script claims it (changes to `[discussing]`) |
 | **Update phase** (mill-go) | Update `[phase]` marker in heading, commit + push on parent |
-| **Complete task** (mill-go finalize) | Remove `## ` block entirely, commit + push on parent |
+| **Complete task** (mill-cleanup) | Remove `## ` block entirely via `mill-cleanup.ps1`, commit + push on parent |
 | **Abandon task** (mill-abandon) | Remove `[phase]` marker from heading, commit + push on parent |
 | **Dashboard** (mill-status) | Read tasks.md for task counts and phase overview |
 
@@ -81,7 +82,7 @@ A task block starts at `## Title` (with or without `[phase]`) and ends immediate
 - Descriptions use bullet points (not fenced code blocks).
 - Phase markers are optional — adding a task by hand requires only `## Title`.
 - Skills that run from child worktrees modify the parent's `tasks.md` (resolve parent path via `git worktree list --porcelain`).
-- Skills that run from the main worktree modify `tasks.md` directly (resolve via `git rev-parse --show-toplevel`).
+- Skills that run from the main worktree modify `tasks.md` directly in the project root.
 
 ## Example File
 

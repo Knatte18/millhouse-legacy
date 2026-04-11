@@ -26,7 +26,7 @@ Text before the first colon is the title. Text after is the body (description). 
 
 ### Step 1: Check tasks.md exists
 
-Resolve the repo root via `git rev-parse --show-toplevel`. If `tasks.md` does not exist at the repo root, stop and tell the user to run `mill-setup` first.
+If `tasks.md` does not exist in the project root (the working directory where `_millhouse/` lives), stop and tell the user to run `mill-setup` first.
 
 ### Step 2: Parse input
 

@@ -1,6 +1,9 @@
 # CLAUDE.md
 Instructions for Claude Code when working in this repository.
 
+## Startup
+On first message in a conversation, invoke `mill:conversation` and `mill:workflow` before responding.
+
 ## Background
 - This repo is based on a repo by Craig Motlin. When referring to "what Motlin does", I am referring to his code and repo. The repo can be found here: "C:\Code\motlin-claude-code-plugins".
 - Willie Tran's Autoboard is a reference system for autonomous agent orchestration. When referring to "what Tran does", I am referring to his code and repo. The repo can be found here: "C:\Code\autoboard".

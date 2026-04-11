@@ -1,4 +1,4 @@
-# mill-worktree.ps1 — Create a git worktree with millhouse setup.
+﻿# mill-worktree.ps1 — Create a git worktree with millhouse setup.
 # Handles: branch resolution, git worktree add, .env copies,
 # _millhouse/config.yaml, .vscode/settings.json (unique title bar color),
 # VS Code launch. Supports project subdirectories (cwd != git root).
@@ -86,7 +86,9 @@ if (-not $DirName) {
 if ($IsHub) {
     $WorktreePath = [System.IO.Path]::GetFullPath((Join-Path $HubRoot $DirName))
 } else {
-    $WorktreePath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "..\$DirName"))
+    $RepoName = Split-Path $RepoRoot -Leaf
+    $WorktreeContainer = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "..\$RepoName.worktree"))
+    $WorktreePath = Join-Path $WorktreeContainer $DirName
 }
 
 # Compute project path within the new worktree
@@ -214,6 +216,11 @@ if ($DryRun) {
     exit 0
 }
 
+# --- Create worktree container directory (non-hub only) ---
+if (-not $IsHub) {
+    New-Item -ItemType Directory -Path $WorktreeContainer -Force | Out-Null
+}
+
 # --- Create worktree ---
 Write-Host ""
 Write-Host "Creating worktree..."
@@ -243,6 +250,7 @@ git:
   base-branch: main
   parent-branch: $SourceBranch
   auto-merge: false
+  require-pr-to-base: false
 
 repo:
   short-name: ""
@@ -296,6 +304,70 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText((Join-Path $vscodeDir "settings.json"), $settingsJson, $utf8NoBom)
 
 Write-Host "Title bar color: $PickedColor"
+
+# --- .vscode/tasks.json (at parent's project path, i.e. $PWD) ---
+$parentVscodeDir = Join-Path $PWD ".vscode"
+$parentTasksJsonPath = Join-Path $parentVscodeDir "tasks.json"
+
+# Resolve mill-terminal.ps1 path (same directory as this script)
+$terminalScript = Join-Path (Split-Path $MyInvocation.MyCommand.Path) "mill-terminal.ps1"
+
+$millTaskObj = @"
+        {
+            "label": "Mill: Open Terminal Session",
+            "type": "shell",
+            "command": "& '$terminalScript'",
+            "presentation": {
+                "group": "mill"
+            }
+        }
+"@
+
+if (Test-Path $parentTasksJsonPath) {
+    # Parse existing tasks.json and append if Mill task not present
+    try {
+        $existingJson = Get-Content $parentTasksJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $hasMillTask = $false
+        if ($existingJson.tasks) {
+            foreach ($t in $existingJson.tasks) {
+                if ($t.label -eq "Mill: Open Terminal Session") {
+                    $hasMillTask = $true
+                    break
+                }
+            }
+        }
+        if (-not $hasMillTask) {
+            if (-not $existingJson.tasks) {
+                $existingJson | Add-Member -NotePropertyName "tasks" -NotePropertyValue @()
+            }
+            $newTask = @{
+                label = "Mill: Open Terminal Session"
+                type = "shell"
+                command = "& '$terminalScript'"
+                presentation = @{ group = "mill" }
+            }
+            $existingJson.tasks += $newTask
+            $updatedJson = $existingJson | ConvertTo-Json -Depth 10
+            [System.IO.File]::WriteAllText($parentTasksJsonPath, $updatedJson, $utf8NoBom)
+            Write-Host "Added Mill terminal task to existing .vscode/tasks.json"
+        }
+    } catch {
+        Write-Warning ".vscode/tasks.json exists but could not be parsed — skipping Mill task registration."
+    }
+} else {
+    # Create new tasks.json with Mill task
+    New-Item -ItemType Directory -Path $parentVscodeDir -Force | Out-Null
+    $tasksJsonContent = @"
+{
+    "version": "2.0.0",
+    "tasks": [
+$millTaskObj
+    ]
+}
+"@
+    [System.IO.File]::WriteAllText($parentTasksJsonPath, $tasksJsonContent, $utf8NoBom)
+    Write-Host "Created .vscode/tasks.json with Mill terminal task"
+}
 
 # --- Open VS Code (at project path) ---
 if (-not $NoOpen -and -not $Terminal) {

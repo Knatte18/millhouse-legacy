@@ -5,7 +5,7 @@ description: Create a new task in tasks.md.
 
 # mill-add
 
-One-shot. Add a task to `tasks.md` at the repo root.
+One-shot. Add a task to `tasks.md` in the project root.
 
 For tasks.md file format details, see `plugins/mill/doc/modules/backlog-format.md`.
 
@@ -24,7 +24,7 @@ Text before the first colon is the title. Text after is the body. No colon means
 
 ### Step 1: Check tasks.md exists
 
-Resolve the repo root via `git rev-parse --show-toplevel`. If `tasks.md` does not exist at the repo root, stop and tell the user to run `mill-setup` first.
+If `tasks.md` does not exist in the project root (the working directory where `_millhouse/` lives), stop and tell the user to run `mill-setup` first.
 
 ### Step 2: Parse input
 

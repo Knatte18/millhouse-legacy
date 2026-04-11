@@ -1,4 +1,4 @@
-# fetch-issues.ps1 — Fetch open GitHub issues for the current repo.
+﻿# fetch-issues.ps1 — Fetch open GitHub issues for the current repo.
 # Writes structured JSON to _millhouse/scratch/issues.json.
 #
 # Outputs the issues.json path on success (last line of stdout).

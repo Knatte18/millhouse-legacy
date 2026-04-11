@@ -20,7 +20,10 @@ git worktree list --porcelain
 ```
 If the current directory is the main worktree (the repo root), stop: "mill-merge must be run from a worktree, not the main repo."
 
-Read `_millhouse/config.yaml` if it exists; extract `git.parent-branch`. If not found, fall back to `parent:` in `_millhouse/scratch/status.md`. If neither exists, ask the user which branch to merge into.
+Verify this is a mill-managed worktree:
+- Read the YAML code block in `_millhouse/scratch/status.md`. If the file does not exist, or does not contain both a `task:` and a `phase:` field in the YAML code block, stop: "This worktree is not managed by mill (no status.md with task/phase). Use `git worktree remove` to clean up manually-created worktrees."
+
+Read `_millhouse/config.yaml` if it exists; extract `git.parent-branch`, `git.base-branch`, and `git.require-pr-to-base` (default `false` if missing). If `parent-branch` is not found, fall back to `parent:` from the YAML code block in `_millhouse/scratch/status.md`. If neither exists, ask the user which branch to merge into.
 
 ---
 
@@ -57,20 +60,61 @@ Invoke `mill-merge-in` via the Skill tool. This handles:
 - Verification
 - Codeguide update
 
-If mill-merge-in succeeds, capture the checkpoint branch name it reports (needed for rollback if steps 3–6 fail).
+If mill-merge-in succeeds, capture the checkpoint branch name it reports (needed for rollback if steps 3–7 fail).
 
 If mill-merge-in fails (reports rollback or unresolvable conflicts): release the merge lock (step 7) and report the failure to the user. Do not proceed.
 
-### 3. Merge into parent
+### 3. Mark task as done
 
-Determine the merge method:
+In the child worktree's `tasks.md` (in the project root), find the task heading matching the `task:` field from the YAML code block in `_millhouse/scratch/status.md`. The heading may carry any phase marker (e.g., `## [discussing] <Task Title>`) or no marker.
 
-Always direct squash merge. Mill never creates PRs — that is the user's responsibility via `/git-pr` or manually.
+Replace the heading with `## [done] <Task Title>`.
 
-**Important:** Capture the child branch name before switching context — it is needed in Step 4:
+Stage and commit `tasks.md` in the child worktree:
+```bash
+git add tasks.md
+git commit -m "task: mark <Task Title> [done]"
+```
+
+This commit becomes part of the squash merge in the next step, so the `[done]` marker propagates to the parent's `tasks.md` automatically.
+
+### 4. Merge into parent
+
+**Important:** Capture the child branch name before switching context — it is needed in Step 5:
 ```bash
 CHILD_BRANCH=$(git branch --show-current)
 ```
+
+Determine the merge method:
+
+**If `require-pr-to-base` is `true` AND `parent-branch` equals `base-branch`:** create a pull request instead of squash-merging.
+
+1. Verify `gh` is available and authenticated:
+   ```bash
+   gh --version
+   gh auth status
+   ```
+   If either command fails, stop: "gh CLI is required for PR creation but is not available or not authenticated. Install gh and run `gh auth login`."
+
+2. Push the branch if not already pushed:
+   ```bash
+   git push
+   ```
+
+3. Create the PR. Use the `task:` field from the YAML code block in `_millhouse/scratch/status.md` as the PR title:
+   ```bash
+   gh pr create --title "<task title>" --body "Merging branch \`$CHILD_BRANCH\` to \`<base-branch>\`."
+   ```
+
+4. Update the YAML code block in `_millhouse/scratch/status.md` with `phase: pr-pending` and add a `pr_url:` field containing the PR URL returned by `gh pr create`.
+
+5. Update parent's child registry (same as Step 5 of the normal path): if `<parent-path>/_millhouse/children/` exists, find the child registry file for `$CHILD_BRANCH` and update `status: active` to `status: pr-pending`. Add a `pr_url:` field with the PR URL. Skip silently if the registry or file is not found.
+
+6. Skip Step 6 (Notify). Jump to Step 7 (release merge lock). Report the PR URL to the user.
+
+If `gh pr create` fails, treat as a Step 4 failure: roll back to the checkpoint (same rollback procedure as below), release merge lock (Step 7), and report error.
+
+**Otherwise (default):** direct squash merge.
 
 ```bash
 # Switch to parent in the parent worktree or repo root
@@ -83,7 +127,7 @@ git push
 ```
 Squash merge collapses all worktree commits into a single commit on the parent branch.
 
-### 4. Update parent's child registry
+### 5. Update parent's child registry
 
 If `<parent-path>/_millhouse/children/` exists, find the child registry file whose YAML frontmatter contains `branch: <CHILD_BRANCH>` (search all `.md` files in the folder). If found:
 - Update `status: active` to `status: merged`
@@ -91,40 +135,9 @@ If `<parent-path>/_millhouse/children/` exists, find the child registry file who
 
 If `_millhouse/children/` does not exist in the parent, skip silently (backward compatibility with pre-change worktrees). If no matching file is found, skip silently.
 
-### 5. Notify
+### 6. Notify
 
 Run the **Notification Procedure** (same as mill-go — see below) with `COMPLETE: Merge successful for <branch>` (info-level — toast + status only, skip Slack).
-
-### 6. Cleanup
-
-After successful direct merge (already running in `<parent-path>` from step 3):
-
-```bash
-git worktree remove <worktree-path>
-git branch -D <worktree-branch>
-git branch -D mill-checkpoint-<name>
-```
-
-If `git worktree remove` fails (typically because VS Code locks the directory), fall back to unlinking without deleting the directory:
-
-```bash
-git worktree remove <worktree-path> --force
-```
-
-If that also fails, detach the worktree registration and prune:
-
-```bash
-git worktree prune
-git branch -D <worktree-branch>
-git branch -D mill-checkpoint-<name>
-```
-
-The orphaned directory can be deleted later (manually or by `mill-status`).
-
-If the branch was pushed to remote:
-```bash
-git push origin --delete <worktree-branch>
-```
 
 ### 7. Release merge lock
 
@@ -150,7 +163,7 @@ Then release the merge lock. Run the **Notification Procedure** with `BLOCKED: M
 
 ### Step 1: Update status file (always)
 
-Write the event to `_millhouse/scratch/status.md`. For blocking events, ensure `blocked: true` and `blocked_reason:` are set. For completion events, ensure `phase: complete`. Status file updates are the calling skill's responsibility, not the script's.
+Write the event to the YAML code block in `_millhouse/scratch/status.md`. For blocking events, ensure `blocked: true` and `blocked_reason:` are set. For completion events, ensure `phase: complete`. Status file updates are the calling skill's responsibility, not the script's.
 
 ### Step 2: Send notification
 
@@ -170,4 +183,4 @@ Urgency per event:
 
 ## Board Updates
 
-- Merge complete -> no board update needed. The child worktree's `status.md` already has `phase: complete`.
+- Merge complete -> task marked `[done]` in parent's `tasks.md` (carried via squash merge from child).

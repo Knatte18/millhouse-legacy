@@ -1,6 +1,6 @@
-# mill-spawn.ps1 — Self-contained worktree spawner for Mill tasks.
-# Reads tasks.md, claims the first [spawn] task, creates the worktree,
-# writes handoff brief / status, commits tasks.md change, opens VS Code.
+﻿# mill-spawn.ps1 — Self-contained worktree spawner for Mill tasks.
+# Reads tasks.md, claims the first [>] task (changes to [discussing]),
+# creates the worktree, writes handoff brief / status, commits tasks.md change.
 #
 # No Claude session needed — all logic is deterministic text processing.
 #
@@ -8,7 +8,8 @@
 
 [CmdletBinding()]
 param(
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$VSCode
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,25 +28,25 @@ if (-not (Test-Path $ConfigPath)) {
     exit 1
 }
 
-# --- Read tasks.md (repo root) ---
-$TasksPath = Join-Path $RepoRoot "tasks.md"
+# --- Read tasks.md (project root) ---
+$TasksPath = Join-Path $PWD "tasks.md"
 if (-not (Test-Path $TasksPath)) {
-    Write-Error "tasks.md not found at repo root. Run mill-setup first."
+    Write-Error "tasks.md not found in project root ($PWD). Run mill-setup first."
     exit 1
 }
 
 $TasksContent = Get-Content $TasksPath -Raw -Encoding UTF8
 
-# --- Find first ## [spawn] task ---
-$spawnMatch = [regex]::Match($TasksContent, '(?m)^## \[spawn\] (.+)$')
+# --- Find first ## [>] task ---
+$spawnMatch = [regex]::Match($TasksContent, '(?m)^## \[>\] (.+)$')
 if (-not $spawnMatch.Success) {
-    Write-Host "No [spawn] tasks in tasks.md."
+    Write-Host "No [>] tasks in tasks.md."
     exit 0
 }
 
 $TaskTitle = $spawnMatch.Groups[1].Value.Trim()
 
-# Capture full task block: from ## [spawn] heading to next ## or EOF
+# Capture full task block: from ## [>] heading to next ## or EOF
 $taskBlockStart = $spawnMatch.Index
 $h2Regex = [regex]::new('(?m)^## ')
 $nextH2Match = $h2Regex.Match($TasksContent, $taskBlockStart + $spawnMatch.Length)
@@ -69,10 +70,8 @@ if ($descLines.Count -gt 0) {
     $TaskDescription = $descLines -join "`n"
 }
 
-# --- Remove task block from tasks.md (in-memory) ---
-$UpdatedTasks = $TasksContent.Substring(0, $taskBlockStart) + $TasksContent.Substring($taskBlockEnd)
-# Clean up extra blank lines
-$UpdatedTasks = $UpdatedTasks -replace '(\r?\n){3,}', "`n`n"
+# --- Change [>] to [discussing] in tasks.md (in-memory) ---
+$UpdatedTasks = $TasksContent.Substring(0, $spawnMatch.Index) + "## [discussing] $TaskTitle" + $TasksContent.Substring($spawnMatch.Index + $spawnMatch.Length)
 
 # --- Generate slug ---
 $Slug = $TaskTitle.ToLower() -replace '\s+', '-' -replace '[^a-z0-9\-]', ''
@@ -102,7 +101,7 @@ Write-Host "Branch:    $BranchName"
 if ($DryRun) {
     Write-Host ""
     Write-Host "[DryRun] Would write handoff to _millhouse/handoff.md"
-    Write-Host "[DryRun] Would remove [spawn] task '$TaskTitle' from tasks.md."
+    Write-Host "[DryRun] Would change [>] to [discussing] for task '$TaskTitle' in tasks.md."
     Write-Host "[DryRun] Would create worktree via mill-worktree.ps1 (branch: $BranchName)"
     Write-Host "[DryRun] Would copy _millhouse/ (excluding scratch/) to new worktree"
     Write-Host "[DryRun] Would write status.md in new worktree"
@@ -114,7 +113,7 @@ if ($DryRun) {
 $tasksLines = $UpdatedTasks -split '\r?\n'
 $h1Count = 0
 $h2Headings = @()
-$validPhases = @('discussing', 'discussed', 'planned', 'implementing', 'testing', 'reviewing', 'blocked', 'spawn')
+$validPhases = @('discussing', 'discussed', 'planned', 'implementing', 'testing', 'reviewing', 'blocked', 'pr-pending', 'done', '>')
 
 for ($i = 0; $i -lt $tasksLines.Count; $i++) {
     $line = $tasksLines[$i]
@@ -128,7 +127,7 @@ for ($i = 0; $i -lt $tasksLines.Count; $i++) {
     if ($line -match '^## (?!#)') {
         $h2Headings += $line.Trim()
         # Check phase marker if present
-        if ($line -match '^## \[(\w+)\]') {
+        if ($line -match '^## \[([>\w]+)\]') {
             $phase = $Matches[1]
             if ($validPhases -notcontains $phase) {
                 Write-Error "Validation failed: Invalid phase marker [$phase] in heading: $line"
@@ -185,10 +184,11 @@ $handoffPath = Join-Path $PWD "_millhouse" | Join-Path -ChildPath "handoff.md"
 [System.IO.File]::WriteAllText($TasksPath, $UpdatedTasks, $utf8NoBom)
 
 # Commit and push the tasks.md change (git-tracked)
+$TasksRelPath = $TasksPath.Substring($RepoRoot.Length).TrimStart('\', '/')
 Push-Location $RepoRoot
 try {
-    git add tasks.md 2>&1 | Out-Null
-    git commit -m "task: claim $TaskTitle for spawn" 2>&1 | Out-Null
+    git add $TasksRelPath 2>&1 | Out-Null
+    git commit -m "task: claim $TaskTitle for discussing" 2>&1 | Out-Null
     git push 2>&1 | Out-Null
 } catch {
     Write-Warning "Git commit/push failed: $_"
@@ -260,18 +260,47 @@ if (Test-Path $srcMillhouse) {
 # --- Create empty _millhouse/scratch structure in new worktree ---
 New-Item -ItemType Directory -Path (Join-Path $ProjectPath "_millhouse/scratch/reviews") -Force | Out-Null
 
+# --- Locate status-template.md (three-tier resolution) ---
+$StatusTemplate = $null
+
+# Tier 1: plugin source (works in millhouse repo)
+$t1 = Join-Path $RepoRoot "plugins\mill\templates\status-template.md"
+if (Test-Path $t1) { $StatusTemplate = $t1 }
+
+# Tier 2: plugin cache (works in any repo with mill plugin installed)
+if (-not $StatusTemplate) {
+    $PluginBaseT = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
+    if (Test-Path $PluginBaseT) {
+        $VersionDirT = Get-ChildItem $PluginBaseT -Directory |
+            Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+        if ($VersionDirT) {
+            $t2 = Join-Path $VersionDirT.FullName "templates\status-template.md"
+            if (Test-Path $t2) { $StatusTemplate = $t2 }
+        }
+    }
+}
+
+# Tier 3: sibling to script's directory
+if (-not $StatusTemplate) {
+    $t3 = Join-Path (Split-Path $MyInvocation.MyCommand.Path) "templates\status-template.md"
+    if (Test-Path $t3) { $StatusTemplate = $t3 }
+}
+
+if (-not $StatusTemplate) {
+    Write-Error "status-template.md not found. Ensure the mill plugin is installed correctly."
+    exit 1
+}
+
 # --- Write status.md in new worktree ---
 $TimeStamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-$statusContent = @"
-parent: $ParentBranch
-task: $TaskTitle
-task_description: |
-  $DiscussionSummary
-phase: discussing
-
-## Timeline
-discussing              $TimeStamp
-"@
+$statusContent = Get-Content $StatusTemplate -Raw -Encoding UTF8
+$statusContent = $statusContent -replace '\{\{task\}\}', $TaskTitle
+$statusContent = $statusContent -replace '\{\{phase\}\}', 'discussing'
+$statusContent = $statusContent -replace '\{\{parent\}\}', $ParentBranch
+$statusContent = $statusContent -replace '\{\{task_description\}\}', $DiscussionSummary
+$statusContent = $statusContent -replace '\{\{timeline_entry\}\}', "discussing              $TimeStamp"
 
 $statusPath = Join-Path $ProjectPath "_millhouse" | Join-Path -ChildPath "scratch"
 $statusPath = Join-Path $statusPath "status.md"
@@ -311,19 +340,25 @@ $DiscussionSummary
 [System.IO.File]::WriteAllText($ChildFilePath, $childContent, $utf8NoBom)
 Write-Host "Child registry: $ChildFilename"
 
-# --- Open VS Code ---
-Write-Host "Opening VS Code..."
-$codeCmdPath = Get-Command "code.cmd" -ErrorAction SilentlyContinue
-if ($codeCmdPath) {
-    & code.cmd $ProjectPath | Out-Null
-} else {
-    Write-Warning "code.cmd not found on PATH. Open manually: $ProjectPath"
+# --- Open VS Code (only with -VSCode flag) ---
+if ($VSCode) {
+    Write-Host "Opening VS Code..."
+    $codeCmdPath = Get-Command "code.cmd" -ErrorAction SilentlyContinue
+    if ($codeCmdPath) {
+        & code.cmd $ProjectPath | Out-Null
+    } else {
+        Write-Warning "code.cmd not found on PATH. Open manually: $ProjectPath"
+    }
 }
 
 Write-Host ""
 Write-Host "Worktree created at $ProjectPath on branch $BranchName"
 Write-Host "Task: $TaskTitle"
-Write-Host "Run mill-start in the new VS Code window to continue planning."
+if ($VSCode) {
+    Write-Host "Run mill-start in the new VS Code window to continue planning."
+} else {
+    Write-Host "Run mill-terminal.ps1 from the parent terminal to open a Claude Code session in the new worktree."
+}
 
 # --- Stdout contract: bare project path as the only Write-Output ---
 Write-Output $ProjectPath

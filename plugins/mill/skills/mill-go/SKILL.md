@@ -16,13 +16,13 @@ Autonomous. Plan, implement, review, merge.
 
 Read `_millhouse/config.yaml`. If it does not exist, stop --- tell the user to run `mill-setup` first.
 
-Read `_millhouse/scratch/status.md`. Check the `phase:` field is exactly `discussed` (the completion sentinel confirming `mill-start` finished normally). If `phase:` is missing, not `discussed`, or is a partial value (e.g. `discussing`), stop --- tell the user to complete `mill-start` first.
+Read `_millhouse/scratch/status.md`. Check the `phase:` field from the YAML code block is exactly `discussed` (the completion sentinel confirming `mill-start` finished normally). If `phase:` is missing, not `discussed`, or is a partial value (e.g. `discussing`), stop --- tell the user to complete `mill-start` first.
 
-Extract the `discussion:` field to locate the discussion file. Read it. If it does not exist, stop --- tell the user to re-run `mill-start`.
+Extract the `discussion:` field from the YAML code block to locate the discussion file. Read it. If it does not exist, stop --- tell the user to re-run `mill-start`.
 
 Read the discussion file frontmatter. Validate the `worktree:` field matches the current working directory (`git rev-parse --show-toplevel`). If they differ, warn: "mill-go is running from `<cwd>` but the discussion was written in `<worktree>`. Verify you are in the correct worktree." This is the one exception to the "never ask" rule --- worktree mismatch can destroy work.
 
-Extract the `task:` field from status.md to identify the task title.
+Extract the `task:` field from the YAML code block in status.md to identify the task title.
 
 `mill-go` is always autonomous. It never runs a discuss phase or asks clarifying questions. That is `mill-start`'s job.
 
@@ -45,7 +45,7 @@ Parse `-pr` and `-cr` values from the skill invocation arguments. If not provide
 
 On entry, check if this is a resume (prior work exists):
 
-1. Read `_millhouse/scratch/status.md` for `phase:`, `plan:`, `current_step:`, and retry counts under `retries:`.
+1. Read the YAML code block in `_millhouse/scratch/status.md` for `phase:`, `plan:`, `current_step:`, and retry counts under `retries:`.
 
 2. **Pre-Setup resume.** Plan and Plan Review phases do not produce commits, so `git log --oneline` is not useful for detecting progress --- use status.md fields exclusively:
    - If `phase: discussed` and no `plan:` field: Phase: Plan (plan not yet written). Re-write the plan from scratch using the discussion file.
@@ -56,7 +56,7 @@ On entry, check if this is a resume (prior work exists):
 3. **Post-Setup resume** (existing git-log-based detection):
    - Check `git log --oneline` for commits matching plan step `Commit:` messages.
    - For each matching commit: mark that step as already done --- skip it.
-   - Determine current phase from the `phase:` field in status.md:
+   - Determine current phase from the `phase:` field in the YAML code block of status.md:
      - `implementing` → Phase: Implement (resume from current_step)
      - `testing` → Phase: Test
      - `reviewing` → Phase: Review
@@ -64,6 +64,43 @@ On entry, check if this is a resume (prior work exists):
    - Continue from the first incomplete step.
 
 Do NOT redo completed work. Do NOT re-run tests for steps that already committed successfully.
+
+---
+
+## LLM Backend Dispatch
+
+On entry, read the `llm-backend:` section from `_millhouse/config.yaml` (already read at Entry). If `llm-backend.enabled` is `true`, review agents (plan review, code review) are dispatched to the configured backend instead of the Agent tool. If `llm-backend.enabled` is `false`, missing, or the backend is unavailable, use the Agent tool as before.
+
+**Dispatch protocol** (used at each review agent spawn point):
+
+1. Write the full substituted review prompt to a temp file in `_millhouse/scratch/` (e.g., `_millhouse/scratch/plan-review-prompt.md`).
+2. If the review prompt references `mill-receiving-review` (Phase 2 of plan review and code review), read `plugins/mill/skills/mill-receiving-review/SKILL.md` and append its content to the prompt file with the header:
+
+   ```
+   ---
+
+   ## Pre-loaded: Receiving-Review Decision Tree
+
+   The following is the mill-receiving-review protocol. When Phase 2 instructs
+   you to "invoke the mill-receiving-review skill", apply this decision tree
+   directly instead:
+   ```
+
+   This is necessary because `claude --bare` has no access to skills.
+
+3. Call spawn-agent.ps1 via Bash:
+   ```bash
+   powershell -NoProfile -ExecutionPolicy Bypass -File "<cwd>/_millhouse/spawn-agent.ps1" \
+     -PromptFile "<temp-file>" -MaxTurns 20 -WorkDir "<cwd>"
+   EXIT_CODE=$?
+   ```
+
+4. Handle exit codes:
+   - **Exit 0:** success. Use stdout as the agent's response. Parse verdict and file paths identically to an Agent tool response.
+   - **Exit 1:** hard failure — the backend was healthy but invocation failed. Report the error to the user and stop. Do NOT fall back to the Agent tool.
+   - **Exit 2:** fallback — backend not configured or not reachable. Proceed to the **Agent tool path** below.
+
+5. After dispatch completes (either path), delete the temp prompt file.
 
 ---
 
@@ -83,7 +120,7 @@ During implementation, if a test failure matches the baseline (pre-existing), do
 
 ## Phases
 
-mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/status.md` with the current phase name and relevant fields. On resume, the agent reads the phase from status.md and continues from there.
+mill-go proceeds through named phases. Each phase updates the YAML code block in `_millhouse/scratch/status.md` with the current phase name and relevant fields, and inserts timeline entries before the closing ` ``` ` of the timeline text block. On resume, the agent reads the phase from the YAML code block in status.md and continues from there.
 
 ### Phase: Plan
 
@@ -143,7 +180,7 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
 
    Write the full plan autonomously --- no incremental approval checkpoints.
 
-   Update status.md: `plan: _millhouse/scratch/plan.md`.
+   Update the YAML code block in status.md: add `plan: _millhouse/scratch/plan.md`.
 
 ### Phase: Plan Review (BLOCKING GATE) (round N/max_plan_review_rounds)
 
@@ -165,7 +202,9 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to merged agent).
 
-   c. Spawn the **plan review+fix agent** using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<PLAN_FILE_PATH>`, and `<N>` (the current round number):
+   c. **LLM backend dispatch (if enabled):** If `llm-backend.enabled` is `true`, follow the Dispatch protocol from the "LLM Backend Dispatch" section above. Write the full substituted prompt (with all `<PLAN_CONTENT>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<PLAN_FILE_PATH>`, `<N>` values filled in) to a temp file. Append the receiving-review skill content (the prompt has Phase 2). Call `_millhouse/spawn-agent.ps1`. On exit 0: use the result. On exit 1: stop. On exit 2: proceed to the Agent tool path below.
+
+      **Agent tool path (default/fallback):** Spawn the **plan review+fix agent** using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<PLAN_FILE_PATH>`, and `<N>` (the current round number):
 
       ---
       You are an independent plan reviewer and fixer. You operate in two phases: first review (read-only), then fix (if needed). You have no shared context with the planning conversation --- you see only the plan, the task description, and the codebase.
@@ -243,48 +282,48 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
       8. **Return:** verdict (`APPROVE`, `FIXED`, or `PUSHED_BACK`) plus both file paths (review report path and fixer report path, space-separated). Format: `<verdict> <review-path> <fixer-path>`.
       ---
 
-   d. If agent **approved** (no BLOCKING issues): set `approved: true` in plan frontmatter. Update status.md: `phase: planned`. Append `planned  <timestamp>` to `## Timeline` (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`). Proceed to Phase: Setup. Do not read the review file.
+   d. If agent **approved** (no BLOCKING issues): set `approved: true` in plan frontmatter. Update the YAML code block in status.md: `phase: planned`. Use the Edit tool to insert `planned  <timestamp>` on a new line before the closing ` ``` ` of the timeline text block in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`). Proceed to Phase: Setup. Do not read the review file.
 
    e. If agent **fixed or pushed back**: extract the fixer report file path from the agent's return value.
 
-   f. **Progress detection.** Update `prev_fixer_report_path` to the current fixer report path. If `prev_fixer_report_path` was set before this round: read the `## Pushed Back` section from the previous fixer report and compare it against the `## Pushed Back` section from the current fixer report. If the pushed-back findings are identical (same finding numbers and descriptions), non-progress is detected: write non-progress details to `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason: Plan review non-progress — agent pushed back identical findings in consecutive rounds`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run the **Notification Procedure** with `BLOCKED: Plan review non-progress after consecutive rounds`. Escalate to user immediately rather than spending remaining rounds.
+   f. **Progress detection.** Update `prev_fixer_report_path` to the current fixer report path. If `prev_fixer_report_path` was set before this round: read the `## Pushed Back` section from the previous fixer report and compare it against the `## Pushed Back` section from the current fixer report. If the pushed-back findings are identical (same finding numbers and descriptions), non-progress is detected: update the YAML code block in `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason: Plan review non-progress — agent pushed back identical findings in consecutive rounds`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Run the **Notification Procedure** with `BLOCKED: Plan review non-progress after consecutive rounds`. Escalate to user immediately rather than spending remaining rounds.
 
    g. Re-spawn the review+fix agent with the **updated plan content only**. Do NOT pass the fixer report path to the agent. The agent always starts fresh from the updated plan alone, with no context from prior rounds. Report: **"Plan Review --- round N/&lt;max_plan_review_rounds&gt;"**
 
-   h. Max `max_plan_review_rounds` rounds. If unresolved BLOCKING issues remain after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Update status.md with `blocked: true`, `blocked_reason: Plan review dispute after <max_plan_review_rounds> rounds`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run the **Notification Procedure** with `BLOCKED: Plan review dispute after <max_plan_review_rounds> rounds`. Present remaining BLOCKING issues to user for decision.
+   h. Max `max_plan_review_rounds` rounds. If unresolved BLOCKING issues remain after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Update the YAML code block in status.md with `blocked: true`, `blocked_reason: Plan review dispute after <max_plan_review_rounds> rounds`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Run the **Notification Procedure** with `BLOCKED: Plan review dispute after <max_plan_review_rounds> rounds`. Present remaining BLOCKING issues to user for decision.
 
 ### Phase: Setup
 
-3. Record `PLAN_START_HASH=$(git rev-parse HEAD)`. Store in `_millhouse/scratch/status.md` as `plan_start_hash:`. On resume, read from status.md instead of re-computing.
+3. Record `PLAN_START_HASH=$(git rev-parse HEAD)`. Store in the YAML code block of `_millhouse/scratch/status.md` as `plan_start_hash:`. On resume, read from the YAML code block in status.md instead of re-computing.
 
-4. Read plan (path from `_millhouse/scratch/status.md` `plan:` field). Read all files listed in `## Files`.
+4. Read plan (path from the YAML code block in `_millhouse/scratch/status.md` `plan:` field). Read all files listed in `## Files`.
 
 5. **Staleness check.** Run `git log --since=<started> -- <file1> <file2> ...` using the `started:` timestamp from plan frontmatter and files from `## Files`.
    - No changes: proceed.
    - Minor changes (formatting, comments, unrelated areas): log warning in status.md, proceed.
    - Major changes (files restructured, APIs changed, interfaces modified): halt. Plan-stale revert:
-     1. Resolve parent worktree path via `git worktree list --porcelain` or `_millhouse/scratch/status.md` `parent:` field.
-     2. Remove the `[phase]` marker from the task's heading in the parent's `tasks.md` (resolve parent path via `git worktree list --porcelain`). Stage, commit, and push `tasks.md` from the parent worktree.
-     3. Update status.md with `blocked: true`, `blocked_reason: Plan stale --- files changed since plan was written`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `mill-start`.
+     1. Resolve parent worktree path via `git worktree list --porcelain` or the `parent:` field from the YAML code block in `_millhouse/scratch/status.md`.
+     2. Remove the `[phase]` marker from the task's heading in the parent's `tasks.md`. Resolve the parent's project root by computing the project subdirectory offset (working directory minus git root) and applying it to the parent worktree path. Stage, commit, and push `tasks.md` from the parent worktree.
+     3. Update the YAML code block in status.md with `blocked: true`, `blocked_reason: Plan stale --- files changed since plan was written`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Run the **Notification Procedure** with `BLOCKED: Plan stale — files changed`. Tell the user to re-run `mill-start`.
 
 6. **Explore.** Read code following each step's `Explore:` targets. If `_codeguide/Overview.md` exists: read it and use the navigation pattern (Overview -> module doc -> Source section -> code).
 
 7. **Read constraints.** Resolve repo root: `git rev-parse --show-toplevel`. Read `CONSTRAINTS.md` from repo root if it exists. These are hard invariants — never write code that violates them. If the file does not exist, proceed without it.
 
-8. **Move to Implementing.** Update `_millhouse/scratch/status.md`:
+8. **Move to Implementing.** Update the YAML code block in `_millhouse/scratch/status.md`:
    ```
    phase: implementing
    current_step: 1
    ```
-   Append `implementing  <timestamp>` to `## Timeline` (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
+   Use the Edit tool to insert `implementing  <timestamp>` on a new line before the closing ` ``` ` of the timeline text block in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
-   **Update tasks.md phase marker.** Resolve the parent worktree path via `git worktree list --porcelain`. In the parent's `tasks.md`, update the task's heading from `## [discussing] <Task Title>` (or `## [planned] <Task Title>`) to `## [implementing] <Task Title>`. Stage, commit, and push `tasks.md` from the parent worktree. If running in-place (main worktree), resolve via `git rev-parse --show-toplevel` instead.
+   **Update tasks.md phase marker.** Resolve the parent worktree path via `git worktree list --porcelain`. Compute the parent's project root by applying the project subdirectory offset (working directory minus git root) to the parent worktree path. In the parent's `tasks.md`, update the task's heading from `## [discussing] <Task Title>` (or `## [planned] <Task Title>`) to `## [implementing] <Task Title>`. Stage, commit, and push `tasks.md` from the parent worktree. If running in-place (main worktree), use the working directory directly.
 
 ### Phase: Implement
 
 9. **For each step in the plan:**
 
-   a. Update `_millhouse/scratch/status.md` with current step number and name:
+   a. Update the YAML code block in `_millhouse/scratch/status.md` with current step number and name:
       ```
       current_step: <N>
       current_step_name: <step description>
@@ -302,12 +341,12 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
 
    e. **On test failure** (new failure, not in baseline):
       1. Invoke the Systematic Debugging Protocol (see below) before retrying.
-      2. Track retry count in `_millhouse/scratch/status.md` under `retries:` as `step_<N>: <count>`.
+      2. Track retry count in the YAML code block of `_millhouse/scratch/status.md` under `retries:` as `step_<N>: <count>`.
       3. Max 3 retries per step.
       4. After 3 retries: classify the failure and route:
-         - **Code error** that you cannot fix: update status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Stop.
-         - **Permission/config error**: notify user immediately (no retries were appropriate). Update status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Stop.
-         - **Upstream dependency error** (import from non-existent file, API not available): update status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Stop.
+         - **Code error** that you cannot fix: update the YAML code block in status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Stop.
+         - **Permission/config error**: notify user immediately (no retries were appropriate). Update the YAML code block in status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Stop.
+         - **Upstream dependency error** (import from non-existent file, API not available): update the YAML code block in status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Stop.
 
    f. **Commit and push after each successful step** using the step's `Commit:` message:
       - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
@@ -319,18 +358,18 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
 
 ### Phase: Test
 
-10. Update `_millhouse/scratch/status.md`:
+10. Update the YAML code block in `_millhouse/scratch/status.md`:
     ```
     phase: testing
     ```
-    Append `testing  <timestamp>` to `## Timeline` (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
+    Use the Edit tool to insert `testing  <timestamp>` on a new line before the closing ` ``` ` of the timeline text block in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
-    **Update tasks.md phase marker.** Resolve the parent worktree path (or repo root if in-place). Update the task's heading in `tasks.md` to `## [testing] <Task Title>`. Stage, commit, and push from the parent worktree.
+    **Update tasks.md phase marker.** Resolve the parent's project root (parent worktree path + project subdirectory offset, or working directory if in-place). Update the task's heading in `tasks.md` to `## [testing] <Task Title>`. Stage, commit, and push from the parent worktree.
 
     **Full verification.** Run the complete verify command from plan frontmatter (lint, type-check, build, test --- whatever the command includes).
     - All tests must pass --- not just tests related to this task.
     - Compare failures against `_millhouse/scratch/test-baseline.md` to distinguish pre-existing failures from new regressions.
-    - If new failures: debug and fix using the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: update status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run Notification Procedure, stop.
+    - If new failures: debug and fix using the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: update the YAML code block in status.md with `blocked: true`, `blocked_reason:`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Run Notification Procedure, stop.
 
     **If verify is `N/A`:** check the discussion file's `## Testing Strategy` section. If it specifies tests, there is a contradiction --- stop and report to user. Otherwise skip verification and proceed directly.
 
@@ -338,13 +377,13 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
 
 ### Phase: Review (round N/max_code_review_rounds)
 
-11. Update `_millhouse/scratch/status.md`:
+11. Update the YAML code block in `_millhouse/scratch/status.md`:
     ```
     phase: reviewing
     ```
-    Append `reviewing  <timestamp>` to `## Timeline` (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
+    Use the Edit tool to insert `reviewing  <timestamp>` on a new line before the closing ` ``` ` of the timeline text block in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
-    **Update tasks.md phase marker.** Resolve the parent worktree path (or repo root if in-place). Update the task's heading in `tasks.md` to `## [reviewing] <Task Title>`. Stage, commit, and push from the parent worktree.
+    **Update tasks.md phase marker.** Resolve the parent's project root (parent worktree path + project subdirectory offset, or working directory if in-place). Update the task's heading in `tasks.md` to `## [reviewing] <Task Title>`. Stage, commit, and push from the parent worktree.
 
     **Setup:** Ensure `_millhouse/scratch/reviews/` directory exists (`mkdir -p` if not). Initialize `prev_fixer_report_path` to empty (no previous fixer report on first round).
 
@@ -356,7 +395,9 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
 
     c. Read `_codeguide/Overview.md` if it exists (pass content to agent). Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to agent).
 
-    d. Spawn the **code review+fix agent** using the Agent tool with the model from `models.code-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`:
+    d. **LLM backend dispatch (if enabled):** If `llm-backend.enabled` is `true`, follow the Dispatch protocol from the "LLM Backend Dispatch" section above. Write the full substituted prompt (with all `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, `<N>` values filled in) to a temp file. Append the receiving-review skill content (the prompt has Phase 2). Call `_millhouse/spawn-agent.ps1`. On exit 0: use the result. On exit 1: stop. On exit 2: proceed to the Agent tool path below.
+
+       **Agent tool path (default/fallback):** Spawn the **code review+fix agent** using the Agent tool with the model from `models.code-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`:
 
        ---
        You are an independent code reviewer and fixer. You operate in two phases: first review (read-only), then fix (if needed). You have no shared context with the implementing agent --- you see only the diff, the plan, and the quality standards.
@@ -440,37 +481,35 @@ mill-go proceeds through named phases. Each phase updates `_millhouse/scratch/st
 
     f. If agent **fixed or pushed back**: extract the fixer report file path from the agent's return value.
 
-    g. **Progress detection.** Update `prev_fixer_report_path` to the current fixer report path. If `prev_fixer_report_path` was set before this round: read the `## Pushed Back` section from the previous fixer report and compare it against the `## Pushed Back` section from the current fixer report. If the pushed-back findings are identical (same finding numbers and descriptions), non-progress is detected: update `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason: Review non-progress — agent pushed back identical findings in consecutive rounds`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run the **Notification Procedure** with `BLOCKED: Review non-progress after consecutive rounds`. Escalate to user immediately rather than spending remaining rounds.
+    g. **Progress detection.** Update `prev_fixer_report_path` to the current fixer report path. If `prev_fixer_report_path` was set before this round: read the `## Pushed Back` section from the previous fixer report and compare it against the `## Pushed Back` section from the current fixer report. If the pushed-back findings are identical (same finding numbers and descriptions), non-progress is detected: update the YAML code block in `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason: Review non-progress — agent pushed back identical findings in consecutive rounds`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Run the **Notification Procedure** with `BLOCKED: Review non-progress after consecutive rounds`. Escalate to user immediately rather than spending remaining rounds.
 
     h. **Re-verify.** Re-run full verification (the verify command from plan frontmatter). If verification fails after the fix phase, treat as a blocked state (same as Phase: Test failure handling).
 
     i. Re-spawn the review+fix agent with the **updated diff only** (`git diff <plan_start_hash>..HEAD`). Do NOT pass the fixer report path to the agent. The agent always starts fresh from the updated diff alone, with no context from prior rounds. Report: **"Review --- round N/&lt;max_code_review_rounds&gt;"**
 
-    j. Max `max_code_review_rounds` rounds. If unresolved BLOCKING issues after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Escalate to user. Update status.md with `blocked: true`, `blocked_reason: Review dispute after <max_code_review_rounds> rounds — likely design flaw`, `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after <max_code_review_rounds> rounds`. Present remaining BLOCKING issues to user for decision.
+    j. Max `max_code_review_rounds` rounds. If unresolved BLOCKING issues after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Escalate to user. Update the YAML code block in status.md with `blocked: true`, `blocked_reason: Review dispute after <max_code_review_rounds> rounds — likely design flaw`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Run the **Notification Procedure** with `BLOCKED: Code reviewer dispute after <max_code_review_rounds> rounds`. Present remaining BLOCKING issues to user for decision.
 
 ### Phase: Finalize
 
 Phase: Finalize is not resumable at the step level; on crash-resume, mill-go re-enters Phase: Finalize from the beginning. mill-merge's idempotency via its checkpoint branch ensures the merge is not duplicated.
 
-20. **Remove task from tasks.md.** Resolve the parent worktree path via `git worktree list --porcelain` (or repo root if in-place). Remove the task's entire `## ` block from `tasks.md` (from the `## [phase] <Task Title>` heading to the next `## ` or EOF). Completed tasks are in git history — no need to keep them in the file. Stage, commit, and push `tasks.md` from the parent worktree.
+20. **Codeguide update.** If `_codeguide/Overview.md` exists, invoke the `mill:codeguide-update` skill (no arguments --- it defaults to the current git diff).
 
-21. **Codeguide update.** If `_codeguide/Overview.md` exists, invoke the `mill:codeguide-update` skill (no arguments --- it defaults to the current git diff).
-
-22. **Post-review commit.** If any files changed during review fixes or codeguide update:
+21. **Post-review commit.** If any files changed during review fixes or codeguide update:
     - Stage files individually: `git add file1 file2` --- never `git add .` or `git add -A`.
     - Commit: `chore: post-review cleanup for <task-title>`
     - Push: `git push`
 
-23. **Update status.md:**
+22. **Update the YAML code block in status.md:**
     ```
     phase: complete
     ```
-    Append `complete  <timestamp>` to `## Timeline` (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
+    Use the Edit tool to insert `complete  <timestamp>` on a new line before the closing ` ``` ` of the timeline text block in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
-24. **Auto-merge.** First, read `git.auto-merge` from `_millhouse/config.yaml` (already read at Entry). If `auto-merge` is `false`, skip mill-merge entirely: run the **Notification Procedure** with `COMPLETE: Task done, auto-merge disabled` (info-level --- toast + status only, skip Slack). Report: "Execution complete. Auto-merge disabled --- run `/mill-merge` when ready." Then stop (do not proceed to the child/in-place merge logic below).
+23. **Auto-merge.** First, read `git.auto-merge` from `_millhouse/config.yaml` (already read at Entry). If `auto-merge` is `false`, skip mill-merge entirely: run the **Notification Procedure** with `COMPLETE: Task done, auto-merge disabled` (info-level --- toast + status only, skip Slack). Report: "Execution complete. Auto-merge disabled --- run `/mill-merge` when ready." Then stop (do not proceed to the child/in-place merge logic below).
 
     If `auto-merge` is `true` (or not set), check whether mill-go is running in a child worktree or in-place on the main worktree. Detect using `git worktree list --porcelain` — if the current path is the first/main entry, it is in-place; otherwise it is a child worktree.
-    - **Child worktree:** invoke `mill-merge` via the Skill tool. If mill-merge fails (conflicts, etc.): update status.md with `blocked: true`, `blocked_reason: Merge failed`. Run the **Notification Procedure** with `BLOCKED: Merge failed`. Report to user and stop.
+    - **Child worktree:** invoke `mill-merge` via the Skill tool. If mill-merge fails (conflicts, etc.): update the YAML code block in status.md with `blocked: true`, `blocked_reason: Merge failed`. Run the **Notification Procedure** with `BLOCKED: Merge failed`. Report to user and stop.
     - **In-place (main worktree):** skip mill-merge. Run the **Notification Procedure** with `COMPLETE: All tasks done, ready to merge` (info-level). Report: "In-place execution complete. Task done."
 
 ---
@@ -479,7 +518,7 @@ Phase: Finalize is not resumable at the step level; on crash-resume, mill-go re-
 
 After successful auto-merge in a child worktree: mill-merge handles its own notification and status update (`phase: complete`). mill-go does not send a duplicate notification.
 
-For in-place runs: mill-go sets `phase: complete` and sends the completion notification itself (step 25).
+For in-place runs: mill-go sets `phase: complete` and sends the completion notification itself (step 23).
 
 ---
 
@@ -497,13 +536,12 @@ For in-place runs: mill-go sets `phase: complete` and sends the completion notif
 
 ## Board Updates
 
-tasks.md changes require commit and push (tasks.md is git-tracked). When running from a child worktree, resolve the parent worktree path via `git worktree list --porcelain` and modify the parent's `tasks.md`.
+tasks.md changes require commit and push (tasks.md is git-tracked). When running from a child worktree, resolve the parent's project root by computing the project subdirectory offset (working directory minus git root) and applying it to the parent worktree path from `git worktree list --porcelain`. Modify the parent's `tasks.md` at that project root.
 
-Phase transitions are tracked via `phase:` in `_millhouse/scratch/status.md` and the append-only `## Timeline` section. See `doc/modules/discussion-format.md` for the status.md schema and timeline format.
+Phase transitions are tracked via `phase:` in the YAML code block of `_millhouse/scratch/status.md` and the `## Timeline` section (entries inserted before the closing ` ``` ` of the text fence). See `doc/modules/discussion-format.md` for the status.md schema and timeline format.
 
 - Phase transitions → update `[phase]` marker in parent's `tasks.md`, commit and push
 - Plan stale → remove `[phase]` marker from task in parent's `tasks.md`, commit and push
-- Task complete → remove task's `## ` block from parent's `tasks.md`, commit and push
 
 ---
 
@@ -513,7 +551,7 @@ When the skill says "notify user", follow this procedure. Notifications are NOT 
 
 ### Step 1: Update status file (always)
 
-Write the event to `_millhouse/scratch/status.md`. This happens regardless of config — the status file is the most reliable channel.
+Write the event to the YAML code block in `_millhouse/scratch/status.md`. This happens regardless of config — the status file is the most reliable channel.
 
 For blocking events, ensure `blocked: true` and `blocked_reason:` are set (already handled by Post-Failure State above).
 
@@ -622,7 +660,7 @@ When a step fails after exhausting retries, classify before escalating:
 
 On any failure that blocks progress:
 
-1. Update `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason:`, and `phase: blocked`. Append `blocked  <timestamp>` to `## Timeline`.
+1. Update the YAML code block in `_millhouse/scratch/status.md` with `blocked: true`, `blocked_reason:`, and `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block.
 2. Preserve all state --- do not clean up, do not rollback automatically.
 3. Run the **Notification Procedure** (see section above) with the BLOCKED event.
 4. Report the blocker to the user.

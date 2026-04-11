@@ -1,0 +1,54 @@
+# Spawn backend configuration for Millhouse.
+# Add this section to _millhouse/config.yaml to route spawned review agents
+# (discussion review, plan review, code review) to an alternative model backend
+# instead of Claude API.
+#
+# The backend can be local (vLLM on the same machine via WSL) or remote
+# (vLLM on another machine over the network, e.g. desktop GPU from a laptop).
+#
+# When enabled, mill-go and mill-start will try the configured provider first,
+# falling back to Claude (via the Agent tool) if the provider is unavailable.
+#
+# See plugins/mill/doc/guides/ for setup details:
+#   - vllm-guide.md         — vLLM flags, startup, testing
+#   - claude-code-local-llm.md — env vars, --bare flag, tool use
+#   - wsl2-gpu-setup.md     — CUDA toolkit, Python, model downloads
+
+llm-backend:
+  # Master switch. Set to true to enable alternative backend dispatch.
+  enabled: false
+
+  # Which provider to use. Currently supported: vllm
+  provider: vllm
+
+  # Fall back to Claude (Agent tool) when the local provider is unavailable.
+  fallback-to-claude: true
+
+  vllm:
+    # URL where vLLM is listening. Port is extracted from this URL.
+    url: http://localhost:8000
+
+    # Model name as configured in vLLM (--served-model-name).
+    model-name: default
+
+    # Path to the model directory inside WSL.
+    # Replace <username> with your WSL username.
+    wsl-model-path: /home/<username>/models/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit
+
+    # Maximum context length in tokens (--max-model-len).
+    # 65536 is the recommended balance of speed (139 tok/s) and capacity.
+    # See benchmarks.md for speed at other context sizes.
+    max-model-len: 65536
+
+    # Fraction of GPU memory vLLM may use (--gpu-memory-utilization).
+    # 0.93 is recommended for RTX 5090 (Windows DWM uses ~1.6 GiB).
+    # Do not exceed 0.94 on Windows.
+    gpu-memory-utilization: 0.93
+
+    # Additional vLLM flags appended to the serve command.
+    # These are always included: --enable-prefix-caching,
+    # --enable-auto-tool-choice, --tool-call-parser qwen3_xml,
+    # --enable-expert-parallel.
+    # NEVER add: --reasoning-parser, --kv-cache-dtype fp8_e4m3,
+    # --enforce-eager, --tool-call-parser hermes.
+    extra-flags: ""

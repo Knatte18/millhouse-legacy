@@ -1,4 +1,4 @@
-# Link all millhouse plugins to source, bypassing the plugin cache.
+﻿# Link all millhouse plugins to source, bypassing the plugin cache.
 # Uses Windows junctions (no admin required).
 # Run from the millhouse repo root.
 

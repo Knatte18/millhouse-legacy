@@ -16,7 +16,7 @@ Interactive. Pick a task and design the solution.
 
 Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
 
-Read `tasks.md` at the repo root (resolve via `git rev-parse --show-toplevel`). If it does not exist, stop and tell the user to run `mill-setup` first or create `tasks.md` manually.
+Read `tasks.md` in the project root (the working directory where `_millhouse/` lives). If it does not exist, stop and tell the user to run `mill-setup` first or create `tasks.md` manually.
 
 **Child worktree guard:** If running in a non-main worktree (detect via `git worktree list --porcelain` — current path is not the first/main entry), warn: "mill-start in-place should be run from the parent worktree. Commits in a child worktree create merge conflicts with the parent." Require user confirmation before proceeding.
 
@@ -36,13 +36,32 @@ Parse the `-dr` value from the skill invocation arguments. If not provided via C
 
 mill-start proceeds through named phases. Report the current phase to the user at each transition.
 
+### Phase: Color
+
+Read `.vscode/settings.json` in the current worktree. If it exists, extract the `titleBar.activeBackground` hex value. Map it to the closest Claude Code color name using this lookup:
+
+| Hex | CC Color |
+|-----|----------|
+| `#2d7d46` | green |
+| `#7d2d6b` | purple |
+| `#2d4f7d` | blue |
+| `#7d5c2d` | yellow |
+| `#6b2d2d` | red |
+| `#2d6b6b` | cyan |
+| `#4a2d7d` | purple |
+| `#7d462d` | orange |
+
+If a match is found, print: "Run `/color <name>` to match this worktree's theme."
+
+If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, or the hex value does not match any entry in the table: skip silently (no error). This is a best-effort visual cue, not a blocking requirement.
+
 ### Phase: Select
 
-0. **Check for handoff brief.** Use the Read tool (not bash) to read `_millhouse/handoff.md`. If it exists, the brief's `## Issue` identifies the task --- select it directly (skip step 1). Read `task:` and `task_description:` from `_millhouse/scratch/status.md` for the task details (written by mill-spawn before spawning). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain. After extracting task info from the handoff brief, delete `_millhouse/handoff.md`. This prevents stale handoff detection on subsequent in-place mill-start runs.
+0. **Check for handoff brief.** Use the Read tool (not bash) to read `_millhouse/handoff.md`. If it exists, the brief's `## Issue` identifies the task --- select it directly (skip step 1). Read the `task:` and `task_description:` fields from the YAML code block in `_millhouse/scratch/status.md` for the task details (written by mill-spawn before spawning). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain. After extracting task info from the handoff brief, delete `_millhouse/handoff.md`. This prevents stale handoff detection on subsequent in-place mill-start runs.
 
-1. **Guard: active task check.** This guard applies only to paths 2/3/4 below — path 0 (handoff brief) short-circuits to Explore and skips the guard. Before claiming a task, read `_millhouse/scratch/status.md` if it exists. If `phase:` is set and is not `complete`, report "An active task is already in progress (phase: `<phase>`). Run mill-go or mill-abandon first." and stop.
+1. **Guard: active task check.** This guard applies only to paths 2/3/4 below — path 0 (handoff brief) short-circuits to Explore and skips the guard. Before claiming a task, read the YAML code block in `_millhouse/scratch/status.md` if it exists. If the `phase:` field is set and is not `complete`, report "An active task is already in progress (phase: `<phase>`). Run mill-go or mill-abandon first." and stop.
 
-2. **Select task.** Read `tasks.md` at the repo root (resolve via `git rev-parse --show-toplevel`).
+2. **Select task.** Read `tasks.md` in the project root (the working directory where `_millhouse/` lives).
 
    a. Find all `## ` headings. Unmarked headings (no `[phase]` marker) are available tasks. Headings with a `[phase]` marker are already claimed — skip them.
 
@@ -56,14 +75,26 @@ mill-start proceeds through named phases. Report the current phase to the user a
 
    Validate tasks.md per `doc/modules/validation.md` (tasks.md structural rules).
 
-   Write to `_millhouse/scratch/status.md`:
-   ```
+   Write `_millhouse/scratch/status.md` with the complete fenced structure:
+
+   ````markdown
+   # Status
+
+   ```yaml
    phase: discussing
    task: <task-title>
    task_description: |
      <task description from tasks.md>
    ```
-   Append `discussing  <timestamp>` to `## Timeline` in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
+
+   ## Timeline
+
+   ```text
+   discussing  <timestamp>
+   ```
+   ````
+
+   Generate the timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`. The Timeline text block must be present in the initial write so subsequent Edit-tool timeline appends have a closing fence to insert before.
 
 ### Phase: Explore
 
@@ -126,7 +157,14 @@ mill-start proceeds through named phases. Report the current phase to the user a
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
 
-   c. Spawn the discussion-reviewer agent using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Follow the prompt template and invocation pattern defined in `doc/modules/discussion-review.md`.
+   c. **LLM backend dispatch (if enabled):** If `llm-backend.enabled` is `true` in `_millhouse/config.yaml`, try the alternative backend first. Write the full substituted discussion review prompt (from `doc/modules/discussion-review.md`, with `<DISCUSSION_FILE_PATH>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<N>` filled in) to a temp file in `_millhouse/scratch/` (e.g., `discussion-review-prompt.md`). Discussion review has no fix phase, so no `mill-receiving-review` inlining is needed. Call `_millhouse/spawn-agent.ps1` via Bash:
+      ```bash
+      powershell -NoProfile -ExecutionPolicy Bypass -File "<cwd>/_millhouse/spawn-agent.ps1" \
+        -PromptFile "<temp-file>" -MaxTurns 20 -WorkDir "<cwd>"
+      ```
+      On exit 0: use stdout as the agent's response. On exit 1: stop and report error. On exit 2: fall back to the Agent tool path below. Delete the temp prompt file after dispatch.
+
+      **Agent tool path (default/fallback):** Spawn the discussion-reviewer agent using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Follow the prompt template and invocation pattern defined in `doc/modules/discussion-review.md`.
 
    d. If reviewer **approved** (no GAPs): proceed to Phase: Handoff.
 
@@ -142,18 +180,16 @@ mill-start proceeds through named phases. Report the current phase to the user a
 
 9. **Lock and hand off:**
 
-   a. Update `_millhouse/scratch/status.md`:
+   a. Update `_millhouse/scratch/status.md` — use the Edit tool to update fields within the existing YAML code block:
 
-   ```
-   discussion: _millhouse/scratch/discussion.md
-   phase: discussed
-   task: <task-title>
-   parent: <parent-branch>
-   ```
+   - Add `discussion: _millhouse/scratch/discussion.md` as a new field in the YAML code block.
+   - Update `phase:` to `discussed`.
+   - Add `parent: <parent-branch>` if not already present.
+   - Preserve `task:` and `task_description:` from Phase: Select (do not remove them).
 
    Resolve `<parent-branch>` from `_millhouse/config.yaml` (`git.parent-branch` key) if it exists, otherwise from the branch that the worktree was created from (detect via `git worktree list --porcelain`), otherwise default to `main`.
 
-   b. Append `discussed  <timestamp>` to `## Timeline` in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
+   b. Use the Edit tool to insert `discussed  <timestamp>` on a new line before the closing ` ``` ` of the timeline text block in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
    c. Report: "Discussion complete. Discussion file written to `_millhouse/scratch/discussion.md`. Run `mill-go` to start autonomous execution."
 
@@ -161,7 +197,7 @@ mill-start proceeds through named phases. Report the current phase to the user a
 
 ## Todo Scope
 
-If you use TodoWrite to track your own progress, only include mill-start phases: Select, Explore, Discuss, Discussion File, Discussion Review, Handoff. Never add implementation steps (creating files, modifying files, writing code, running tests) --- those belong to mill-go.
+If you use TodoWrite to track your own progress, only include mill-start phases: Color, Select, Explore, Discuss, Discussion File, Discussion Review, Handoff. Never add implementation steps (creating files, modifying files, writing code, running tests) --- those belong to mill-go.
 
 ---
 
@@ -182,7 +218,7 @@ If you use TodoWrite to track your own progress, only include mill-start phases:
 
 tasks.md changes require commit and push (tasks.md is git-tracked).
 
-Phase transitions are tracked via `phase:` in `_millhouse/scratch/status.md` and the append-only `## Timeline` section.
+Phase transitions are tracked via `phase:` in the YAML code block of `_millhouse/scratch/status.md` and the `## Timeline` section (entries inserted before the closing ` ``` ` of the text fence).
 
-- Task claimed from tasks.md -> add `[discussing]` marker (commit + push), write `phase: discussing` + `task_description:` to status.md
-- Discussion complete -> write `phase: discussed` to status.md, append to timeline
+- Task claimed from tasks.md -> add `[discussing]` marker (commit + push), write fenced status.md with `phase: discussing` + `task_description:` in YAML code block
+- Discussion complete -> update `phase: discussed` in YAML code block, insert timeline entry before closing fence

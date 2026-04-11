@@ -2,11 +2,11 @@
 
 Post-write validation for `tasks.md`, `_millhouse/scratch/status.md`, and `_millhouse/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
 
-## tasks.md (repo root)
+## tasks.md (project root)
 
 ### File validation
 
-1. **File must exist.** `tasks.md` must exist at the repository root (resolve via `git rev-parse --show-toplevel`). Created by `mill-setup`. If missing, run `mill-setup`.
+1. **File must exist.** `tasks.md` must exist in the project root (the working directory where `_millhouse/` lives). Created by `mill-setup`. If missing, run `mill-setup`.
 
 ### Structural validation
 
@@ -14,16 +14,16 @@ After writing tasks.md, verify all of the following:
 
 1. **Single project heading.** Exactly one `# ` heading, at line 1 (e.g., `# Tasks`).
 2. **Tasks use `## ` headings.** All task entries are `## ` headings (not `###` or deeper).
-3. **Valid phase markers.** If a `## ` heading contains a `[phase]` marker, the phase must be one of: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `spawn`. Format: `## [phase] Title`.
+3. **Valid phase markers.** If a `## ` heading contains a `[phase]` marker, the phase must be one of: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `done`, `>`. Format: `## [phase] Title`. Note: the regex `\[(\w+)\]` does not match `[>]` — use `\[([>\w]+)\]` when validating programmatically.
 4. **No orphaned content.** No non-blank lines before the first `## ` heading (except the `# ` project heading).
 
 ## status.md (`_millhouse/scratch/status.md`)
 
 ### Field validation
 
-After writing status.md, verify:
+After writing status.md, verify fields within the YAML code block (` ```yaml ``` ` fence):
 
-1. **`phase:` is valid.** Must be one of: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `complete`. Empty/missing `phase:` is allowed only if no task is active.
+1. **`phase:` is valid.** Must be one of: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `done`, `complete`. Empty/missing `phase:` is allowed only if no task is active.
 2. **`task:` is non-empty when phase is set.** If `phase:` has a value, `task:` must also have a non-empty value.
 
 ## _millhouse/config.yaml

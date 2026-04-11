@@ -105,7 +105,10 @@ These values are copied into the plan frontmatter by `mill-go`.
 
 ## status.md Schema
 
-After `mill-start` completes (Phase: Handoff), `status.md` must contain:
+`status.md` uses fenced code blocks per `markdown-format.md`. After `mill-start` completes (Phase: Handoff), `status.md` must have this structure:
+
+````markdown
+# Status
 
 ```yaml
 discussion: _millhouse/scratch/discussion.md
@@ -116,11 +119,19 @@ task_description: |
 parent: <parent-branch>
 ```
 
-- `phase: discussed` is the completion sentinel. `mill-go` checks for exactly this value on entry to confirm `mill-start` completed normally.
-- `parent:` is the fallback for `mill-merge` and plan-stale revert when `_millhouse/config.yaml` is absent.
-- `task_description:` stores the task body text (migrated from tasks.md). Written by `mill-start` (in-place flow) and `mill-spawn.ps1` (worktree flow).
+## Timeline
 
-After `mill-go` Plan Review completes and sets `approved: true` in the plan frontmatter, `mill-go` adds:
+```text
+discussing              2026-04-08T10:23:15Z
+discussed               2026-04-08T11:00:00Z
+```
+````
+
+- `phase: discussed` is the completion sentinel. `mill-go` checks for exactly this value in the YAML code block on entry to confirm `mill-start` completed normally.
+- `parent:` is the fallback for `mill-merge` and plan-stale revert when `_millhouse/config.yaml` is absent.
+- `task_description:` stores the task body text (migrated from tasks.md). Written by `mill-start` (in-place flow) and `mill-spawn.ps1` (worktree flow via template).
+
+After `mill-go` Plan Review completes and sets `approved: true` in the plan frontmatter, `mill-go` adds to the YAML code block:
 
 ```yaml
 plan: _millhouse/scratch/plan.md
@@ -130,16 +141,18 @@ The `approved:` field lives in the plan frontmatter, not in `status.md`.
 
 ### Valid phase values
 
-`discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `complete`.
+`discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `complete`.
 
 The `phase:` field is the authoritative source of truth for the current workflow phase.
 
 ## Timeline Section
 
-`status.md` includes an append-only `## Timeline` section that records chronological phase history. Each phase transition appends one line via shell `echo >>`:
+`status.md` includes a `## Timeline` section with a ` ```text ``` ` fenced block that records chronological phase history. Each phase transition inserts a new line before the closing ` ``` ` of the text fence using the Edit tool:
 
-```
+````markdown
 ## Timeline
+
+```text
 discussing              2026-04-08T10:23:15Z
 discussion-review-r1    2026-04-08T10:45:00Z
 discussed               2026-04-08T11:00:00Z
@@ -152,11 +165,13 @@ reviewing               2026-04-08T11:50:00Z
 code-review-r1          2026-04-08T12:00:00Z
 complete                2026-04-08T12:10:00Z
 ```
+````
 
 Rules:
 - Format: `<phase-name>  <ISO-8601-timestamp>` (two spaces between name and timestamp).
 - Timestamps must be generated via shell `date -u +"%Y-%m-%dT%H:%M:%SZ"` (see `@mill:cli` timestamp rules).
+- New entries are inserted before the closing ` ``` ` of the timeline text block using the Edit tool (not `echo >>`).
 - Review rounds get individual entries: `plan-review-r1`, `plan-fix-r1`, `code-review-r1`, `code-fix-r1`, etc.
 - Implementation steps get entries: `step-1`, `step-2`, etc.
 - Unstarted phases have no entry (no `~` placeholders).
-- The timeline is history, not current state. The `phase:` field at the top is the authoritative current phase.
+- The timeline is history, not current state. The `phase:` field in the YAML code block is the authoritative current phase.

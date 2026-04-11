@@ -5,7 +5,7 @@ description: Initialize Mill for a repository. Creates tasks.md, config, directo
 
 # mill-setup
 
-One-time initialization per repo. Creates `tasks.md` at the repo root, the `_millhouse/` directory structure with config, scratch space, forwarding wrapper scripts, and VS Code color settings. Idempotent — safe to re-run (skips existing files).
+One-time initialization per project. Creates `tasks.md` in the project root (the working directory where `_millhouse/` is being created), the `_millhouse/` directory structure with config, scratch space, forwarding wrapper scripts, and VS Code color settings. Idempotent — safe to re-run (skips existing files).
 
 For tasks.md file format details, see `plugins/mill/doc/modules/backlog-format.md`.
 
@@ -27,7 +27,7 @@ Check the repo's root `.gitignore` for an entry matching `**/_millhouse/`. If no
 
 ### Step 3: Create tasks.md
 
-If `tasks.md` already exists at the repo root, skip creation (preserves existing task data on re-run).
+If `tasks.md` already exists in the project root, skip creation (preserves existing task data on re-run).
 
 If it does not exist, create it:
 
@@ -55,7 +55,7 @@ Ask the user: "Repo short-name for window titles (default: `<directory-name>`):"
 
 If `_millhouse/config.yaml` does not exist, write it with the full template below.
 
-If `_millhouse/config.yaml` already exists, check for missing top-level sections and append only the missing ones. Skip sections that already exist (preserves existing values). The sections to check: `git.auto-merge` (under existing `git:` section), `repo:`, `reviews:`. Do not overwrite existing keys.
+If `_millhouse/config.yaml` already exists, check for missing top-level sections and append only the missing ones. Skip sections that already exist (preserves existing values). The sections to check: `git.auto-merge` (under existing `git:` section), `git.require-pr-to-base` (under existing `git:` section), `repo:`, `reviews:`, `llm-backend:`. Do not overwrite existing keys.
 
 Full config template (used for new creation):
 
@@ -64,6 +64,7 @@ git:
   base-branch: main
   parent-branch: main
   auto-merge: false
+  require-pr-to-base: false
 
 repo:
   short-name: "<SHORT_NAME>"
@@ -87,6 +88,23 @@ notifications:
     channel: ""
   toast:
     enabled: true
+
+# Alternative LLM backend for spawned review agents.
+# When enabled, mill-go and mill-start route review agents to this backend
+# instead of Claude API. The backend can be local or remote (e.g. vLLM on
+# a GPU machine accessed over the network). Falls back to Claude if unavailable.
+# See plugins/mill/doc/guides/ and plugins/mill/templates/llm-config.example.yaml.
+llm-backend:
+  enabled: false
+  provider: vllm
+  fallback-to-claude: true
+  vllm:
+    url: http://localhost:8000
+    model-name: default
+    wsl-model-path: /path/to/model
+    max-model-len: 65536
+    gpu-memory-utilization: 0.93
+    extra-flags: ""
 ```
 
 Validate `_millhouse/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
@@ -197,6 +215,210 @@ if (-not (Test-Path $Script)) {
 & $Script @args
 ```
 
+#### 5d: mill-terminal.ps1
+
+Write `_millhouse/mill-terminal.ps1` with the following content:
+
+```powershell
+# mill-terminal.ps1 — Forwarding wrapper
+# Canonical script: plugins/mill/scripts/mill-terminal.ps1
+# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
+
+$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
+if (-not (Test-Path $PluginBase)) {
+    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
+    exit 1
+}
+
+$VersionDir = Get-ChildItem $PluginBase -Directory |
+    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
+    Sort-Object Name -Descending |
+    Select-Object -First 1
+
+if (-not $VersionDir) {
+    Write-Error "No valid version directory found in: $PluginBase"
+    exit 1
+}
+
+$Script = Join-Path $VersionDir.FullName "scripts\mill-terminal.ps1"
+if (-not (Test-Path $Script)) {
+    Write-Error "mill-terminal.ps1 not found at: $Script"
+    exit 1
+}
+
+& $Script @args
+```
+
+#### 5e: mill-vscode.ps1
+
+Write `_millhouse/mill-vscode.ps1` with the following content:
+
+```powershell
+# mill-vscode.ps1 — Forwarding wrapper
+# Canonical script: plugins/mill/scripts/mill-vscode.ps1
+# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
+
+$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
+if (-not (Test-Path $PluginBase)) {
+    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
+    exit 1
+}
+
+$VersionDir = Get-ChildItem $PluginBase -Directory |
+    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
+    Sort-Object Name -Descending |
+    Select-Object -First 1
+
+if (-not $VersionDir) {
+    Write-Error "No valid version directory found in: $PluginBase"
+    exit 1
+}
+
+$Script = Join-Path $VersionDir.FullName "scripts\mill-vscode.ps1"
+if (-not (Test-Path $Script)) {
+    Write-Error "mill-vscode.ps1 not found at: $Script"
+    exit 1
+}
+
+& $Script @args
+```
+
+#### 5f: mill-cleanup.ps1
+
+Write `_millhouse/mill-cleanup.ps1` with the following content:
+
+```powershell
+# mill-cleanup.ps1 — Forwarding wrapper
+# Canonical script: plugins/mill/scripts/mill-cleanup.ps1
+# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
+
+$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
+if (-not (Test-Path $PluginBase)) {
+    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
+    exit 1
+}
+
+$VersionDir = Get-ChildItem $PluginBase -Directory |
+    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
+    Sort-Object Name -Descending |
+    Select-Object -First 1
+
+if (-not $VersionDir) {
+    Write-Error "No valid version directory found in: $PluginBase"
+    exit 1
+}
+
+$Script = Join-Path $VersionDir.FullName "scripts\mill-cleanup.ps1"
+if (-not (Test-Path $Script)) {
+    Write-Error "mill-cleanup.ps1 not found at: $Script"
+    exit 1
+}
+
+& $Script @args
+```
+
+#### 5g: spawn-agent.ps1
+
+Write `_millhouse/spawn-agent.ps1` with the following content:
+
+```powershell
+# spawn-agent.ps1 — Forwarding wrapper
+# Canonical script: plugins/mill/scripts/spawn-agent.ps1
+# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
+
+$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
+if (-not (Test-Path $PluginBase)) {
+    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
+    exit 1
+}
+
+$VersionDir = Get-ChildItem $PluginBase -Directory |
+    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
+    Sort-Object Name -Descending |
+    Select-Object -First 1
+
+if (-not $VersionDir) {
+    Write-Error "No valid version directory found in: $PluginBase"
+    exit 1
+}
+
+$Script = Join-Path $VersionDir.FullName "scripts\spawn-agent.ps1"
+if (-not (Test-Path $Script)) {
+    Write-Error "spawn-agent.ps1 not found at: $Script"
+    exit 1
+}
+
+& $Script @args
+```
+
+#### 5h: start-qwen.ps1
+
+Write `_millhouse/start-qwen.ps1` with the following content:
+
+```powershell
+# start-qwen.ps1 — Forwarding wrapper
+# Canonical script: plugins/mill/scripts/start-qwen.ps1
+# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
+
+$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
+if (-not (Test-Path $PluginBase)) {
+    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
+    exit 1
+}
+
+$VersionDir = Get-ChildItem $PluginBase -Directory |
+    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
+    Sort-Object Name -Descending |
+    Select-Object -First 1
+
+if (-not $VersionDir) {
+    Write-Error "No valid version directory found in: $PluginBase"
+    exit 1
+}
+
+$Script = Join-Path $VersionDir.FullName "scripts\start-qwen.ps1"
+if (-not (Test-Path $Script)) {
+    Write-Error "start-qwen.ps1 not found at: $Script"
+    exit 1
+}
+
+& $Script @args
+```
+
+#### 5i: stop-qwen.ps1
+
+Write `_millhouse/stop-qwen.ps1` with the following content:
+
+```powershell
+# stop-qwen.ps1 — Forwarding wrapper
+# Canonical script: plugins/mill/scripts/stop-qwen.ps1
+# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
+
+$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
+if (-not (Test-Path $PluginBase)) {
+    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
+    exit 1
+}
+
+$VersionDir = Get-ChildItem $PluginBase -Directory |
+    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
+    Sort-Object Name -Descending |
+    Select-Object -First 1
+
+if (-not $VersionDir) {
+    Write-Error "No valid version directory found in: $PluginBase"
+    exit 1
+}
+
+$Script = Join-Path $VersionDir.FullName "scripts\stop-qwen.ps1"
+if (-not (Test-Path $Script)) {
+    Write-Error "stop-qwen.ps1 not found at: $Script"
+    exit 1
+}
+
+& $Script @args
+```
+
 ### Step 6: Write VS Code settings
 
 If `.vscode/settings.json` already exists, skip (preserves existing color settings on re-run).
@@ -219,12 +441,15 @@ Where `<SHORT_NAME>` is the value from Step 4a.
 
 ### Step 7: Update CLAUDE.md
 
-If `CLAUDE.md` exists, check for a `## Kanban` or `## Tasks` section. If either section exists, replace the section content with the new template below. If neither section exists, append it.
+If `CLAUDE.md` exists, check for a `## Kanban` or `## Tasks` section. If either section exists, replace the section content with the new template below. If neither section exists, append it. Also check for a `## Startup` section — if missing, add it before `## Tasks`.
 
 ```markdown
+## Startup
+On first message in a conversation, invoke `mill:conversation` and `mill:workflow` before responding.
+
 ## Tasks
 
-- Task list: `tasks.md` at repo root — git-tracked, `## ` headings for tasks, optional `[phase]` markers.
+- Task list: `tasks.md` in project root — git-tracked, `## ` headings for tasks, optional `[phase]` markers.
 - Phase tracking: `_millhouse/scratch/status.md` — `phase:` field is the authoritative source. `## Timeline` section records chronological phase history.
 - `_millhouse/` is gitignored. On spawn, it is copied (excluding `scratch/`) from parent to new worktree.
 - Run `mill-setup` to initialize after a fresh clone (safe to re-run; skips existing files).

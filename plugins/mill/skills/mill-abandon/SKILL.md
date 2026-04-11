@@ -20,14 +20,17 @@ git worktree list --porcelain
 ```
 If the current directory is the main worktree, stop: "mill-abandon must be run from a worktree, not the main repo."
 
+Verify this is a mill-managed worktree:
+- Read the YAML code block in `_millhouse/scratch/status.md`. If the file does not exist, or does not contain both a `task:` and a `phase:` field in the YAML code block, stop: "This worktree is not managed by mill (no status.md with task/phase). Use `git worktree remove` to clean up manually-created worktrees."
+
 Read the current branch name:
 ```bash
 git branch --show-current
 ```
 
-Read `_millhouse/scratch/status.md` if it exists to identify the task title.
+Read the YAML code block in `_millhouse/scratch/status.md` if it exists to identify the task title.
 
-Read `_millhouse/config.yaml` if it exists; extract `git.parent-branch`. If not found, fall back to `parent:` in `_millhouse/scratch/status.md`. If neither exists, ask the user which branch to merge into.
+Read `_millhouse/config.yaml` if it exists; extract `git.parent-branch`. If not found, fall back to `parent:` from the YAML code block in `_millhouse/scratch/status.md`. If neither exists, ask the user which branch to merge into.
 
 Resolve the parent worktree path: run `git worktree list --porcelain` and find the entry whose `branch` field matches the parent branch name. Extract its `worktree` path and store it. This path is used in Steps 5, 6, and 9. The resolved parent-branch and parent-path must be in memory before Step 4 removes the worktree.
 
@@ -66,7 +69,7 @@ Never auto-abandon. Never skip confirmation, even if there are no warnings.
 
 ### 4. Capture task info from status.md
 
-Read `task:` and `task_description:` from the child worktree's `_millhouse/scratch/status.md` **before** the worktree is deleted. Store the task title in memory for use in Step 9 (tasks.md update).
+Read `task:` and `task_description:` from the YAML code block in the child worktree's `_millhouse/scratch/status.md` **before** the worktree is deleted. Store the task title in memory for use in Step 9 (tasks.md update).
 
 ### 5. Update parent's child registry
 
@@ -114,7 +117,7 @@ git branch -D mill-checkpoint-<name>
 
 ### 9. Update tasks.md
 
-Resolve the parent worktree path (already resolved at Entry). Read `<parent-path>/tasks.md`. Find the task's `## ` heading (match by task title captured in Step 4). Remove the `[phase]` marker from the heading, making the task unclaimed again. E.g., `## [implementing] Fix login` becomes `## Fix login`.
+Resolve the parent's project root by computing the project subdirectory offset (working directory minus git root) and applying it to the parent worktree path (already resolved at Entry). Read `<parent-project-root>/tasks.md`. Find the task's `## ` heading (match by task title captured in Step 4). Remove the `[phase]` marker from the heading, making the task unclaimed again. E.g., `## [implementing] Fix login` becomes `## Fix login`.
 
 Stage, commit, and push from the parent worktree:
 ```bash
