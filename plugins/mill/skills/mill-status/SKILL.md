@@ -7,7 +7,7 @@ description: Dashboard showing all active worktrees and their state.
 
 Dashboard. No arguments.
 
-Shows task overview, current status, and worktree overview. Also cleans up stale worktrees.
+Shows task overview, current status, and worktree overview. Read-only — if stale state is detected, it suggests running `mill-cleanup` but does not mutate git state itself.
 
 ---
 
@@ -32,20 +32,7 @@ Read the YAML code block in `_millhouse/scratch/status.md` if it exists. Extract
 
 If a plan file path is present and the file exists, read the plan to count total steps (lines matching `### Step`) and completed steps (based on git log matching `Commit:` messages from the plan).
 
-### Step 3: Clean up stale worktrees
-
-Run `git worktree list --porcelain`. For each worktree (skip the main one):
-1. Check if the worktree's `_millhouse/scratch/status.md` YAML code block has `phase: complete`.
-2. Check if the worktree directory is still open in VS Code: `test -f <worktree-path>/.vscode-server` or check if any process holds a lock. In practice, just try `git worktree remove <path>` — if it fails (directory locked), skip it silently.
-3. If phase is complete and removal succeeds: delete the local branch (`git branch -D <branch>`) and the remote branch (`git push origin --delete <branch>` if it was pushed). Report: `Cleaned up: <branch>`.
-
-Run `git worktree prune` to remove any remaining stale entries (directories deleted manually).
-
-Check for orphaned worktree directories using layout-aware logic. Derive hub root: the parent directory of the repo root (`git rev-parse --show-toplevel`). Detect hub layout: `.bare` directory exists at `<hub-root>/.bare`.
-- **Hub layout**: scan the hub root for subdirectories not in `git worktree list` output AND not `.bare`. These are orphans — delete them immediately without asking for confirmation. Report each deletion: `Cleaned up orphan: <dirname>`.
-- **Non-hub layout**: skip orphan directory scanning entirely — no dedicated container directory exists, so scanning the parent directory would be overly broad.
-
-### Step 4: Build worktree tree
+### Step 3: Build worktree tree
 
 1. Run `git worktree list --porcelain` to get all worktrees with their branches and paths.
 2. For each worktree, read `_millhouse/children/` folder if it exists. Collect ALL `.md` files (active, merged, and abandoned entries). Parse YAML frontmatter for `branch:` and `status:` fields.
@@ -56,6 +43,17 @@ Check for orphaned worktree directories using layout-aware logic. Derive hub roo
    - For each **active** child, check if a live worktree exists for that branch (match branch name against `git worktree list` output). If it does, read the child's live `_millhouse/scratch/status.md` YAML code block for phase/progress. If no live worktree, show `[active — no worktree]`.
    - For **merged/abandoned** children, show them under their parent with their registry status. No live worktree lookup needed.
    - Recurse: if a child worktree has its own `_millhouse/children/`, include its children as grandchildren, and so on.
+
+### Step 4: Detect stale state (for cleanup suggestion)
+
+Scan for any of the following. If any are found, remember to emit a cleanup suggestion at the bottom of the dashboard in Step 5:
+
+- Children entries in `_millhouse/children/*.md` with `status: merged`, `status: abandoned`, or `status: complete`.
+- Worktrees (from `git worktree list --porcelain`) whose `_millhouse/scratch/status.md` YAML code block has `phase: complete`.
+- Orphan directories in `<parent-of-repo-root>/<reponame>.worktrees/` (non-hub layout): subdirs not in `git worktree list` output. Skip this check if hub layout is detected (a `.bare` directory exists at `<parent-of-repo-root>/.bare`) — hub-layout orphan detection is handled by `mill-cleanup` itself.
+- `[done]` or `[abandoned]` task markers in `tasks.md`.
+
+This is a read-only detection. No state is modified; this skill does not run cleanup actions.
 
 ### Step 5: Display dashboard
 
@@ -122,6 +120,12 @@ If there are no worktrees beyond main and main has no children:
 ```
 Worktrees:
   main
+```
+
+If any stale state was detected in Step 4, append this line at the very bottom of the dashboard output:
+
+```
+Stale state detected. Run `mill-cleanup` from the main worktree to clean up.
 ```
 
 ### Example output

@@ -67,43 +67,6 @@ Do NOT redo completed work. Do NOT re-run tests for steps that already committed
 
 ---
 
-## LLM Backend Dispatch
-
-On entry, read the `llm-backend:` section from `_millhouse/config.yaml` (already read at Entry). If `llm-backend.enabled` is `true`, review agents (plan review, code review) are dispatched to the configured backend instead of the Agent tool. If `llm-backend.enabled` is `false`, missing, or the backend is unavailable, use the Agent tool as before.
-
-**Dispatch protocol** (used at each review agent spawn point):
-
-1. Write the full substituted review prompt to a temp file in `_millhouse/scratch/` (e.g., `_millhouse/scratch/plan-review-prompt.md`).
-2. If the review prompt references `mill-receiving-review` (Phase 2 of plan review and code review), read `plugins/mill/skills/mill-receiving-review/SKILL.md` and append its content to the prompt file with the header:
-
-   ```
-   ---
-
-   ## Pre-loaded: Receiving-Review Decision Tree
-
-   The following is the mill-receiving-review protocol. When Phase 2 instructs
-   you to "invoke the mill-receiving-review skill", apply this decision tree
-   directly instead:
-   ```
-
-   This is necessary because `claude --bare` has no access to skills.
-
-3. Call spawn-agent.ps1 via Bash:
-   ```bash
-   powershell -NoProfile -ExecutionPolicy Bypass -File "<cwd>/_millhouse/spawn-agent.ps1" \
-     -PromptFile "<temp-file>" -MaxTurns 20 -WorkDir "<cwd>"
-   EXIT_CODE=$?
-   ```
-
-4. Handle exit codes:
-   - **Exit 0:** success. Use stdout as the agent's response. Parse verdict and file paths identically to an Agent tool response.
-   - **Exit 1:** hard failure — the backend was healthy but invocation failed. Report the error to the user and stop. Do NOT fall back to the Agent tool.
-   - **Exit 2:** fallback — backend not configured or not reachable. Proceed to the **Agent tool path** below.
-
-5. After dispatch completes (either path), delete the temp prompt file.
-
----
-
 ## Test Baseline
 
 Before implementing any steps (and only if not resuming past this point), capture the test baseline:
@@ -202,9 +165,7 @@ mill-go proceeds through named phases. Each phase updates the YAML code block in
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to merged agent).
 
-   c. **LLM backend dispatch (if enabled):** If `llm-backend.enabled` is `true`, follow the Dispatch protocol from the "LLM Backend Dispatch" section above. Write the full substituted prompt (with all `<PLAN_CONTENT>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<PLAN_FILE_PATH>`, `<N>` values filled in) to a temp file. Append the receiving-review skill content (the prompt has Phase 2). Call `_millhouse/spawn-agent.ps1`. On exit 0: use the result. On exit 1: stop. On exit 2: proceed to the Agent tool path below.
-
-      **Agent tool path (default/fallback):** Spawn the **plan review+fix agent** using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<PLAN_FILE_PATH>`, and `<N>` (the current round number):
+   c. Spawn the **plan review+fix agent** using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<PLAN_CONTENT>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<PLAN_FILE_PATH>`, and `<N>` (the current round number):
 
       ---
       You are an independent plan reviewer and fixer. You operate in two phases: first review (read-only), then fix (if needed). You have no shared context with the planning conversation --- you see only the plan, the task description, and the codebase.
@@ -395,9 +356,7 @@ mill-go proceeds through named phases. Each phase updates the YAML code block in
 
     c. Read `_codeguide/Overview.md` if it exists (pass content to agent). Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to agent).
 
-    d. **LLM backend dispatch (if enabled):** If `llm-backend.enabled` is `true`, follow the Dispatch protocol from the "LLM Backend Dispatch" section above. Write the full substituted prompt (with all `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, `<N>` values filled in) to a temp file. Append the receiving-review skill content (the prompt has Phase 2). Call `_millhouse/spawn-agent.ps1`. On exit 0: use the result. On exit 1: stop. On exit 2: proceed to the Agent tool path below.
-
-       **Agent tool path (default/fallback):** Spawn the **code review+fix agent** using the Agent tool with the model from `models.code-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`:
+    d. Spawn the **code review+fix agent** using the Agent tool with the model from `models.code-review` in `_millhouse/config.yaml`. Pass the following prompt verbatim, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`:
 
        ---
        You are an independent code reviewer and fixer. You operate in two phases: first review (read-only), then fix (if needed). You have no shared context with the implementing agent --- you see only the diff, the plan, and the quality standards.

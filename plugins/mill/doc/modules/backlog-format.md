@@ -47,11 +47,12 @@ Format: `## [phase] Task Title`
 ## [reviewing] Add OAuth Support
 ```
 
-Valid phase values: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `done`, `>`.
+Valid phase values: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `done`, `abandoned`, `>`.
 
 - No marker = unclaimed / available for pickup
 - `[>]` = ready to be claimed by `mill-spawn.ps1` (changed to `[discussing]` when claimed)
-- `[done]` = merged but not yet cleaned up — set by `mill-merge`, removed by `mill-cleanup.ps1`
+- `[done]` = merged but not yet cleaned up — set by `mill-merge`, removed by `mill-cleanup` skill
+- `[abandoned]` = task abandoned, awaiting cleanup — set by `mill-abandon`, unmarked back to unclaimed by `mill-cleanup` skill
 - Other markers = active work in progress
 
 Task identity is the title text *without* any `[phase]` prefix. `## [implementing] Add OAuth Support` -> title = `Add OAuth Support`.
@@ -71,8 +72,8 @@ A task block starts at `## Title` (with or without `[phase]`) and ends immediate
 | **Claim task** (mill-start) | Add `[discussing]` marker to heading, commit + push |
 | **Spawn task** (mill-spawn) | Add `## [>] Title`, commit + push; script claims it (changes to `[discussing]`) |
 | **Update phase** (mill-go) | Update `[phase]` marker in heading, commit + push on parent |
-| **Complete task** (mill-cleanup) | Remove `## ` block entirely via `mill-cleanup.ps1`, commit + push on parent |
-| **Abandon task** (mill-abandon) | Remove `[phase]` marker from heading, commit + push on parent |
+| **Complete task** (mill-cleanup) | Remove `## ` block entirely via `mill-cleanup` skill, commit + push on parent |
+| **Abandon task** (mill-abandon) | Replace `[phase]` marker with `[abandoned]` marker, commit + push on parent (via merge-lock) |
 | **Dashboard** (mill-status) | Read tasks.md for task counts and phase overview |
 
 ## Write Rules

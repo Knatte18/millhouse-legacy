@@ -87,7 +87,7 @@ if ($IsHub) {
     $WorktreePath = [System.IO.Path]::GetFullPath((Join-Path $HubRoot $DirName))
 } else {
     $RepoName = Split-Path $RepoRoot -Leaf
-    $WorktreeContainer = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "..\$RepoName.worktree"))
+    $WorktreeContainer = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "..\$RepoName.worktrees"))
     $WorktreePath = Join-Path $WorktreeContainer $DirName
 }
 

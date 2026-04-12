@@ -157,14 +157,7 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
 
-   c. **LLM backend dispatch (if enabled):** If `llm-backend.enabled` is `true` in `_millhouse/config.yaml`, try the alternative backend first. Write the full substituted discussion review prompt (from `doc/modules/discussion-review.md`, with `<DISCUSSION_FILE_PATH>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<N>` filled in) to a temp file in `_millhouse/scratch/` (e.g., `discussion-review-prompt.md`). Discussion review has no fix phase, so no `mill-receiving-review` inlining is needed. Call `_millhouse/spawn-agent.ps1` via Bash:
-      ```bash
-      powershell -NoProfile -ExecutionPolicy Bypass -File "<cwd>/_millhouse/spawn-agent.ps1" \
-        -PromptFile "<temp-file>" -MaxTurns 20 -WorkDir "<cwd>"
-      ```
-      On exit 0: use stdout as the agent's response. On exit 1: stop and report error. On exit 2: fall back to the Agent tool path below. Delete the temp prompt file after dispatch.
-
-      **Agent tool path (default/fallback):** Spawn the discussion-reviewer agent using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Follow the prompt template and invocation pattern defined in `doc/modules/discussion-review.md`.
+   c. Spawn the discussion-reviewer agent using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Follow the prompt template and invocation pattern defined in `doc/modules/discussion-review.md`.
 
    d. If reviewer **approved** (no GAPs): proceed to Phase: Handoff.
 

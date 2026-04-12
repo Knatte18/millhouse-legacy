@@ -55,7 +55,7 @@ Ask the user: "Repo short-name for window titles (default: `<directory-name>`):"
 
 If `_millhouse/config.yaml` does not exist, write it with the full template below.
 
-If `_millhouse/config.yaml` already exists, check for missing top-level sections and append only the missing ones. Skip sections that already exist (preserves existing values). The sections to check: `git.auto-merge` (under existing `git:` section), `git.require-pr-to-base` (under existing `git:` section), `repo:`, `reviews:`, `llm-backend:`. Do not overwrite existing keys.
+If `_millhouse/config.yaml` already exists, check for missing top-level sections and append only the missing ones. Skip sections that already exist (preserves existing values). The sections to check: `git.auto-merge` (under existing `git:` section), `git.require-pr-to-base` (under existing `git:` section), `repo:`, `reviews:`. Do not overwrite existing keys.
 
 Full config template (used for new creation):
 
@@ -88,23 +88,6 @@ notifications:
     channel: ""
   toast:
     enabled: true
-
-# Alternative LLM backend for spawned review agents.
-# When enabled, mill-go and mill-start route review agents to this backend
-# instead of Claude API. The backend can be local or remote (e.g. vLLM on
-# a GPU machine accessed over the network). Falls back to Claude if unavailable.
-# See plugins/mill/doc/guides/ and plugins/mill/templates/llm-config.example.yaml.
-llm-backend:
-  enabled: false
-  provider: vllm
-  fallback-to-claude: true
-  vllm:
-    url: http://localhost:8000
-    model-name: default
-    wsl-model-path: /path/to/model
-    max-model-len: 65536
-    gpu-memory-utilization: 0.93
-    extra-flags: ""
 ```
 
 Validate `_millhouse/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
@@ -277,142 +260,6 @@ if (-not $VersionDir) {
 $Script = Join-Path $VersionDir.FullName "scripts\mill-vscode.ps1"
 if (-not (Test-Path $Script)) {
     Write-Error "mill-vscode.ps1 not found at: $Script"
-    exit 1
-}
-
-& $Script @args
-```
-
-#### 5f: mill-cleanup.ps1
-
-Write `_millhouse/mill-cleanup.ps1` with the following content:
-
-```powershell
-# mill-cleanup.ps1 — Forwarding wrapper
-# Canonical script: plugins/mill/scripts/mill-cleanup.ps1
-# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
-
-$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
-if (-not (Test-Path $PluginBase)) {
-    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
-    exit 1
-}
-
-$VersionDir = Get-ChildItem $PluginBase -Directory |
-    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
-
-if (-not $VersionDir) {
-    Write-Error "No valid version directory found in: $PluginBase"
-    exit 1
-}
-
-$Script = Join-Path $VersionDir.FullName "scripts\mill-cleanup.ps1"
-if (-not (Test-Path $Script)) {
-    Write-Error "mill-cleanup.ps1 not found at: $Script"
-    exit 1
-}
-
-& $Script @args
-```
-
-#### 5g: spawn-agent.ps1
-
-Write `_millhouse/spawn-agent.ps1` with the following content:
-
-```powershell
-# spawn-agent.ps1 — Forwarding wrapper
-# Canonical script: plugins/mill/scripts/spawn-agent.ps1
-# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
-
-$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
-if (-not (Test-Path $PluginBase)) {
-    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
-    exit 1
-}
-
-$VersionDir = Get-ChildItem $PluginBase -Directory |
-    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
-
-if (-not $VersionDir) {
-    Write-Error "No valid version directory found in: $PluginBase"
-    exit 1
-}
-
-$Script = Join-Path $VersionDir.FullName "scripts\spawn-agent.ps1"
-if (-not (Test-Path $Script)) {
-    Write-Error "spawn-agent.ps1 not found at: $Script"
-    exit 1
-}
-
-& $Script @args
-```
-
-#### 5h: start-qwen.ps1
-
-Write `_millhouse/start-qwen.ps1` with the following content:
-
-```powershell
-# start-qwen.ps1 — Forwarding wrapper
-# Canonical script: plugins/mill/scripts/start-qwen.ps1
-# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
-
-$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
-if (-not (Test-Path $PluginBase)) {
-    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
-    exit 1
-}
-
-$VersionDir = Get-ChildItem $PluginBase -Directory |
-    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
-
-if (-not $VersionDir) {
-    Write-Error "No valid version directory found in: $PluginBase"
-    exit 1
-}
-
-$Script = Join-Path $VersionDir.FullName "scripts\start-qwen.ps1"
-if (-not (Test-Path $Script)) {
-    Write-Error "start-qwen.ps1 not found at: $Script"
-    exit 1
-}
-
-& $Script @args
-```
-
-#### 5i: stop-qwen.ps1
-
-Write `_millhouse/stop-qwen.ps1` with the following content:
-
-```powershell
-# stop-qwen.ps1 — Forwarding wrapper
-# Canonical script: plugins/mill/scripts/stop-qwen.ps1
-# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
-
-$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
-if (-not (Test-Path $PluginBase)) {
-    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
-    exit 1
-}
-
-$VersionDir = Get-ChildItem $PluginBase -Directory |
-    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
-
-if (-not $VersionDir) {
-    Write-Error "No valid version directory found in: $PluginBase"
-    exit 1
-}
-
-$Script = Join-Path $VersionDir.FullName "scripts\stop-qwen.ps1"
-if (-not (Test-Path $Script)) {
-    Write-Error "stop-qwen.ps1 not found at: $Script"
     exit 1
 }
 

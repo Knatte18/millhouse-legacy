@@ -145,6 +145,10 @@ Delete `<parent-path>/_millhouse/scratch/merge.lock`.
 
 This step runs in ALL exit paths — success, failure, or rollback. Use trap/finally pattern.
 
+### 8. Report
+
+> "Merge complete. Run mill-cleanup from the parent worktree to remove the merged worktree and branch."
+
 ---
 
 ## Rollback
@@ -184,3 +188,4 @@ Urgency per event:
 ## Board Updates
 
 - Merge complete -> task marked `[done]` in parent's `tasks.md` (carried via squash merge from child).
+- Worktree, branch, and children registry removal are deferred to `mill-cleanup`, which runs from the parent worktree in a separate invocation.
