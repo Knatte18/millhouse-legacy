@@ -38,6 +38,6 @@ General behavior rules for Claude Code. These apply regardless of which plugins 
 ## File Writing
 
 - **Never write to `/tmp/` or system temporary directories.** This causes permission prompts.
-- **Default scratch location:** `_millhouse/scratch/` in the repo root. Use for any temporary files, intermediate output, or scratch data that is not managed by a specific plugin.
-- **Plugin-managed scratch:** All plugins share `_millhouse/scratch/`. Subdirectories like `plans/`, `briefs/`, `reviews/` are created as needed.
+- **Default scratch location:** `_millhouse/scratch/` in the repo root. Use for ephemeral files (materialized reviewer prompts, test baselines, merge locks, new-thread hand-off prompts). Task-state files (`status.md`, `plan.md`, `discussion.md`, `reviews/`, `implementer-brief-instance.md`) live in `_millhouse/task/` — see the task/scratch split documented in `plugins/mill/doc/overview.md`.
+- **Plugin-managed scratch:** All plugins share `_millhouse/scratch/` for ephemeral files. Subdirectories like `plans/` and `briefs/` are created as needed.
 - `_millhouse/scratch/` must be in the repo-root `.gitignore`.

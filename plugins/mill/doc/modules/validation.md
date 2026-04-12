@@ -1,6 +1,6 @@
 # Validation Rules
 
-Post-write validation for `tasks.md`, `_millhouse/scratch/status.md`, and `_millhouse/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
+Post-write validation for `tasks.md`, `_millhouse/task/status.md`, and `_millhouse/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
 
 ## tasks.md (project root)
 
@@ -14,17 +14,37 @@ After writing tasks.md, verify all of the following:
 
 1. **Single project heading.** Exactly one `# ` heading, at line 1 (e.g., `# Tasks`).
 2. **Tasks use `## ` headings.** All task entries are `## ` headings (not `###` or deeper).
-3. **Valid phase markers.** If a `## ` heading contains a `[phase]` marker, the phase must be one of: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `done`, `>`. Format: `## [phase] Title`. Note: the regex `\[(\w+)\]` does not match `[>]` — use `\[([>\w]+)\]` when validating programmatically.
+3. **Valid phase markers.** If a `## ` heading contains a `[phase]` marker, the phase must be one of: `>`, `active`, `done`, `abandoned`. Format: `## [phase] Title`. Note: the regex `\[(\w+)\]` does not match `[>]` — use `\[([>\w]+)\]` when validating programmatically.
 4. **No orphaned content.** No non-blank lines before the first `## ` heading (except the `# ` project heading).
 
-## status.md (`_millhouse/scratch/status.md`)
+## status.md (`_millhouse/task/status.md`)
 
 ### Field validation
 
 After writing status.md, verify fields within the YAML code block (` ```yaml ``` ` fence):
 
-1. **`phase:` is valid.** Must be one of: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `done`, `complete`. Empty/missing `phase:` is allowed only if no task is active.
+1. **`phase:` is valid.** Must be one of: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `complete`. Empty/missing `phase:` is allowed only if no task is active.
 2. **`task:` is non-empty when phase is set.** If `phase:` has a value, `task:` must also have a non-empty value.
+
+> **Note:** The `phase:` vocabulary in `status.md` is a separate validation domain from `tasks.md` phase markers. The `status.md` vocabulary retains the full phase lifecycle (`discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `complete`) — `done` is not a valid `phase:` value in `status.md`, only in `tasks.md`. Only the `tasks.md` marker set is trimmed to `['>', 'active', 'done', 'abandoned']`.
+
+## plan.md (`_millhouse/task/plan.md`)
+
+### File validation
+
+1. **File exists when expected.** `mill-go` Phase: Setup requires `_millhouse/task/plan.md` to exist (it was written by Phase: Plan and approved by Phase: Plan Review). If missing on Setup entry, mill-go stops with an error pointing the user to re-run mill-go.
+
+### Structural validation
+
+After writing plan.md (Phase: Plan), verify all of the following:
+
+1. **Frontmatter present.** YAML frontmatter must include keys `verify`, `dev-server`, `approved`, `started`. The `approved` value is `true` or `false`. The `started` value matches `YYYYMMDD-HHMMSS` (UTC).
+2. **Required sections.** A single `# <Task Title>` h1, and h2 sections `## Context`, `## Files`, `## Steps` (in that order). Other h2 sections may follow.
+3. **Step structure.** Each `### Step N: <description>` heading must be followed by a step card containing the bolded fields **Creates:**, **Modifies:**, **Requirements:**, **Explore:**, **Test approach:**, **Key test scenarios:**, **Commit:**. The **TDD:** field is optional.
+4. **Atomic step granularity.** A step that bundles unrelated file operations is a structural violation. Heuristic: more than ~5 distinct paths in **Modifies:** that span unrelated subdirectories. The heuristic is documented as guidance — reviewers enforce it during plan review (`plan-review.md` evaluation criteria), not programmatically.
+5. **Decision subsections.** Each `### Decision: <title>` inside `## Context` must contain `**Why:**` and `**Alternatives rejected:**` lines.
+
+See `doc/modules/plan-format.md` for the full schema and the atomicity invariant.
 
 ## _millhouse/config.yaml
 
@@ -34,7 +54,39 @@ After writing, verify all of the following:
 2. **Required top-level keys.** These keys must be present: `models`, `notifications`.
 3. **GitHub section (deprecated).** If a `github:` key exists, it is ignored. No validation required.
 
-Sub-keys under `models` and `notifications` are not validated — new fields can be added without updating these rules.
+Sub-keys under `notifications` are not validated. **Sub-keys under `models` are validated per the rules below.**
+
+### `models:` block validation
+
+`mill-start` and `mill-go` validate the `models:` block on entry. The required slots are:
+
+| Slot | Type | Note |
+|---|---|---|
+| `models.session` | scalar (string) | Thread A model — mill-start + mill-go Phase 2 |
+| `models.implementer` | scalar (string) | Thread B model — Phase 3+4 implementer-orchestrator |
+| `models.explore` | scalar (string) | Explore subagent helper |
+| `models.discussion-review` | object with required `default` (string) sub-key | Discussion-reviewer (mill-start) |
+| `models.plan-review` | object with required `default` (string) sub-key | Plan-reviewer (mill-go Phase 2) |
+| `models.code-review` | object with required `default` (string) sub-key | Code-reviewer (Thread B Phase: Review) |
+
+Optional integer-keyed sub-keys are allowed under each per-round object (`discussion-review`, `plan-review`, `code-review`):
+
+| Slot | Type | Note |
+|---|---|---|
+| `models.discussion-review.1`, `.2`, `.3`, ... | scalar (string) | Per-round overrides; resolution falls back to `default` if absent |
+| `models.plan-review.1`, `.2`, `.3`, ... | scalar (string) | Same |
+| `models.code-review.1`, `.2`, `.3`, ... | scalar (string) | Same |
+
+The integer keys are compared as strings during lookup. See `overview.md#config-resolution` for the resolution rule.
+
+#### Failure modes
+
+- **Missing required slot:** stop with error `Config schema out of date. Expected models.<slot> (<type>). Run 'mill-setup' to auto-migrate.`
+- **Scalar where object expected** (e.g. `plan-review: sonnet` instead of `plan-review: {default: sonnet}`): stop with the same error, explicitly naming the offending slot.
+- **Unknown model name in a slot:** NOT a validation failure. Model-name resolution happens in the orchestrator and `spawn-agent.ps1` at call time; unknown names fail loudly there with "not implemented" when the provider lookup misses. Validation only checks shape, not content.
+- **Unknown extra keys under `models:`** (e.g. `models.foo: bar`): NOT a validation failure. Warn and proceed. Users may experiment with new slots.
+
+`mill-setup` auto-migration (Step 4b) attempts to fix missing slots and scalar-where-object cases automatically before validation runs. Validation is the safety net for edge cases the migration cannot handle. See `overview.md#config-migration` for the two-layer migration spec.
 
 ## Failure behavior
 

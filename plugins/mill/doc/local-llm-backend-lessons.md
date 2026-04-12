@@ -10,7 +10,7 @@ In April 2026 we attempted to add a local LLM backend to Millhouse for plan and 
 
 - **Model:** Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit
 - **Inference engine:** vLLM on WSL2 / RTX 5090
-- **Dispatch:** `spawn-agent.ps1` → `claude --bare -p` with `ANTHROPIC_BASE_URL` pointed at vLLM
+- **Dispatch:** `spawn-agent.ps1` → `claude -p` (note: `--bare` flag was later removed; this is a historical reference to the dispatch pattern used at the time) with `ANTHROPIC_BASE_URL` pointed at vLLM
 - **Protocol:** full Anthropic tool-use (Read/Write/Edit/Grep/Bash), multi-turn
 
 We benchmarked Qwen head-to-head against Sonnet on a real task (the mill-cleanup refactoring) for both plan review and code review. The results were conclusive enough to abandon this approach entirely.

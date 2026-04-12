@@ -21,9 +21,9 @@ git worktree list --porcelain
 If the current directory is the main worktree (the repo root), stop: "mill-merge must be run from a worktree, not the main repo."
 
 Verify this is a mill-managed worktree:
-- Read the YAML code block in `_millhouse/scratch/status.md`. If the file does not exist, or does not contain both a `task:` and a `phase:` field in the YAML code block, stop: "This worktree is not managed by mill (no status.md with task/phase). Use `git worktree remove` to clean up manually-created worktrees."
+- Read the YAML code block in `_millhouse/task/status.md`. If the file does not exist, or does not contain both a `task:` and a `phase:` field in the YAML code block, stop: "This worktree is not managed by mill (no status.md with task/phase). Use `git worktree remove` to clean up manually-created worktrees."
 
-Read `_millhouse/config.yaml` if it exists; extract `git.parent-branch`, `git.base-branch`, and `git.require-pr-to-base` (default `false` if missing). If `parent-branch` is not found, fall back to `parent:` from the YAML code block in `_millhouse/scratch/status.md`. If neither exists, ask the user which branch to merge into.
+Read `_millhouse/config.yaml` if it exists; extract `git.parent-branch`, `git.base-branch`, and `git.require-pr-to-base` (default `false` if missing). If `parent-branch` is not found, fall back to `parent:` from the YAML code block in `_millhouse/task/status.md`. If neither exists, ask the user which branch to merge into.
 
 ---
 
@@ -66,7 +66,7 @@ If mill-merge-in fails (reports rollback or unresolvable conflicts): release the
 
 ### 3. Mark task as done
 
-In the child worktree's `tasks.md` (in the project root), find the task heading matching the `task:` field from the YAML code block in `_millhouse/scratch/status.md`. The heading may carry any phase marker (e.g., `## [discussing] <Task Title>`) or no marker.
+In the child worktree's `tasks.md` (in the project root), find the task heading matching the `task:` field from the YAML code block in `_millhouse/task/status.md`. The heading may carry any phase marker (e.g., `## [active] <Task Title>`) or no marker.
 
 Replace the heading with `## [done] <Task Title>`.
 
@@ -101,12 +101,12 @@ Determine the merge method:
    git push
    ```
 
-3. Create the PR. Use the `task:` field from the YAML code block in `_millhouse/scratch/status.md` as the PR title:
+3. Create the PR. Use the `task:` field from the YAML code block in `_millhouse/task/status.md` as the PR title:
    ```bash
    gh pr create --title "<task title>" --body "Merging branch \`$CHILD_BRANCH\` to \`<base-branch>\`."
    ```
 
-4. Update the YAML code block in `_millhouse/scratch/status.md` with `phase: pr-pending` and add a `pr_url:` field containing the PR URL returned by `gh pr create`.
+4. Update the YAML code block in `_millhouse/task/status.md` with `phase: pr-pending` and add a `pr_url:` field containing the PR URL returned by `gh pr create`.
 
 5. Update parent's child registry (same as Step 5 of the normal path): if `<parent-path>/_millhouse/children/` exists, find the child registry file for `$CHILD_BRANCH` and update `status: active` to `status: pr-pending`. Add a `pr_url:` field with the PR URL. Skip silently if the registry or file is not found.
 
@@ -167,7 +167,7 @@ Then release the merge lock. Run the **Notification Procedure** with `BLOCKED: M
 
 ### Step 1: Update status file (always)
 
-Write the event to the YAML code block in `_millhouse/scratch/status.md`. For blocking events, ensure `blocked: true` and `blocked_reason:` are set. For completion events, ensure `phase: complete`. Status file updates are the calling skill's responsibility, not the script's.
+Write the event to the YAML code block in `_millhouse/task/status.md`. For blocking events, ensure `blocked: true` and `blocked_reason:` are set. For completion events, ensure `phase: complete`. Status file updates are the calling skill's responsibility, not the script's.
 
 ### Step 2: Send notification
 

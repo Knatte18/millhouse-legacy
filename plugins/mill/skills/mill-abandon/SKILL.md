@@ -23,16 +23,16 @@ git worktree list --porcelain
 If the current directory is the main worktree, stop: "mill-abandon must be run from a worktree, not the main repo."
 
 Verify this is a mill-managed worktree:
-- Read the YAML code block in `_millhouse/scratch/status.md`. If the file does not exist, or does not contain both a `task:` and a `phase:` field in the YAML code block, stop: "This worktree is not managed by mill (no status.md with task/phase). Use `git worktree remove` to clean up manually-created worktrees."
+- Read the YAML code block in `_millhouse/task/status.md`. If the file does not exist, or does not contain both a `task:` and a `phase:` field in the YAML code block, stop: "This worktree is not managed by mill (no status.md with task/phase). Use `git worktree remove` to clean up manually-created worktrees."
 
 Read the current branch name:
 ```bash
 git branch --show-current
 ```
 
-Read the YAML code block in `_millhouse/scratch/status.md` to identify the task title, current phase, and (if present) `current_step_name`.
+Read the YAML code block in `_millhouse/task/status.md` to identify the task title, current phase, and (if present) `current_step_name`.
 
-Read `_millhouse/config.yaml`; extract `git.parent-branch`. If not found, fall back to `parent:` from the YAML code block in `_millhouse/scratch/status.md`. If neither exists, ask the user which branch is the parent.
+Read `_millhouse/config.yaml`; extract `git.parent-branch`. If not found, fall back to `parent:` from the YAML code block in `_millhouse/task/status.md`. If neither exists, ask the user which branch is the parent.
 
 Resolve the parent worktree path: run `git worktree list --porcelain` and find the entry whose `branch` field matches the parent branch name. Extract its `worktree` path and store it. This path is used in Steps 5 and 7.
 
@@ -71,7 +71,7 @@ Never auto-abandon. Never skip confirmation, even if there are no warnings.
 
 ### 4. Capture task info from status.md
 
-Read `task:` and `task_description:` from the YAML code block in the child worktree's `_millhouse/scratch/status.md`. Store the task title for Step 7.
+Read `task:` and `task_description:` from the YAML code block in the child worktree's `_millhouse/task/status.md`. Store the task title for Step 7.
 
 ### 5. Update parent's child registry
 
@@ -88,11 +88,11 @@ If `_millhouse/children/` does not exist in the parent, skip silently (backward 
 - Otherwise, prompt: "Why are you abandoning this task? (one line)" and read a single line from stdin.
 
 **Auto-generate the context summary (2-3 lines):**
-- Read the last 3 timeline entries from the `## Timeline` section of `_millhouse/scratch/status.md`.
+- Read the last 3 timeline entries from the `## Timeline` section of `_millhouse/task/status.md`.
 - Read the task description (`task_description:`) from the YAML code block.
 - Compose a 2-3 line summary: what the task was, what phase it reached, and (if applicable) what was the last completed step. Example: "Task: design cleanup skill. Reached implementing phase. Completed step 2 of 6 (mill-cleanup skill created); stopped before mill-abandon rewrite."
 
-**Write the `## Abandon` section to the child's `_millhouse/scratch/status.md`:**
+**Write the `## Abandon` section to the child's `_millhouse/task/status.md`:**
 
 Use the Edit tool to insert a new section after the closing ``` of the YAML code block and before the `## Timeline` section:
 
@@ -110,7 +110,7 @@ context: |
 
 If a `## Abandon` section already exists from a prior abandon, overwrite it (latest-only).
 
-**Update the phase in the YAML code block** of status.md from its current value to `abandoned`. Insert a timeline entry `abandoned  <UTC ISO 8601 timestamp>` before the closing ``` of the `## Timeline` text block using the Edit tool.
+**Update the phase in the YAML code block** of `_millhouse/task/status.md` from its current value to `abandoned`. Insert a timeline entry `abandoned  <UTC ISO 8601 timestamp>` before the closing ``` of the `## Timeline` text block using the Edit tool.
 
 ### 7. Update parent's tasks.md (with merge-lock)
 
@@ -133,7 +133,7 @@ If the lock file already exists:
 
 **Perform the tasks.md update** (under the lock):
 
-Resolve the parent's project root by computing the project subdirectory offset (working directory minus git root) and applying it to the parent worktree path. Read `<parent-project-root>/tasks.md`. Find the task's `## ` heading (match by task title captured in Step 4). Replace the `[phase]` marker with `[abandoned]`. E.g., `## [implementing] Fix login` becomes `## [abandoned] Fix login`.
+Resolve the parent's project root by computing the project subdirectory offset (working directory minus git root) and applying it to the parent worktree path. Read `<parent-project-root>/tasks.md`. Find the task's `## ` heading (match by task title captured in Step 4). Replace the `[phase]` marker with `[abandoned]`. E.g., `## [active] Fix login` becomes `## [abandoned] Fix login`.
 
 Stage, commit, and push from the parent worktree:
 ```bash
@@ -149,7 +149,7 @@ This step (lock acquire → tasks.md update → commit/push → lock release) mu
 
 ### 8. Report
 
-> "Task marked [abandoned]. Abandon protocol captured in _millhouse/scratch/status.md. Run mill-cleanup from the parent worktree (after closing terminals and VS Code in this worktree) to complete cleanup."
+> "Task marked [abandoned]. Abandon protocol captured in _millhouse/task/status.md. Run mill-cleanup from the parent worktree (after closing terminals and VS Code in this worktree) to complete cleanup."
 
 ---
 
@@ -157,4 +157,4 @@ This step (lock acquire → tasks.md update → commit/push → lock release) mu
 
 - Abandon → task's `[phase]` marker is replaced with `[abandoned]` in parent's `tasks.md` under a merge-lock (commit + push from parent worktree).
 - Worktree, branch, and children registry entry removal are deferred to `mill-cleanup`, which runs from the parent worktree in a separate invocation.
-- The child's `_millhouse/scratch/status.md` gets a new `## Abandon` section capturing reason and context for carry-forward into the next claim of this task.
+- The child's `_millhouse/task/status.md` gets a new `## Abandon` section capturing reason and context for carry-forward into the next claim of this task.

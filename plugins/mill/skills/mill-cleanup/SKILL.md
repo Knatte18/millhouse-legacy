@@ -26,9 +26,42 @@ Resolve repo root via `git rev-parse --show-toplevel`.
 
 ---
 
+## Junction safety
+
+**Hard constraint:** Any code that removes a path under `_millhouse/children/<slug>/` (the junction location) OR any path that might be a reparse point MUST use `(Get-Item $path).Delete()` or `cmd /c "rmdir "$path""`. NEVER use `Remove-Item -Recurse -Force` on a reparse-point path.
+
+**Why:** `Remove-Item -Recurse -Force` on a junction follows the reparse point and deletes the contents of the TARGET directory — for `_millhouse/children/<slug>/` (junction → child's `_millhouse/task/`), this would wipe out the child's live task state. Catastrophic data loss.
+
+**Detection pattern:**
+```powershell
+$item = Get-Item $path -ErrorAction SilentlyContinue
+if ($item -and $item.Attributes.ToString().Contains("ReparsePoint")) {
+    $item.Delete()  # Safe: deletes only the reparse point
+} else {
+    Remove-Item $path -Recurse -Force  # Only for real directories
+}
+```
+
+---
+
 ## Steps
 
-mill-cleanup runs in two phases: **Detection** (read-only scan that builds a cleanup set) and **Execution** (performs the actions). No user confirmation between phases — the skill just runs.
+mill-cleanup runs in three phases: **Phase 0: Legacy-scratch sweep** (one-time migration cleanup), **Phase 1: Detection** (read-only scan that builds a cleanup set), and **Phase 2: Execution** (performs the actions). No user confirmation between phases — the skill just runs.
+
+### Phase 0: Legacy-scratch sweep
+
+Runs once, is idempotent, and cleans up migration-era hardlinks/junctions before any detection scan runs. This phase handles the transition period where `_millhouse/scratch/` held hardlinks to files that now live canonically in `_millhouse/task/`.
+
+1. **Reviews-directory sweep (current worktree only):** if `_millhouse/task/reviews/` exists AND its `LinkType` is `Junction` AND `_millhouse/scratch/reviews/` exists as a regular directory:
+   a. Delete the junction: `(Get-Item _millhouse/task/reviews).Delete()`. This removes only the reparse point — `_millhouse/scratch/reviews/` and its contents are unaffected.
+   b. Remove `_millhouse/scratch/reviews/` and its contents: `Remove-Item -Recurse -Force _millhouse/scratch/reviews`. Safe — it is a regular directory, not a reparse point.
+   c. Recreate `_millhouse/task/reviews/` as a real empty directory: `New-Item -ItemType Directory -Path _millhouse/task/reviews -Force | Out-Null`.
+
+2. **File-hardlink sweep (current worktree only):** for each file in `{ status.md, plan.md, discussion.md, implementer-brief-instance.md }`: if `_millhouse/scratch/<file>` exists AND its `LinkType` is `HardLink` AND `_millhouse/task/<file>` also exists: run `Remove-Item _millhouse/scratch/<file>`. `Remove-Item` on a hardlink decrements the inode's link count without deleting the underlying data; the file survives at `_millhouse/task/<file>`.
+
+3. After the sweep, `_millhouse/scratch/` should contain only genuinely ephemeral files.
+
+4. This sweep is idempotent: re-running it after migration-era state is already cleaned is a no-op.
 
 ### Phase 1: Detection
 
@@ -37,12 +70,12 @@ Build a cleanup set by scanning the following sources in order. Collect each can
 #### Scan 1: Children registry
 Scan `_millhouse/children/*.md`. For each `.md` file, parse the YAML frontmatter. Collect entries where `status:` is one of `merged`, `abandoned`, or `complete`. For each, capture `branch`, `task`, the file path.
 
-For `abandoned` entries: try to read the child's `_millhouse/scratch/status.md` (resolved via `git worktree list --porcelain` to find the worktree path for that branch). Extract the `## Abandon` section if present. Capture `reason`, `last_phase`, `last_step`, `context`. Store these for the execution phase — do not re-read during execution.
+For `abandoned` entries: try to read the child's `_millhouse/task/status.md` (resolved via `git worktree list --porcelain` to find the worktree path for that branch, or via the `_millhouse/children/<slug>/` junction if present). Extract the `## Abandon` section if present. Capture `reason`, `last_phase`, `last_step`, `context`. Store these for the execution phase — do not re-read during execution.
 
 Skip entries with `status: active` or `status: pr-pending`.
 
 #### Scan 2: Worktrees with phase complete
-Run `git worktree list --porcelain`. For each worktree other than the main one: read its `_millhouse/scratch/status.md`. If the YAML code block has `phase: complete` AND no matching child registry entry was found in Scan 1 (no entry for this branch), add to the cleanup set as a "complete" candidate.
+Run `git worktree list --porcelain`. For each worktree other than the main one: read its `_millhouse/task/status.md`. If the YAML code block has `phase: complete` AND no matching child registry entry was found in Scan 1 (no entry for this branch), add to the cleanup set as a "complete" candidate.
 
 #### Scan 3: tasks.md markers
 Read `tasks.md` in the project root. Collect all `## [done] <Title>` and `## [abandoned] <Title>` headings.
@@ -72,6 +105,9 @@ If Scan 4 identified orphans in `<parent-of-repo-root>/<reponame>.worktrees/`, t
 
 #### Scan 7: Remote branches for merged children
 For each entry from Scan 1 with `status: merged`: check if the remote still has the branch (`git ls-remote origin <branch>`). If so, mark for remote deletion.
+
+#### Scan 8: Dangling junctions in _millhouse/children/
+Enumerate `_millhouse/children/*` directory entries. For each entry that is a reparse point (junction): attempt to read `<junction>/status.md`. If the read throws an exception (target missing — the child worktree was removed externally), add this junction to a "dangling junctions" list for removal in the execution phase.
 
 ### Phase 2: Execution
 
@@ -105,8 +141,25 @@ For each orphan directory from Scan 4:
 #### Action 6: Remove empty container directory
 If the `<parent-of-repo-root>/<reponame>.worktrees/` container still exists and is now empty (after Actions 1 and 5 ran), `rmdir` it. Skip silently if it still has contents (something was not cleaned up by earlier actions).
 
-#### Action 7: Delete children registry entries
-For each entry processed from Scan 1: delete its `.md` file from `_millhouse/children/`. Do this after the corresponding worktree/branch actions so the registry reflects the latest state during the run.
+#### Action 7: Delete children registry entries and junctions
+For each entry processed from Scan 1: delete its `.md` file from `_millhouse/children/`. Then remove the corresponding slug-named junction:
+1. Derive the slug from the registry file's stem (strip the leading `<timestamp>-` prefix) or from the `branch:` frontmatter field (use the final path segment after any `/`).
+2. Compute `$junctionPath = Join-Path $childrenDir $slug`.
+3. Check for the junction using the detection pattern:
+   ```powershell
+   $junctionItem = Get-Item $junctionPath -ErrorAction SilentlyContinue
+   if ($junctionItem -and $junctionItem.Attributes.ToString().Contains("ReparsePoint")) {
+       $junctionItem.Delete()
+       Write-Host "Removed junction: $junctionPath"
+   }
+   ```
+   NEVER use `Remove-Item -Recurse -Force` on the junction path — see the Junction safety section above.
+4. If no junction exists at `$junctionPath`, skip silently (backward compatibility with pre-junction worktrees).
+
+Do this after the corresponding worktree/branch actions so the registry reflects the latest state during the run.
+
+#### Action 7b: Remove dangling junctions
+For each dangling junction identified in Scan 8: remove it via `(Get-Item $path).Delete()` and log the removal. This reaps junctions whose child worktree was deleted outside mill-cleanup.
 
 #### Action 8: Update tasks.md
 For each `[done]` task in the cleanup set: remove the entire block (the `## [done] <Title>` heading and all body lines until the next `## ` heading or EOF).

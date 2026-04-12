@@ -16,6 +16,14 @@ Interactive. Pick a task and design the solution.
 
 Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
 
+**Entry-time validation.** After the config-existence check, validate the `models:` block per `plugins/mill/doc/modules/validation.md` `## _millhouse/config.yaml` section. Required slots: `models.session` (string), `models.implementer` (string), `models.explore` (string), `models.discussion-review.default` (string), `models.plan-review.default` (string), `models.code-review.default` (string). On failure, stop with the exact error message:
+
+```
+Config schema out of date. Expected models.<slot> (<type>). Run 'mill-setup' to auto-migrate.
+```
+
+Do not attempt auto-migration here — that is `mill-setup`'s job. See `plugins/mill/doc/overview.md#config-migration` for the two-layer migration spec.
+
 Read `tasks.md` in the project root (the working directory where `_millhouse/` lives). If it does not exist, stop and tell the user to run `mill-setup` first or create `tasks.md` manually.
 
 **Child worktree guard:** If running in a non-main worktree (detect via `git worktree list --porcelain` — current path is not the first/main entry), warn: "mill-start in-place should be run from the parent worktree. Commits in a child worktree create merge conflicts with the parent." Require user confirmation before proceeding.
@@ -57,9 +65,9 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
 ### Phase: Select
 
-0. **Check for handoff brief.** Use the Read tool (not bash) to read `_millhouse/handoff.md`. If it exists, the brief's `## Issue` identifies the task --- select it directly (skip step 1). Read the `task:` and `task_description:` fields from the YAML code block in `_millhouse/scratch/status.md` for the task details (written by mill-spawn before spawning). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain. After extracting task info from the handoff brief, delete `_millhouse/handoff.md`. This prevents stale handoff detection on subsequent in-place mill-start runs.
+0. **Check for handoff brief.** Use the Read tool (not bash) to read `_millhouse/handoff.md`. If it exists, the brief's `## Issue` identifies the task --- select it directly (skip step 1). Read the `task:` and `task_description:` fields from the YAML code block in `_millhouse/task/status.md` for the task details (written by mill-spawn before spawning). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain. After extracting task info from the handoff brief, delete `_millhouse/handoff.md`. This prevents stale handoff detection on subsequent in-place mill-start runs.
 
-1. **Guard: active task check.** This guard applies only to paths 2/3/4 below — path 0 (handoff brief) short-circuits to Explore and skips the guard. Before claiming a task, read the YAML code block in `_millhouse/scratch/status.md` if it exists. If the `phase:` field is set and is not `complete`, report "An active task is already in progress (phase: `<phase>`). Run mill-go or mill-abandon first." and stop.
+1. **Guard: active task check.** This guard applies only to paths 2/3/4 below — path 0 (handoff brief) short-circuits to Explore and skips the guard. Before claiming a task, read the YAML code block in `_millhouse/task/status.md` if it exists. If the `phase:` field is set and is not `complete`, report "An active task is already in progress (phase: `<phase>`). Run mill-go or mill-abandon first." and stop.
 
 2. **Select task.** Read `tasks.md` in the project root (the working directory where `_millhouse/` lives).
 
@@ -71,11 +79,11 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    d. If 2+ available tasks: print numbered list (follow mill:conversation rules). User types the number.
 
-3. **Move to Discussing.** Add `[discussing]` marker to the selected task's heading in `tasks.md`. E.g., `## Task Title` becomes `## [discussing] Task Title`. Stage, commit, and push `tasks.md` immediately.
+3. **Move to Active.** Add `[active]` marker to the selected task's heading in `tasks.md`. E.g., `## Task Title` becomes `## [active] Task Title`. Stage, commit, and push `tasks.md` immediately. The `[active]` marker stays in place through the entire discuss/plan/implement/test/review window until merge or abandon.
 
    Validate tasks.md per `doc/modules/validation.md` (tasks.md structural rules).
 
-   Write `_millhouse/scratch/status.md` with the complete fenced structure:
+   Write `_millhouse/task/status.md` with the complete fenced structure:
 
    ````markdown
    # Status
@@ -130,7 +138,7 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
 ### Phase: Discussion File
 
-7. **Write the discussion file.** After the user approves the approach, write the structured discussion file per `doc/modules/discussion-format.md` to `_millhouse/scratch/discussion.md`.
+7. **Write the discussion file.** After the user approves the approach, write the structured discussion file per `doc/modules/discussion-format.md` to `_millhouse/task/discussion.md`.
 
    Include everything from the conversation:
    - The evolved problem statement (not the original task description)
@@ -151,31 +159,41 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
 8. **Discussion review loop:**
 
-   **Setup:** Ensure `_millhouse/scratch/reviews/` directory exists (`mkdir -p` if not).
+   **Setup:** Ensure `_millhouse/task/reviews/` directory exists (`mkdir -p` if not).
 
    a. Report to user: **"Discussion Review --- round N/&lt;max_review_rounds&gt;"**
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
 
-   c. Spawn the discussion-reviewer agent using the Agent tool with the model from `models.plan-review` in `_millhouse/config.yaml`. Follow the prompt template and invocation pattern defined in `doc/modules/discussion-review.md`.
+   c. **Resolve the model for round N.** Read `models.discussion-review.<N>` from `_millhouse/config.yaml`; if absent, fall back to `models.discussion-review.default`. The integer key is compared as a string. See `doc/overview.md#config-resolution` for the resolution rule.
 
-   d. If reviewer **approved** (no GAPs): proceed to Phase: Handoff.
+   d. **Materialize the prompt.** Read the prompt template from `doc/modules/discussion-review.md`. Substitute `<DISCUSSION_FILE_PATH>` (absolute path to `_millhouse/task/discussion.md`), `<TASK_TITLE>` (from `tasks.md`), and `<CONSTRAINTS_CONTENT>` (the contents of `CONSTRAINTS.md` from the repo root if it exists, or the literal string `(no CONSTRAINTS.md)` if not). Write the materialized prompt to `_millhouse/scratch/discussion-review-prompt-r<N>.md`.
 
-   e. If reviewer found **gaps**: read the review findings file.
+   e. **Spawn the discussion-reviewer.** Invoke via Bash:
+      ```bash
+      powershell.exe -File plugins/mill/scripts/spawn-agent.ps1 -Role reviewer -PromptFile _millhouse/scratch/discussion-review-prompt-r<N>.md -ProviderName <model>
+      ```
+      The script is synchronous from the caller's perspective. Reviewers are short — do not run in background.
+
+   f. **Parse the JSON line** from the script's stdout: `{"verdict": "APPROVE" | "GAPS_FOUND", "review_file": "<absolute-path>"}`.
+
+   g. If verdict is **APPROVE**: proceed to Phase: Handoff.
+
+   h. If verdict is **GAPS_FOUND**: read the review file at `review_file`.
 
       **MANDATORY: You MUST NOT update the discussion file based on review findings without asking the user questions first. Every GAP requires the user's answer before it can be closed.** Do not auto-fix gaps, do not infer answers, do not fill in gaps from codebase context alone. Present each gap to the user and wait for their response.
 
       Ask the user follow-up questions to resolve the gaps. Update the discussion file with the new information only after the user has answered. Re-spawn the reviewer with the **updated discussion file only**. Do NOT pass prior review findings to the reviewer. The reviewer always starts fresh from the updated discussion alone, with no context from prior rounds.
 
-   f. Max `max_review_rounds` rounds. If unresolved gaps remain after all rounds: present the remaining gaps to the user for decision. The user may override (proceed anyway) or provide more information.
+   i. Max `max_review_rounds` rounds. If unresolved gaps remain after all rounds: present the remaining gaps to the user for decision. The user may override (proceed anyway) or provide more information.
 
 ### Phase: Handoff
 
 9. **Lock and hand off:**
 
-   a. Update `_millhouse/scratch/status.md` — use the Edit tool to update fields within the existing YAML code block:
+   a. Update `_millhouse/task/status.md` — use the Edit tool to update fields within the existing YAML code block:
 
-   - Add `discussion: _millhouse/scratch/discussion.md` as a new field in the YAML code block.
+   - Add `discussion: _millhouse/task/discussion.md` as a new field in the YAML code block.
    - Update `phase:` to `discussed`.
    - Add `parent: <parent-branch>` if not already present.
    - Preserve `task:` and `task_description:` from Phase: Select (do not remove them).
@@ -184,7 +202,7 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    b. Use the Edit tool to insert `discussed  <timestamp>` on a new line before the closing ` ``` ` of the timeline text block in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
-   c. Report: "Discussion complete. Discussion file written to `_millhouse/scratch/discussion.md`. Run `mill-go` to start autonomous execution."
+   c. Report: "Discussion complete. Discussion file written to `_millhouse/task/discussion.md`. Run `mill-go` to start autonomous execution."
 
 ---
 
@@ -211,7 +229,7 @@ If you use TodoWrite to track your own progress, only include mill-start phases:
 
 tasks.md changes require commit and push (tasks.md is git-tracked).
 
-Phase transitions are tracked via `phase:` in the YAML code block of `_millhouse/scratch/status.md` and the `## Timeline` section (entries inserted before the closing ` ``` ` of the text fence).
+Phase transitions are tracked via `phase:` in the YAML code block of `_millhouse/task/status.md` and the `## Timeline` section (entries inserted before the closing ` ``` ` of the text fence).
 
-- Task claimed from tasks.md -> add `[discussing]` marker (commit + push), write fenced status.md with `phase: discussing` + `task_description:` in YAML code block
+- Task claimed from tasks.md -> add `[active]` marker (commit + push), write fenced `_millhouse/task/status.md` with `phase: discussing` + `task_description:` in YAML code block
 - Discussion complete -> update `phase: discussed` in YAML code block, insert timeline entry before closing fence

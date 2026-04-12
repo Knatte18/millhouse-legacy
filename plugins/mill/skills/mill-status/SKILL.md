@@ -21,11 +21,11 @@ Read `tasks.md`. For each `## ` heading, categorize:
 - Headings without a `[phase]` marker -> unclaimed tasks
 - Headings with a `[phase]` marker -> active tasks (extract the phase name)
 
-Read the YAML code block in `_millhouse/scratch/status.md` if it exists. Extract `phase:`, `task:`, `plan:`, and the timeline entries from the ` ```text ``` ` fence in the `## Timeline` section.
+Read the YAML code block in `_millhouse/task/status.md` if it exists. Extract `phase:`, `task:`, `plan:`, and the timeline entries from the ` ```text ``` ` fence in the `## Timeline` section.
 
 ### Step 2: Read current status
 
-Read the YAML code block in `_millhouse/scratch/status.md` if it exists. Extract:
+Read the YAML code block in `_millhouse/task/status.md` if it exists. Extract:
 - `phase:` — current workflow phase
 - `plan:` — path to plan file (if any)
 - `task:` — current task name (if any)
@@ -36,11 +36,15 @@ If a plan file path is present and the file exists, read the plan to count total
 
 1. Run `git worktree list --porcelain` to get all worktrees with their branches and paths.
 2. For each worktree, read `_millhouse/children/` folder if it exists. Collect ALL `.md` files (active, merged, and abandoned entries). Parse YAML frontmatter for `branch:` and `status:` fields.
-3. For each worktree, read the YAML code block in `_millhouse/scratch/status.md` for phase and step progress. If a plan file path is present and the file exists, count total steps (`### Step` lines) and completed steps (via git log).
+3. For each worktree, read the YAML code block in `_millhouse/task/status.md` for phase and step progress. If a plan file path is present and the file exists, count total steps (`### Step` lines) and completed steps (via git log).
 4. Build a tree structure:
    - The main worktree is the root node.
    - For each worktree, its children are the entries in its `_millhouse/children/` folder.
-   - For each **active** child, check if a live worktree exists for that branch (match branch name against `git worktree list` output). If it does, read the child's live `_millhouse/scratch/status.md` YAML code block for phase/progress. If no live worktree, show `[active — no worktree]`.
+   - For each **active** child (registry `status: active` or `status: pr-pending`):
+     1. Derive the slug from the registry file's stem (strip the leading `<timestamp>-` prefix).
+     2. **Primary source:** try to read `<parent>/_millhouse/children/<slug>/status.md` (via the junction). If the read succeeds, use the YAML code block for phase/progress.
+     3. **Fallback:** if the junction read throws an exception (dangling junction — target missing or junction missing): fall back to `git worktree list --porcelain` lookup, reading `<child>/_millhouse/task/status.md` directly.
+     4. **Both fail:** display `<slug>  [target missing — run mill-cleanup]` for that entry and continue rendering other children.
    - For **merged/abandoned** children, show them under their parent with their registry status. No live worktree lookup needed.
    - Recurse: if a child worktree has its own `_millhouse/children/`, include its children as grandchildren, and so on.
 
@@ -49,7 +53,7 @@ If a plan file path is present and the file exists, read the plan to count total
 Scan for any of the following. If any are found, remember to emit a cleanup suggestion at the bottom of the dashboard in Step 5:
 
 - Children entries in `_millhouse/children/*.md` with `status: merged`, `status: abandoned`, or `status: complete`.
-- Worktrees (from `git worktree list --porcelain`) whose `_millhouse/scratch/status.md` YAML code block has `phase: complete`.
+- Worktrees (from `git worktree list --porcelain`) whose `_millhouse/task/status.md` YAML code block has `phase: complete`.
 - Orphan directories in `<parent-of-repo-root>/<reponame>.worktrees/` (non-hub layout): subdirs not in `git worktree list` output. Skip this check if hub layout is detected (a `.bare` directory exists at `<parent-of-repo-root>/.bare`) — hub-layout orphan detection is handled by `mill-cleanup` itself.
 - `[done]` or `[abandoned]` task markers in `tasks.md`.
 
@@ -69,16 +73,16 @@ If there are in-progress tasks, list them:
 
 ```
 Active tasks:
-  [discussing]     Task A
-  [implementing]   Task B
+  [active]   Task A
+  [active]   Task B
 ```
 
-Source of truth for phase: `phase:` field in the YAML code block of `_millhouse/scratch/status.md`.
+Source of truth for phase: `phase:` field in the YAML code block of `_millhouse/task/status.md`.
 
-If `_millhouse/scratch/status.md` exists and has a `## Timeline` section (read entries from within the ` ```text ``` ` fence):
+If `_millhouse/task/status.md` exists and has a `## Timeline` section (read entries from within the ` ```text ``` ` fence):
 
 ```
-Timeline (_millhouse/scratch/status.md):
+Timeline (_millhouse/task/status.md):
   discussing              2026-04-08T10:23:15Z
   discussed               2026-04-08T10:45:00Z
   implementing            2026-04-08T11:00:00Z
@@ -86,7 +90,7 @@ Timeline (_millhouse/scratch/status.md):
 
 Show all timeline entries from the `## Timeline` section, one per line. If status.md does not exist or has no `## Timeline` section, show `Timeline: (none)`.
 
-If the YAML code block in `_millhouse/scratch/status.md` has a phase that is not `complete`:
+If the YAML code block in `_millhouse/task/status.md` has a phase that is not `complete`:
 
 ```
 Current:
@@ -103,14 +107,14 @@ Worktrees:
   main
     hanf  [implementing]  3/5 steps
       fix-login-bug  [merged]
-      add-caching  [discussing]
+      add-caching  [discussed]
     feature-x  [planned]
 ```
 
 Where:
 - Each level is indented by 2 additional spaces
 - Active children with live worktrees show their phase and progress from the YAML code block in `status.md`
-- Active children without live worktrees show `[active — no worktree]`
+- Active children with unresolvable state show `[target missing — run mill-cleanup]`
 - Merged/abandoned children show their registry status (e.g., `[merged]`, `[abandoned]`)
 - If a child's status is unreadable, show `[unknown]`
 - If `_millhouse/children/` is missing for a node, that node simply shows no children
@@ -136,9 +140,9 @@ Tasks (tasks.md):
   In-progress:   1 task
 
 Active tasks:
-  [implementing]   Implement mill-status skill
+  [active]   Implement mill-status skill
 
-Timeline (_millhouse/scratch/status.md):
+Timeline (_millhouse/task/status.md):
   discussing              2026-04-08T10:23:15Z
   discussed               2026-04-08T10:45:00Z
   implementing            2026-04-08T11:00:00Z
@@ -152,6 +156,6 @@ Worktrees:
   main
     hanf  [implementing]  3/5 steps
       fix-login-bug  [merged]
-      add-caching  [discussing]
+      add-caching  [discussed]
     feature-x  [planned]
 ```

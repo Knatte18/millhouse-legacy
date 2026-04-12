@@ -7,7 +7,7 @@ description: Create a new task in tasks.md.
 
 One-shot. Add a task to `tasks.md` in the project root.
 
-For tasks.md file format details, see `plugins/mill/doc/modules/backlog-format.md`.
+For tasks.md file format details, see `plugins/mill/doc/modules/tasksmd-format.md`.
 
 ---
 

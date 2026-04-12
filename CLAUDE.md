@@ -42,7 +42,7 @@ Millhouse is a multi-plugin marketplace for Claude Code. The core plugin is `mil
 ## Tasks
 
 - Task list: `tasks.md` at repo root — git-tracked, `## ` headings for tasks, optional `[phase]` markers.
-- Phase tracking: `_millhouse/scratch/status.md` — `phase:` field is the authoritative source. `## Timeline` section records chronological phase history.
-- `_millhouse/` is gitignored. On spawn, it is copied (excluding `scratch/`) from parent to new worktree.
+- Phase tracking: `_millhouse/task/status.md` — `phase:` field is the authoritative source. `## Timeline` section records chronological phase history.
+- `_millhouse/` is gitignored. On spawn, it is copied (excluding `task/`, `scratch/`, and `children/`) from parent to new worktree.
 - Run `mill-setup` to initialize after a fresh clone (safe to re-run; skips existing files).
-- Format reference: `plugins/mill/doc/modules/backlog-format.md` (tasks.md format).
+- Format reference: `plugins/mill/doc/modules/tasksmd-format.md` (tasks.md format).

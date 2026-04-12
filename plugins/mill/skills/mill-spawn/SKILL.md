@@ -7,7 +7,7 @@ description: Add a task to tasks.md and create a worktree for it in one command.
 
 One-shot. Add a task with `[spawn]` marker to `tasks.md`, commit, then call `mill-spawn.ps1` to claim it and create a worktree.
 
-For tasks.md file format details, see `plugins/mill/doc/modules/backlog-format.md`.
+For tasks.md file format details, see `plugins/mill/doc/modules/tasksmd-format.md`.
 
 ---
 
@@ -78,7 +78,7 @@ Run via bash:
 pwsh -File "<resolved-path>"
 ```
 
-The script reads the first `## [spawn] ` task from `tasks.md`, claims it (removes the task block, commits), creates the worktree via `mill-worktree.ps1` (passing `WorktreeName` and `BranchName`), writes status/board in the new worktree, and writes a child registry entry to the parent's `_millhouse/children/` directory. The `children/` folder is excluded from copy-on-spawn (alongside `scratch/`). Like all of `_millhouse/`, the `children/` folder is gitignored — registry entries are local to each clone/worktree.
+The script reads the first `## [>] ` task from `tasks.md`, claims it (removes the task block, commits), creates the worktree via `mill-worktree.ps1` (passing `WorktreeName` and `BranchName`), writes `_millhouse/task/status.md` in the new worktree, and writes a child registry entry to the parent's `_millhouse/children/` directory and a junction at `_millhouse/children/<slug>/` pointing to the new worktree's `_millhouse/task/`. The `task/`, `children/`, and `scratch/` folders are excluded from copy-on-spawn. Like all of `_millhouse/`, these folders are gitignored — registry entries and task state are local to each clone/worktree.
 
 ### Step 7: Report
 

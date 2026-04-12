@@ -1,5 +1,5 @@
 ﻿# mill-spawn.ps1 — Self-contained worktree spawner for Mill tasks.
-# Reads tasks.md, claims the first [>] task (changes to [discussing]),
+# Reads tasks.md, claims the first [>] task (changes to [active]),
 # creates the worktree, writes handoff brief / status, commits tasks.md change.
 #
 # No Claude session needed — all logic is deterministic text processing.
@@ -70,8 +70,8 @@ if ($descLines.Count -gt 0) {
     $TaskDescription = $descLines -join "`n"
 }
 
-# --- Change [>] to [discussing] in tasks.md (in-memory) ---
-$UpdatedTasks = $TasksContent.Substring(0, $spawnMatch.Index) + "## [discussing] $TaskTitle" + $TasksContent.Substring($spawnMatch.Index + $spawnMatch.Length)
+# --- Change [>] to [active] in tasks.md (in-memory) ---
+$UpdatedTasks = $TasksContent.Substring(0, $spawnMatch.Index) + "## [active] $TaskTitle" + $TasksContent.Substring($spawnMatch.Index + $spawnMatch.Length)
 
 # --- Generate slug ---
 $Slug = $TaskTitle.ToLower() -replace '\s+', '-' -replace '[^a-z0-9\-]', ''
@@ -101,9 +101,9 @@ Write-Host "Branch:    $BranchName"
 if ($DryRun) {
     Write-Host ""
     Write-Host "[DryRun] Would write handoff to _millhouse/handoff.md"
-    Write-Host "[DryRun] Would change [>] to [discussing] for task '$TaskTitle' in tasks.md."
+    Write-Host "[DryRun] Would change [>] to [active] for task '$TaskTitle' in tasks.md."
     Write-Host "[DryRun] Would create worktree via mill-worktree.ps1 (branch: $BranchName)"
-    Write-Host "[DryRun] Would copy _millhouse/ (excluding scratch/) to new worktree"
+    Write-Host "[DryRun] Would copy _millhouse/ (excluding task/, scratch/, and children/) to new worktree"
     Write-Host "[DryRun] Would write status.md in new worktree"
     exit 0
     # Note: DryRun exits without emitting Write-Output $ProjectPath.
@@ -113,7 +113,7 @@ if ($DryRun) {
 $tasksLines = $UpdatedTasks -split '\r?\n'
 $h1Count = 0
 $h2Headings = @()
-$validPhases = @('discussing', 'discussed', 'planned', 'implementing', 'testing', 'reviewing', 'blocked', 'pr-pending', 'done', '>')
+$validPhases = @('>', 'active', 'done', 'abandoned')
 
 for ($i = 0; $i -lt $tasksLines.Count; $i++) {
     $line = $tasksLines[$i]
@@ -188,7 +188,7 @@ $TasksRelPath = $TasksPath.Substring($RepoRoot.Length).TrimStart('\', '/')
 Push-Location $RepoRoot
 try {
     git add $TasksRelPath 2>&1 | Out-Null
-    git commit -m "task: claim $TaskTitle for discussing" 2>&1 | Out-Null
+    git commit -m "task: claim $TaskTitle" 2>&1 | Out-Null
     git push 2>&1 | Out-Null
 } catch {
     Write-Warning "Git commit/push failed: $_"
@@ -245,20 +245,21 @@ if (-not $ProjectPath -or -not (Test-Path $ProjectPath)) {
 }
 
 # --- Copy gitignored directories from parent to new worktree ---
-# _millhouse/ (excluding scratch/ and children/) — config.yaml is handled by mill-worktree.ps1 but
+# _millhouse/ (excluding task/, scratch/, and children/) — config.yaml is handled by mill-worktree.ps1 but
 # other files (handoff, wrappers) need explicit copy.
 # .claude/ — not handled by mill-worktree.ps1, needs copy.
 # .vscode/ — mill-worktree.ps1 creates its own settings.json, no copy needed.
 $srcMillhouse = Join-Path $PWD "_millhouse"
 $dstMillhouse = Join-Path $ProjectPath "_millhouse"
 if (Test-Path $srcMillhouse) {
-    Get-ChildItem $srcMillhouse -Exclude "scratch", "children" | ForEach-Object {
+    Get-ChildItem $srcMillhouse -Exclude "task", "scratch", "children" | ForEach-Object {
         Copy-Item $_.FullName -Destination (Join-Path $dstMillhouse $_.Name) -Recurse -Force
     }
 }
 
-# --- Create empty _millhouse/scratch structure in new worktree ---
+# --- Create empty _millhouse/scratch and _millhouse/task structures in new worktree ---
 New-Item -ItemType Directory -Path (Join-Path $ProjectPath "_millhouse/scratch/reviews") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $ProjectPath "_millhouse/task/reviews") -Force | Out-Null
 
 # --- Locate status-template.md (three-tier resolution) ---
 $StatusTemplate = $null
@@ -302,7 +303,7 @@ $statusContent = $statusContent -replace '\{\{parent\}\}', $ParentBranch
 $statusContent = $statusContent -replace '\{\{task_description\}\}', $DiscussionSummary
 $statusContent = $statusContent -replace '\{\{timeline_entry\}\}', "discussing              $TimeStamp"
 
-$statusPath = Join-Path $ProjectPath "_millhouse" | Join-Path -ChildPath "scratch"
+$statusPath = Join-Path $ProjectPath "_millhouse" | Join-Path -ChildPath "task"
 $statusPath = Join-Path $statusPath "status.md"
 [System.IO.File]::WriteAllText($statusPath, $statusContent, $utf8NoBom)
 
@@ -339,6 +340,22 @@ $DiscussionSummary
 
 [System.IO.File]::WriteAllText($ChildFilePath, $childContent, $utf8NoBom)
 Write-Host "Child registry: $ChildFilename"
+
+# --- Create junction in parent _millhouse/children/<slug>/ -> child _millhouse/task/ ---
+$junctionPath = Join-Path $childrenDir $Slug
+$junctionTarget = Join-Path $ProjectPath "_millhouse/task"
+try {
+    # Remove stale junction if it exists
+    $existingJunction = Get-Item $junctionPath -ErrorAction SilentlyContinue
+    if ($existingJunction -and $existingJunction.Attributes.ToString().Contains("ReparsePoint")) {
+        $existingJunction.Delete()
+        Write-Host "Removed stale junction: $junctionPath"
+    }
+    New-Item -ItemType Junction -Path $junctionPath -Target $junctionTarget | Out-Null
+    Write-Host "Child junction: $junctionPath -> $junctionTarget"
+} catch {
+    Write-Warning "Junction creation failed: $_. Child registry .md is still valid; mill-status will fall back to git worktree list."
+}
 
 # --- Open VS Code (only with -VSCode flag) ---
 if ($VSCode) {
