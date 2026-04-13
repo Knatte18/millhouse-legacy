@@ -60,7 +60,11 @@ Phases 1+2 share Thread A's conversation context. Phase 1 ends when the user typ
 
 ## Spawn Mechanism
 
-All sub-agent spawns in mill go through `plugins/mill/scripts/spawn-agent.ps1`. This is the swap-backend integration point: today only the `claude` backend is wired, but the script structure makes adding `ollama`, `gemini-cli`, etc. straightforward in a follow-up task.
+All sub-agent spawns in mill go through two layers:
+
+1. **Model layer — `plugins/mill/scripts/spawn-agent.ps1`**: The single backend swap point. Supports `claude` (`opus`, `sonnet`, `haiku`) and `gemini` (`gemini-3-pro`, `gemini-flash`) backends. Accepts `-DispatchMode tool-use|bulk` for Gemini workers.
+
+2. **Reviewer-module layer — `plugins/mill/scripts/spawn-reviewer.py`**: Resolves named reviewer recipes from config, gathers file scope for bulk reviews, spawns N parallel workers, routes through an Opus handler, and emits a single JSON line. Orchestrators call `spawn-reviewer.py`; it calls `spawn-agent.ps1` internally. See `plugins/mill/doc/modules/reviewer-modules.md` for the full dispatch mode guide.
 
 ### Script signature
 
@@ -103,9 +107,9 @@ The principle, stated as one rule: **The thread that produced the artifact fixes
 
 | Artifact | Reviewer (cold, read-only) | Fixer |
 |---|---|---|
-| `discussion.md` | discussion-reviewer (`spawn-agent.ps1 -Role reviewer`) | `mill-start` (Thread A), with user consultation for gaps |
-| `plan.md` | plan-reviewer (`spawn-agent.ps1 -Role reviewer`) | `mill-go` (Thread A), via `mill-receiving-review` skill |
-| Code diff | code-reviewer (`spawn-agent.ps1 -Role reviewer`) | Thread B (the implementer-orchestrator), via `mill-receiving-review` skill |
+| `discussion.md` | discussion-reviewer (`spawn-reviewer.py --phase discussion`) | `mill-start` (Thread A), with user consultation for gaps |
+| `plan.md` | plan-reviewer (`spawn-reviewer.py --phase plan`) | `mill-go` (Thread A), via `mill-receiving-review` skill |
+| Code diff | code-reviewer (`spawn-reviewer.py --phase code`) | Thread B (the implementer-orchestrator), via `mill-receiving-review` skill |
 
 This decouples reviewer model choice from fix capability. Reviewers can be swapped to cheap or non-Claude models later (a follow-up task) without losing fix quality, because the fixer is the thread that holds the freshest context for the artifact.
 
@@ -115,35 +119,49 @@ This decouples reviewer model choice from fix capability. Reviewers can be swapp
 
 ### `#config-resolution`
 
-For review round `N`, the resolving skill looks up `models.<review-type>.<N>`. If that integer key is absent, it falls back to `models.<review-type>.default`. Rounds past the highest explicit index always use `default`. The `default` key is required for every review slot.
+Orchestrator skills (`mill-go`, `mill-start`, Thread B) resolve a reviewer name from `review-modules.<phase>.<round>` in `_millhouse/config.yaml`, then pass that name to `spawn-reviewer.py --reviewer-name`. `spawn-reviewer.py` reads the matching `reviewers.<name>` recipe and dispatches accordingly.
 
-YAML integer keys must be coerced to strings before lookup — keys are always compared as strings. The resolution helper in mill-go and mill-start performs the coercion. `spawn-agent.ps1` does **not** read config; the orchestrator skills resolve the model name and pass it as `-ProviderName`.
+For round `N`, the resolving skill looks up `review-modules.<phase>.<N>`. If that integer key is absent, it falls back to `review-modules.<phase>.default`. Rounds past the highest explicit index always use `default`. The `default` key is required for every phase slot.
+
+YAML integer keys must be coerced to strings before lookup — keys are always compared as strings. `spawn-reviewer.py` performs this coercion internally. Orchestrator skills pass only `--reviewer-name <name>` and `--round <N>`; they do not read the recipe themselves.
 
 Worked example:
 
 ```yaml
-models:
-  plan-review:
-    1: opus
-    2: sonnet
-    default: sonnet
+review-modules:
+  plan:
+    1: ensemble-gemini3-opus
+    2: single-sonnet
+    default: single-sonnet
+
+reviewers:
+  ensemble-gemini3-opus:
+    worker-model: gemini-3-pro
+    worker-count: 3
+    dispatch: bulk
+    handler-model: opus
+    prompt-template: plugins/mill/doc/modules/code-review-bulk.md
+  single-sonnet:
+    worker-model: sonnet
+    worker-count: 1
+    dispatch: tool-use
 ```
 
-- Round 1 → `opus`
-- Round 2 → `sonnet`
-- Round 3, 4, 5, ... → `sonnet` (falls through to `default`)
+- Round 1 → recipe `ensemble-gemini3-opus` (3 Gemini workers + Opus handler)
+- Round 2 → recipe `single-sonnet`
+- Round 3, 4, 5, ... → `single-sonnet` (falls through to `default`)
 
-If a slot has only `default`:
+If a phase has only `default`:
 
 ```yaml
-models:
-  code-review:
-    default: sonnet
+review-modules:
+  discussion:
+    default: single-opus
 ```
 
-- All rounds → `sonnet`
+- All rounds → recipe `single-opus`
 
-The schema accepts provider names instead of Claude model names in a future `llm-providers:` block, without further schema changes.
+See `plugins/mill/doc/modules/reviewer-modules.md` for the full recipe schema and dispatch mode guide.
 
 ## Config Migration
 
@@ -151,19 +169,15 @@ The schema accepts provider names instead of Claude model names in a future `llm
 
 Two layers protect existing installs from the schema change introduced in this task:
 
-1. **`mill-setup` auto-migration (Layer 1, automatic).** When `_millhouse/config.yaml` already exists, `mill-setup` Step 4b reads the existing `models:` block and updates it in place:
-   - For required scalar keys (`session`, `implementer`, `explore`): if missing, append with the default value.
-   - For per-round object keys (`discussion-review`, `plan-review`, `code-review`):
-     - Absent → insert as `<key>:\n    default: <default-value>` (`discussion-review` → `opus`; the rest → `sonnet`).
-     - Scalar (e.g. `plan-review: sonnet`) → rewrite to `<key>:\n    default: <existing-scalar-value>`. The user's choice is preserved as the new `default`.
-     - Object with `default` sub-key → leave alone (idempotent).
-     - Object missing `default` → insert `default: <hardcoded-default>` under it.
+1. **`mill-setup` auto-migration (Layer 1, automatic).** When `_millhouse/config.yaml` already exists, `mill-setup` Steps 4b–4c update it in place:
+   - **Step 4b** (models block): For required scalar keys (`session`, `implementer`, `explore`): if missing, append with the default value. Removes the old per-round model keys (`discussion-review`, `plan-review`, `code-review`) from the `models:` block if present — those slots moved to `review-modules:` + `reviewers:`.
+   - **Step 4c** (reviewer blocks): If `reviewers:` or `review-modules:` are absent, seeds them with the five default recipes (`single-opus`, `single-sonnet`, `single-haiku`, `sonnet-single-maxeffort`, `ensemble-gemini3-opus`) and default phase mappings. Backs up the existing config to `config.yaml.bak` before writing.
    - Print a diff of what changed. Write the updated file. No git commit (`_millhouse/` is gitignored).
    - Auto-migration runs every time `mill-setup` is invoked, so re-running it on a conformant config is a no-op.
 
-2. **Entry-time validation (Layer 2, fail-loud).** `mill-start` and `mill-go` validate the `models:` block on entry per the rules in `validation.md` `## _millhouse/config.yaml`. On failure, both skills stop with the exact error message:
+2. **Entry-time validation (Layer 2, fail-loud).** `mill-start` and `mill-go` validate the `reviewers:` and `review-modules:` blocks on entry per the rules in `validation.md` `## _millhouse/config.yaml`. On failure, both skills stop with the exact error message:
    ```
-   Config schema out of date. Expected models.<slot> (<type>). Run 'mill-setup' to auto-migrate.
+   Config schema out of date. Expected reviewers: and review-modules: blocks. Run 'mill-setup' to auto-migrate.
    ```
    Validation runs every time, not just after migration. It catches edge cases the auto-migration cannot handle (e.g. a hand-edited config that introduces a malformed shape).
 
@@ -177,7 +191,9 @@ In-flight `_millhouse/task/discussion.md` or `plan.md` files written before this
 | `doc/modules/discussion-review.md` | Discussion-reviewer protocol (read-only sub-agent invoked by mill-start) |
 | `doc/modules/plan-format.md` | Schema for `_millhouse/task/plan.md`, including the atomic step-card invariant |
 | `doc/modules/plan-review.md` | Plan-reviewer protocol (read-only sub-agent invoked by mill-go) |
-| `doc/modules/code-review.md` | Code-reviewer protocol (read-only sub-agent invoked by Thread B) |
+| `doc/modules/code-review.md` | Code-reviewer protocol (`tool-use` dispatch — Claude reviewers) |
+| `doc/modules/code-review-bulk.md` | Code-reviewer prompt template for `bulk` dispatch (Gemini workers) |
+| `doc/modules/reviewer-modules.md` | Reviewer-module architecture guide: recipe schema, dispatch modes, failure modes, adding ensembles |
 | `doc/modules/implementer-brief.md` | Thread B's prompt template — the runtime spec for Phase 3+4 |
 | `doc/modules/handoff-brief.md` | `_millhouse/handoff.md` format (mill-spawn → mill-start handoff) |
 | `doc/modules/tasksmd-format.md` | `tasks.md` format reference (the git-tracked task list) |

@@ -16,7 +16,7 @@ The template lives in `doc/modules/` (alongside `handoff-brief.md`) so that the 
 | `<REPO_ROOT>` | Same as `<WORK_DIR>` (alias kept for clarity in the brief body) |
 | `<VERIFY_CMD>` | The `verify:` value from plan frontmatter |
 | `<MAX_CODE_REVIEW_ROUNDS>` | The resolved max rounds (CLI arg or `reviews.code` config or default 3) |
-| `<CODE_REVIEW_RESOLUTION_SNAPSHOT>` | The `models.code-review` block from `_millhouse/config.yaml` (verbatim copy so Thread B can do per-round resolution itself) |
+| `<CODE_REVIEW_RESOLUTION_SNAPSHOT>` | The `review-modules.code` block from `_millhouse/config.yaml` (verbatim copy so Thread B can do per-round resolution itself — maps round numbers to reviewer names) |
 | `<TASK_TITLE>` | Task title from `status.md` |
 
 ## CRITICAL Banners (top of materialized prompt)
@@ -151,11 +151,11 @@ a. Compute the diff: `git diff <plan_start_hash>..HEAD` (read `plan_start_hash` 
 
 b. Read `_codeguide/Overview.md` if it exists, and `CONSTRAINTS.md` from repo root if it exists. These will be inlined into the prompt.
 
-c. Materialize the prompt template from `plugins/mill/doc/modules/code-review.md` into `_millhouse/scratch/code-review-prompt-r<N>.md`, substituting `<DIFF>`, `<PLAN_CONTENT>` (read from `<PLAN_PATH>`), `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`.
+c. Materialize the prompt template from `plugins/mill/doc/modules/code-review.md` into `_millhouse/scratch/code-review-prompt-r<N>.md`, substituting `<DIFF>`, `<PLAN_CONTENT>` (read from `<PLAN_PATH>`), `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`. This file is used as `--prompt-file` by spawn-reviewer.py for tool-use recipes and retained for debugging traceability on bulk recipes (bulk recipes ignore it and use their own template).
 
-d. Resolve the model for round `N` from `<CODE_REVIEW_RESOLUTION_SNAPSHOT>`: look up integer key `N` (as string); fall back to `default`.
+d. Resolve the reviewer name for round `N` from `<CODE_REVIEW_RESOLUTION_SNAPSHOT>`: look up integer key `N` (as string); fall back to `default`. The snapshot now contains the `review-modules.code` block verbatim (reviewer names, not model names). Each reviewer name maps to a recipe in the `reviewers:` block.
 
-e. Spawn synchronously via Bash: `powershell.exe -File plugins/mill/scripts/spawn-agent.ps1 -Role reviewer -PromptFile _millhouse/scratch/code-review-prompt-r<N>.md -ProviderName <model>`. (Reviewers are short — no `run_in_background`.)
+e. Spawn synchronously via Bash: `python plugins/mill/scripts/spawn-reviewer.py --reviewer-name <reviewer-name> --prompt-file _millhouse/scratch/code-review-prompt-r<N>.md --phase code --round <N> --plan-start-hash <plan_start_hash>`. (Reviewers are short — no `run_in_background`.) Read `plan_start_hash` from the `plan_start_hash:` field in the YAML block of `<STATUS_PATH>`.
 
 f. Parse the JSON line from stdout: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`.
 

@@ -18,7 +18,12 @@ See `plugins/mill/doc/overview.md` for the two-thread architecture overview, the
 
 Read `_millhouse/config.yaml`. If it does not exist, stop --- tell the user to run `mill-setup` first.
 
-**Entry-time validation.** Validate the `models:` block per `plugins/mill/doc/modules/validation.md` `## _millhouse/config.yaml` section. Required slots: `models.session` (string), `models.implementer` (string), `models.explore` (string), `models.discussion-review.default` (string), `models.plan-review.default` (string), `models.code-review.default` (string). On failure, stop with the exact error message:
+**Entry-time validation.** Validate `_millhouse/config.yaml` per `plugins/mill/doc/modules/validation.md`. Required slots: `models.session` (string), `models.implementer` (string), `models.explore` (string). For review phases, accept either the new `review-modules.<phase>.default` OR the legacy `models.<phase>-review.default` — prefer the new one if present. If neither is present for any phase, stop with:
+```
+Config schema out of date. Expected review-modules.<phase>.default (string). Run 'mill-setup' to auto-migrate.
+```
+
+For legacy configs (no `review-modules:` block), validate the legacy slots: `models.discussion-review.default`, `models.plan-review.default`, `models.code-review.default`. On failure, stop with the exact error message:
 
 ```
 Config schema out of date. Expected models.<slot> (<type>). Run 'mill-setup' to auto-migrate.
@@ -119,13 +124,13 @@ mill-go proceeds through named phases. Each phase updates the YAML code block in
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists.
 
-   c. **Resolve the model for round N.** Read `models.plan-review.<N>` from `_millhouse/config.yaml`; if absent, fall back to `models.plan-review.default`. The integer key is compared as a string. See `plugins/mill/doc/overview.md#config-resolution`.
+   c. **Resolve the reviewer name for round N.** Prefer `review-modules.plan.<N>` from `_millhouse/config.yaml`; if absent, fall back to `review-modules.plan.default`. For legacy configs without `review-modules:`, fall back to `models.plan-review.<N>|default` and wrap as `single-<modelname>` (if a matching `reviewers.single-<modelname>` entry exists) or pass as `--reviewer-name` directly. The integer key is compared as a string. See `plugins/mill/doc/overview.md#config-resolution`.
 
    d. **Materialize the prompt.** Read the prompt template from `plugins/mill/doc/modules/plan-review.md`. Substitute `<PLAN_FILE_PATH>` (absolute path to `_millhouse/task/plan.md`), `<TASK_TITLE>` (from status.md), `<CONSTRAINTS_CONTENT>` (CONSTRAINTS.md content or `(no CONSTRAINTS.md)`), and `<N>` (current round number). Write the materialized prompt to `_millhouse/scratch/plan-review-prompt-r<N>.md`. **Do NOT inline the plan content** — the reviewer reads the plan file independently.
 
    e. **Spawn the plan-reviewer.** Invoke via Bash (synchronous, not backgrounded):
       ```bash
-      powershell.exe -File plugins/mill/scripts/spawn-agent.ps1 -Role reviewer -PromptFile _millhouse/scratch/plan-review-prompt-r<N>.md -ProviderName <model>
+      python plugins/mill/scripts/spawn-reviewer.py --reviewer-name <reviewer-name> --prompt-file _millhouse/scratch/plan-review-prompt-r<N>.md --phase plan --round <N>
       ```
 
    f. **Parse the JSON line** from the script's stdout: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`.
@@ -183,7 +188,7 @@ mill-go proceeds through named phases. Each phase updates the YAML code block in
    - `<REPO_ROOT>` → same as `<WORK_DIR>`
    - `<VERIFY_CMD>` → the `verify:` value from plan frontmatter
    - `<MAX_CODE_REVIEW_ROUNDS>` → the resolved `max_code_review_rounds` value
-   - `<CODE_REVIEW_RESOLUTION_SNAPSHOT>` → the `models.code-review` block from `_millhouse/config.yaml`, copied verbatim
+   - `<CODE_REVIEW_RESOLUTION_SNAPSHOT>` → the `review-modules.code` block from `_millhouse/config.yaml`, copied verbatim (maps round numbers to reviewer names). For legacy configs without `review-modules:`, fall back to copying the `models.code-review` block.
    - `<TASK_TITLE>` → task title from status.md
 
    Write the materialized brief to `_millhouse/task/implementer-brief-instance.md`.

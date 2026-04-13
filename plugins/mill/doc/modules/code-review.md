@@ -92,9 +92,21 @@ Return as the final line of your output a single JSON object: `{"verdict": "APPR
 
 ---
 
+## Dispatch Modes
+
+Code-review can run in two dispatch modes, determined by the reviewer recipe's `dispatch:` field in `_millhouse/config.yaml`:
+
+- **`tool-use`** (this file) — The reviewer receives a materialized prompt and has full tool access (Read, Write, Grep, Bash). Used for Claude reviewers where the rate limit does not apply and existing prompt templates already assume tool-use. This file (`code-review.md`) is the template for `dispatch: tool-use` reviewers.
+
+- **`bulk`** (`code-review-bulk.md`) — The reviewer receives all file contents inlined in the prompt and has no tool access. Used for Gemini workers where the Code Assist rate limit (~5 req/min) prohibits per-tool-call API requests. See `plugins/mill/doc/modules/code-review-bulk.md` for the bulk template.
+
+Reviewer-name resolution happens in `spawn-reviewer.py` via `review-modules.code.<round>|default`. The chosen recipe's `dispatch:` field determines which template is used. Thread B no longer directly references model names for code-review — it passes a reviewer name to `spawn-reviewer.py` which handles dispatch internally.
+
+See `plugins/mill/doc/modules/reviewer-modules.md` for the full reviewer-module architecture.
+
 ## Review Loop
 
-1. Thread B materializes the prompt template into `_millhouse/scratch/code-review-prompt-r<N>.md` and spawns `spawn-agent.ps1 -Role reviewer -PromptFile <prompt-path> -ProviderName <model>`.
+1. Thread B materializes the prompt template into `_millhouse/scratch/code-review-prompt-r<N>.md` and spawns `python plugins/mill/scripts/spawn-reviewer.py --reviewer-name <name> --prompt-file <prompt-path> --phase code --round <N> --plan-start-hash <plan_start_hash>`. The reviewer name is resolved from `review-modules.code.<N>|default` in `_millhouse/config.yaml`.
 2. Reviewer writes findings to `_millhouse/task/reviews/<timestamp>-code-review-r<N>.md`.
 3. Reviewer returns a JSON line: `{"verdict": ..., "review_file": ...}`. The script writes this to its own stdout. Thread B parses it.
 4. If **APPROVE**: Thread B proceeds to Phase: Finalize. Thread B does **not** read the review file.

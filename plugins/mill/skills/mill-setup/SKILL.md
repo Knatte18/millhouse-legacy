@@ -132,6 +132,108 @@ Migration rules:
 
 Validate `_millhouse/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
 
+**Step 4c — `reviewers:` and `review-modules:` migration (runs every time mill-setup is invoked).**
+
+This step seeds the reviewer-module abstraction. **Idempotent guard:** if `_millhouse/config.yaml` already contains a `review-modules:` top-level key, skip this step entirely (already migrated).
+
+**Before writing:** copy `_millhouse/config.yaml` to `_millhouse/config.yaml.bak`. Skip if `.bak` already exists.
+
+Migration rules:
+
+1. **Seed v1 shipped reviewers** in the `reviewers:` block (add each if absent; never overwrite):
+   - `single-opus` — `worker-model: opus`, `worker-count: 1`, `dispatch: tool-use`
+   - `single-sonnet` — `worker-model: sonnet`, `worker-count: 1`, `dispatch: tool-use`
+   - `single-haiku` — `worker-model: haiku`, `worker-count: 1`, `dispatch: tool-use`
+   - `sonnet-single-maxeffort` — `worker-model: sonnet`, `worker-count: 1`, `dispatch: tool-use`
+   - `ensemble-gemini3-opus` — `worker-model: gemini-3-pro`, `worker-count: 3`, `dispatch: bulk`, `handler-model: opus`, `prompt-template: plugins/mill/doc/modules/code-review-bulk.md`, `max-bundle-chars: 200000`, `fallback: sonnet-single-maxeffort`
+
+2. **Migrate legacy `models.<phase>` entries** to `reviewers:` + `review-modules:`:
+   - For each phase in `{discussion-review, plan-review, code-review}`: read `models.<phase>.default` and any per-round overrides.
+   - For each unique model name found, ensure `reviewers.single-<modelname>` exists (using the shape above). Skip if already present.
+   - Build the `review-modules.<short-phase>` block (`short-phase`: `discussion-review` → `discussion`, `plan-review` → `plan`, `code-review` → `code`):
+     - Set `default: single-<default-model>`
+     - Set per-round keys from legacy overrides: `"1": single-<model-for-round-1>`, etc.
+
+3. **Override code-review default to ensemble:**
+   - Set `review-modules.code.default: ensemble-gemini3-opus` unconditionally (new v1 default).
+
+4. **Set defaults for plan and discussion:**
+   - If `review-modules.plan.default` was not set by the legacy migration above, set `review-modules.plan.default: single-sonnet`.
+   - If `review-modules.discussion.default` was not set, set `review-modules.discussion.default: single-opus`.
+
+5. **Leave legacy `models:` block intact** (retained for two versions; removal is a follow-up task).
+
+**After writing:** print a summary of what was added/changed.
+
+**Worked example (before → after):**
+
+Before:
+```yaml
+models:
+  session: opus
+  implementer: sonnet
+  explore: haiku
+  discussion-review:
+    default: opus
+  plan-review:
+    default: sonnet
+  code-review:
+    default: sonnet
+```
+
+After:
+```yaml
+models:
+  session: opus
+  implementer: sonnet
+  explore: haiku
+  discussion-review:
+    default: opus
+  plan-review:
+    default: sonnet
+  code-review:
+    default: sonnet
+
+# Reviewer recipes (added by mill-setup Step 4c migration)
+reviewers:
+  # Single-model tool-use reviewers (degenerate ensemble, no handler)
+  single-opus:
+    worker-model: opus
+    worker-count: 1
+    dispatch: tool-use
+  single-sonnet:
+    worker-model: sonnet
+    worker-count: 1
+    dispatch: tool-use
+  single-haiku:
+    worker-model: haiku
+    worker-count: 1
+    dispatch: tool-use
+  # Max-effort single-Sonnet fallback for ensemble-gemini3-opus
+  sonnet-single-maxeffort:
+    worker-model: sonnet
+    worker-count: 1
+    dispatch: tool-use
+  # v1 default code-reviewer: 3-worker Gemini ensemble with Opus handler
+  ensemble-gemini3-opus:
+    worker-model: gemini-3-pro
+    worker-count: 3
+    dispatch: bulk
+    handler-model: opus
+    prompt-template: plugins/mill/doc/modules/code-review-bulk.md
+    max-bundle-chars: 200000
+    fallback: sonnet-single-maxeffort
+
+# Review phase → reviewer name mapping (added by mill-setup Step 4c migration)
+review-modules:
+  discussion:
+    default: single-opus
+  plan:
+    default: single-sonnet
+  code:
+    default: ensemble-gemini3-opus
+```
+
 ### Step 5: Create forwarding wrappers
 
 Create the following forwarding wrappers in `_millhouse/`. For each wrapper, skip creation if the file already exists. If old-named wrappers exist at cwd (`helm-spawn.ps1`, `millhouse-worktree.ps1`, `mill-spawn.ps1`, `fetch-issues.ps1`, `mill-worktree.ps1`), remove them from cwd.

@@ -88,6 +88,61 @@ The integer keys are compared as strings during lookup. See `overview.md#config-
 
 `mill-setup` auto-migration (Step 4b) attempts to fix missing slots and scalar-where-object cases automatically before validation runs. Validation is the safety net for edge cases the migration cannot handle. See `overview.md#config-migration` for the two-layer migration spec.
 
+### `reviewers:` block validation
+
+The `reviewers:` block is a mapping from reviewer-name (string) to recipe objects. It is optional in legacy configs (see `models:` fallback path), but required once `review-modules:` is present.
+
+Each recipe must have:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `worker-model` | string | required | Provider name (e.g. `opus`, `sonnet`, `gemini-3-pro`) |
+| `worker-count` | int ≥ 1 | required | Number of parallel workers |
+| `dispatch` | `tool-use` \| `bulk` | required | Dispatch mode |
+| `prompt-template` | string (repo-relative path) | required when `dispatch == 'bulk'` | Bulk prompt template file |
+| `handler-model` | string | required when `dispatch == 'bulk'` and `worker-count >= 2` | Handler model name |
+| `max-bundle-chars` | int | optional | Default 200000 when dispatch is bulk; absent for tool-use |
+| `fallback` | string (reviewer name) | optional | Fallback recipe name on bot-gate |
+
+#### Forbidden combinations for reviewers
+
+- `dispatch == 'tool-use'` AND `worker-count >= 2` → error:
+  ```
+  reviewer '<name>': dispatch='tool-use' with worker-count >= 2 is not supported. Use dispatch='bulk' for multi-worker ensembles.
+  ```
+- `dispatch == 'bulk'` AND `prompt-template` absent → error:
+  ```
+  reviewer '<name>': dispatch='bulk' requires prompt-template
+  ```
+
+### `review-modules:` block validation
+
+The `review-modules:` block has three required sub-keys: `discussion`, `plan`, `code`. Each has:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `default` | string (reviewer name) | required | Default reviewer name for all rounds |
+| `"1"`, `"2"`, ... | string (reviewer name) | optional | Per-round overrides; integer string keys |
+
+**Cross-check:** every reviewer name referenced in `review-modules.*.*` must exist in the `reviewers:` block. Error format:
+
+```
+Config schema out of date. Expected reviewers.<name> (object). Run 'mill-setup' to auto-migrate.
+```
+
+#### Forbidden combinations for review-modules
+
+- `review-modules.discussion.*` pointing at a reviewer whose `dispatch == 'bulk'` → error:
+  ```
+  discussion-review cannot use bulk dispatch — no deterministic file scope
+  ```
+
+#### Legacy migration
+
+When `review-modules:` is absent, `mill-start` and `mill-go` fall back to the legacy `models.discussion-review`, `models.plan-review`, `models.code-review` blocks. Once `review-modules:` is present, it takes precedence and the legacy blocks become optional. Run `mill-setup` to auto-migrate a legacy config to the new schema.
+
+The round-resolution rule (see `overview.md#config-resolution`) is unchanged: look up `str(round_num)` first, fall back to `default`.
+
 ## Failure behavior
 
 If validation fails: report the specific rule violation to the user and stop. Do not attempt to auto-fix — automatic corrections risk making the problem worse.

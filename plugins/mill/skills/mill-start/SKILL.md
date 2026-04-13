@@ -16,7 +16,11 @@ Interactive. Pick a task and design the solution.
 
 Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
 
-**Entry-time validation.** After the config-existence check, validate the `models:` block per `plugins/mill/doc/modules/validation.md` `## _millhouse/config.yaml` section. Required slots: `models.session` (string), `models.implementer` (string), `models.explore` (string), `models.discussion-review.default` (string), `models.plan-review.default` (string), `models.code-review.default` (string). On failure, stop with the exact error message:
+**Entry-time validation.** After the config-existence check, validate `_millhouse/config.yaml` per `plugins/mill/doc/modules/validation.md`. Required slots: `models.session` (string), `models.implementer` (string), `models.explore` (string). For review phases, accept either `review-modules.<phase>.default` OR the legacy `models.<phase>-review.default` — prefer the new one if present. If neither is present, stop with:
+```
+Config schema out of date. Expected review-modules.<phase>.default (string). Run 'mill-setup' to auto-migrate.
+```
+For legacy configs (no `review-modules:` block), validate: `models.discussion-review.default`, `models.plan-review.default`, `models.code-review.default`. On failure, stop with the exact error message:
 
 ```
 Config schema out of date. Expected models.<slot> (<type>). Run 'mill-setup' to auto-migrate.
@@ -165,13 +169,15 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
 
-   c. **Resolve the model for round N.** Read `models.discussion-review.<N>` from `_millhouse/config.yaml`; if absent, fall back to `models.discussion-review.default`. The integer key is compared as a string. See `doc/overview.md#config-resolution` for the resolution rule.
+   c. **Resolve the reviewer name for round N.** Prefer `review-modules.discussion.<N>` from `_millhouse/config.yaml`; if absent, fall back to `review-modules.discussion.default`. For legacy configs without `review-modules:`, fall back to `models.discussion-review.<N>|default`. The integer key is compared as a string. See `doc/overview.md#config-resolution` for the resolution rule.
 
    d. **Materialize the prompt.** Read the prompt template from `doc/modules/discussion-review.md`. Substitute `<DISCUSSION_FILE_PATH>` (absolute path to `_millhouse/task/discussion.md`), `<TASK_TITLE>` (from `tasks.md`), and `<CONSTRAINTS_CONTENT>` (the contents of `CONSTRAINTS.md` from the repo root if it exists, or the literal string `(no CONSTRAINTS.md)` if not). Write the materialized prompt to `_millhouse/scratch/discussion-review-prompt-r<N>.md`.
 
+   Note: discussion-review rejects bulk dispatch at the engine level. If `review-modules.discussion.*` points at a bulk recipe, spawn-reviewer.py exits with a ConfigError and mill-start surfaces the error to the user.
+
    e. **Spawn the discussion-reviewer.** Invoke via Bash:
       ```bash
-      powershell.exe -File plugins/mill/scripts/spawn-agent.ps1 -Role reviewer -PromptFile _millhouse/scratch/discussion-review-prompt-r<N>.md -ProviderName <model>
+      python plugins/mill/scripts/spawn-reviewer.py --reviewer-name <reviewer-name> --prompt-file _millhouse/scratch/discussion-review-prompt-r<N>.md --phase discussion --round <N>
       ```
       The script is synchronous from the caller's perspective. Reviewers are short — do not run in background.
 

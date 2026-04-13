@@ -6,21 +6,23 @@
 
 ## One-line summary
 
-Three small, surgical fixes that survive the dual-Opus rewrite (Proposal 05) and are useful in their own right: an autonomous-fix policy for spawned implementer/orchestrator threads, a hard worktree-isolation rule encoded in the workflow skills, and a `mill-spawn.ps1` parser fix so prose task descriptions are picked up (today only bullet-point descriptions are extracted, so the new tasks.md format produces empty handoff/status bodies).
+A bundle of small, surgical fixes from the last two autonomous runs that all survive the dual-Opus rewrite (Proposal 05) and are worth landing in their own right: an autonomous-fix policy, a hard worktree-isolation rule, plus four bugs discovered during the gemini-cli-support run — stale `status.md` from Thread B (priority), empty timestamped dirs leaked by `spawn_reviewer` during tests, code-reviewer subagents fabricating timestamps, and the reviewer bulk payload missing non-diff context files. The original Fix C (`mill-spawn.ps1` prose-paragraph parser) was moved into Proposal 07 (Python toolkit) since the Python rewrite solves it natively.
 
 ## Background
 
-These came out of running the "Add functionality to track the status of a child worktree from a parent" task on 2026-04-13, plus one bug discovered immediately afterward when writing the proposal docs themselves. The run completed successfully, but several distinct concerns surfaced. All three apply to **any** future orchestrator design (sonnet today, Opus after Proposal 05), so they're worth landing now even though the architecture is changing.
+Fixes A and B came out of the 2026-04-13 "Add functionality to track the status of a child worktree from a parent" run plus the proposal-writing session that followed. Fixes D, E, F, and G came out of the 2026-04-13 gemini-cli-support run. Both runs completed successfully, but a number of distinct concerns surfaced that all share the same shape: small, surgical, independent of the architecture rewrite. Landing them in one proposal keeps the fixes together and avoids churn in the proposal tree.
 
-(Three other bugs from that same run — `cwd drift`, `relative paths`, `Thread B current_step skip` — are NOT included in this proposal. They are mooted by Proposal 04 and Proposal 05 because the affected code is being rewritten or removed entirely. Fixing them now would be wasted work.)
+The original Fix C — a patch to `mill-spawn.ps1`'s task-description parser so it would pick up prose paragraphs instead of only bullet lines — has been **moved into Proposal 07 (Python toolkit)**. Rewriting `mill-spawn` in Python during that migration solves the parser problem natively; patching the PowerShell parser first would be throwaway work. The Fix C section below is kept as a pointer so downstream references don't break; the letter `C` is skipped in the remaining lettering to preserve D/E/F/G cross-references elsewhere in this doc.
 
-## The three fixes
+(Three other bugs from the track-child-worktree run — `cwd drift`, `relative paths`, `Thread B current_step skip` — are NOT included in this proposal. They are mooted by Proposal 04 and Proposal 05 because the affected code is being rewritten or removed entirely. Fixing them now would be wasted work. Note that the `current_step skip` bug from that run is distinct from Fix D below: Fix D is about **ongoing** status.md updates going silent mid-run, not a single skipped step.)
+
+## The fixes
 
 ### Fix A — Autonomous-fix policy for spawned threads
 
 #### What happened
 
-During the previous run, Thread B (Sonnet implementer-orchestrator) made **two** out-of-plan code commits to fix bugs in `spawn-agent.ps1` that were blocking its own work:
+During the track-child-worktree run, Thread B (Sonnet implementer-orchestrator) made **two** out-of-plan code commits to fix bugs in `spawn-agent.ps1` that were blocking its own work:
 
 1. `0461f28 fix(spawn-agent): force array to prevent PS5 scalar unboxing on single-line result` — Thread B couldn't parse the reviewer's JSON line because PowerShell 5 was unboxing a single-line stdout result from `[string[]]` to bare `string`.
 2. `0813108` (component) — Thread B couldn't parse the reviewer's JSON line because the reviewer wrapped its result in markdown backticks (` `` ` `` `).
@@ -93,98 +95,102 @@ Even when the skill text says "do X in the parent worktree", that text is the bu
 
 The previous run's autonomous fixes (`0461f28`, `0813108`) were exactly the kind of "tool I need to do my job is broken, fix it" moment the policy is for. Both fixes also happened to be in `plugins/mill/scripts/spawn-agent.ps1`, which is in-scope for the proposed scope-limit. The two fixes are independent but synergistic — together they give "Thread B can fix its own tools, but only specific tools, and you can see what it did".
 
-### Fix C — `mill-spawn.ps1` parser ignores prose task descriptions
+### Fix C — *moved to [Proposal 07 (Python toolkit)](07-python-toolkit.md)*
+
+The original Fix C was a PowerShell patch for `mill-spawn.ps1`'s task-description parser, which only matched bullet-point lines and therefore produced empty handoff bodies and empty `task_description:` fields on the new prose-paragraph `tasks.md` format. Since Proposal 07 retires `mill-spawn.ps1` entirely and rewrites it in Python, the parser correctness requirement moves there as an acceptance criterion, and no PowerShell patch is needed. See Proposal 07's Migration ordering (`mill-spawn.ps1` is step 1) and Acceptance criteria.
+
+### Fix D — Thread B stops updating `status.md` mid-run (priority bug)
 
 #### What happened
 
-After the previous run completed and `tasks.md` was rewritten in a new concise format (one task = one heading + a prose paragraph + a markdown link to a proposal doc), spawning the first task via `mill-spawn` produced a handoff file with **no body content**:
+[plugins/mill/doc/modules/implementer-brief.md](../modules/implementer-brief.md) requires Thread B to update `<STATUS_PATH>` at every phase transition (`testing`, `reviewing`, `complete`) and at every step boundary (`current_step`, `current_step_name`, `step-<N>` timeline entry). In practice Thread B writes the first few step entries and then goes silent — `phase:` stays at `implementing` and `current_step` stays at an early step number while many more commits land and the implementer drifts through Phase: Test and into Phase: Review's fixer loop.
 
-```
-# Handoff: Gemini CLI support + ensemble reviewer
+**Observed in gemini-cli-support run (2026-04-13):** status.md last updated to `current_step: 8 / step-8 12:10 UTC`. By 12:32 UTC, 14 commits had landed (steps 1–19 with bundling), Phase: Test had completed, code-review round 1 had finished with REQUEST_CHANGES, the round-1 fixer commit had been pushed, and code-review round 2 was already returning. Status.md was 22+ minutes stale and pointing at the wrong phase the entire time. From the operator's view (mill-go Thread A, the user, or any external monitor), Thread B looked hung. The only reliable signals were `git log` and scratch-file mtimes — neither of which is what the brief contract promises.
 
-## Issue
-Gemini CLI support + ensemble reviewer
+#### Why this is the priority bug
 
-## Parent
-Branch: main
-Worktree: C:\Code\millhouse
+The whole point of status.md is operator visibility into a long autonomous run. When status.md goes stale, the operator can't tell "stalled" from "working" without poking at git internals. The brief's stall-detection rule (10 min of no status.md mtime advance) becomes a false-positive generator. Fix E and Fix F below are observability / hygiene issues; Fix D breaks the entire orchestrator → operator contract.
 
-## Discussion Summary
-Gemini CLI support + ensemble reviewer
+#### Fix candidates
 
-## Config
-- Verify: N/A
-- Dev server: N/A
-```
+- **Hard precondition on commit.** Wrap the per-step commit logic so it cannot complete a step's commit without first writing the `current_step` / timeline entry. If the model "forgets," the commit doesn't happen.
+- **Explicit phase-transition writes.** Add phase-transition writes to the materialized brief at the top of Phase: Test and Phase: Review (Thread B currently has these as bullets in section 6 / 7 but evidently treats them as soft).
+- **Take status.md updates out of the model's hands entirely.** Have `spawn-agent.ps1` (or a wrapper) tail the agent's tool calls and emit synthetic status.md updates on commit-tool-call boundaries. Removes the model's freedom to skip them.
 
-Every "content" field is just the task title repeated. The actual task description (a paragraph explaining what the task does) is missing entirely.
+Same lesson as Fix F below: any rule that depends on the model "remembering" to do housekeeping is unreliable. Bake it into the protocol where the model has no choice. Start with the hard-precondition option (cheapest, most local); escalate to the tool-call-tailing option only if it still drifts.
 
-#### Root cause
+### Fix E — `spawn_reviewer.dispatch_workers` leaks empty timestamped dirs at cwd during tests
 
-The parser in `plugins/mill/scripts/mill-spawn.ps1` lines 62–71 extracts the task description by matching **only bullet-point lines**:
+#### What happened
 
-```powershell
-$TaskDescription = ""
-$descLines = @()
-foreach ($line in ($TaskBlock -split '\r?\n')) {
-    if ($line -match '^\s*- (.+)$' -and $line -notmatch '^\s*- tags:') {
-        $descLines += $Matches[1].Trim()
-    }
-}
-if ($descLines.Count -gt 0) {
-    $TaskDescription = $descLines -join "`n"
-}
-```
+`dispatch_workers` in [plugins/mill/scripts/spawn_reviewer.py](../../scripts/spawn_reviewer.py) calls `os.makedirs(os.path.join(reviews_dir_base, ts))` **before** validating its `prompt_file_path` / `materialized_prompt` parameters. Two validation tests in [plugins/mill/scripts/test_spawn_reviewer.py](../../scripts/test_spawn_reviewer.py) (`test_tool_use_missing_prompt_file_raises`, `test_bulk_missing_materialized_prompt_raises`) pass `"."` as `reviews_dir_base`. Result: every full test run leaks two empty `YYYYMMDD-HHMMSS/` directories at the process cwd — which is the repo root during normal test invocation. Observed in the gemini-cli-support implementation run: 10 empty dirs like `20260413-120323/` appeared at repo root across ~5 test invocations.
 
-The new `tasks.md` format uses prose paragraphs, not bullets. Consequence: `$descLines` is empty, `$TaskDescription` stays empty, and line 156 falls through to `$rawSummary = $TaskTitle`. That `$rawSummary` then flows into both the handoff file body (line 173) AND the `task_description:` field in the spawned worktree's `_millhouse/task/status.md` (line 303).
-
-So the bug affects two artifacts, not just the handoff:
-
-1. `_millhouse/handoff.md` — empty body
-2. `_millhouse/task/status.md` `task_description:` — empty (just the title)
-
-This is a long-standing parser bug that wasn't caught before because the older `tasks.md` entries either had bullets in their descriptions or were short enough that "title only" felt sufficient. The new concise format exposes it.
+The dirs are not gitignored because they land at repo root, not under `_millhouse/`. They surfaced visually in the VS Code file tree during the Thread B run.
 
 #### Fix
 
-Replace the bullet-only matching loop with one that captures all non-blank, non-heading lines from the task block (between the `## [>] <title>` heading and the next `## ` heading or EOF). Optionally stop at the first blank line if you want a short summary, or include all paragraphs for a full description.
+Move the `prompt_file_path` / `materialized_prompt` validation above the `ts` / `os.makedirs` block in `dispatch_workers`. Also update the two validation tests to use `tempfile.TemporaryDirectory()` as `reviews_dir_base` for defense-in-depth (even though after the fix an unsuccessful dispatch never touches the filesystem).
 
-A reasonable shape:
+### Fix F — code-reviewer subagent fabricates timestamps instead of running `date -u`
 
-```powershell
-$TaskDescription = ""
-$descLines = @()
-$inDescription = $false
-foreach ($line in ($TaskBlock -split '\r?\n')) {
-    # Skip the heading itself
-    if ($line -match '^## ') {
-        $inDescription = $true
-        continue
-    }
-    if (-not $inDescription) { continue }
+#### What happened
 
-    # Stop at next heading
-    if ($line -match '^## ') { break }
+The code-reviewer prompt template [plugins/mill/doc/modules/code-review.md:85](../modules/code-review.md#L85) explicitly says "Generate the timestamp for the filename via shell: `date -u +"%Y%m%d-%H%M%S"` (see `@mill:cli` timestamp rules — never guess timestamps)." The instruction is also present at line 15560 of the materialized prompt at `_millhouse/scratch/code-review-prompt-r2.md`. Despite this, the reviewer subagent (sonnet, spawned via `spawn-agent.ps1 -Role reviewer` from Thread B's Phase: Review loop) fabricates round-hour timestamps instead of calling the shell.
 
-    # Skip blank lines at the very start; keep them once content begins
-    if ($descLines.Count -eq 0 -and $line.Trim() -eq '') { continue }
+**Observed in gemini-cli-support run (2026-04-13):**
 
-    $descLines += $line
-}
-# Trim trailing blank lines
-while ($descLines.Count -gt 0 -and $descLines[-1].Trim() -eq '') {
-    $descLines = $descLines[0..($descLines.Count - 2)]
-}
-if ($descLines.Count -gt 0) {
-    $TaskDescription = ($descLines -join "`n").Trim()
-}
-```
+- `_millhouse/task/reviews/20260413-120000-code-review-r1.md` (claimed 12:00:00 UTC, actual mtime ~12:25 UTC)
+- `_millhouse/task/reviews/20260413-130000-code-review-r2.md` (claimed 13:00:00 UTC, actual mtime ~12:32 UTC; current real time ~12:41 UTC)
+- By contrast, Thread B's own fixer report `20260413-122817-code-fix-r1.md` is correctly shell-generated (Thread B uses Bash to compute the timestamp).
 
-Approximately 10 lines of changed PowerShell. The fix is straightforward; the diagnosis was the hard part.
+#### Scope
 
-#### Connection to the other fixes
+The bug is in the code-reviewer subagent thread spawned by `spawn-agent.ps1 -Role reviewer`, not in Thread B itself. Plan-reviewer and discussion-reviewer subagents may share the same defect — cross-check by inspecting their output filenames against actual mtimes.
 
-This one is independent of the autonomous-fix policy and the worktree-isolation rule. It's bundled into Proposal 02 because Proposal 02 is explicitly the "small surgical fixes" home, not because the three fixes are technically related. They share a common shape: small, surgical, survives the larger architecture rewrite.
+#### Likely root cause
+
+Reviewer subagent reads the prompt instruction but skips the Bash tool call. May correlate with reviewers running with `-MaxTurns 20` (default) where the agent treats Bash invocations as "expensive" and economizes incorrectly. The `@mill:cli` skill may not be loaded into the spawn-agent.ps1 reviewer subprocess context.
+
+#### Fix
+
+Remove the agent's freedom to invent the filename. The orchestrator (Thread B / mill-go / mill-start) pre-computes the full output path (`_millhouse/task/reviews/<shell-generated-ts>-<phase>-review-r<N>.md`) before spawning the reviewer, and substitutes it into the materialized prompt as a `<REVIEW_FILE_PATH>` token. The reviewer's instructions become "write your report to `<REVIEW_FILE_PATH>` and return that exact path in the JSON line." There is no decision left for the subagent to get wrong.
+
+Strengthening the prompt language ("CRITICAL: never guess timestamps") is **not** a candidate. The instruction is already explicit and is being ignored. Any fix that leaves the timestamp computation in the subagent's hands will fail the same way.
+
+**Touches:** `plugins/mill/doc/modules/code-review.md`, `plan-review.md`, `discussion-review.md` (remove the "Generate the timestamp" instruction; replace `<timestamp>` placeholders with the new `<REVIEW_FILE_PATH>` token); `plugins/mill/skills/mill-go/SKILL.md` (Phase: Plan Review materialization step pre-computes and substitutes `<REVIEW_FILE_PATH>`); `plugins/mill/doc/modules/implementer-brief.md` (Phase: Review materialization step does the same); `plugins/mill/skills/mill-start/SKILL.md` (discussion-review materialization).
+
+### Fix G — Reviewer bulk payload must be an explicit file list, not git-diff-driven
+
+#### What happened
+
+The code-reviewer is handed a bulk payload built from the implementation `git diff`. This has two failure modes — one narrow, one structural.
+
+**Narrow failure:** files that the implementer **read** but didn't modify — supporting modules, type definitions, configuration that shapes the modified code's behavior — are not in the payload. When the reviewer asks "does this call site pass the right shape?" and the called function's source isn't in the bundle, the reviewer guesses. The guess is sometimes wrong and surfaces as a false-positive finding, or (worse) a real issue missed because the reviewer assumed a shape that happened to match the change.
+
+**Structural failure:** because the payload *is* `git diff`, the review pipeline only works on changes that have been committed. When a parallel thread wanted to compare bulk-review vs tool-use-review on **identical content**, it proposed creating a throwaway WIP commit purely so `git diff` would return the files — then suggested `git reset --soft HEAD~1` afterward to undo it. That workaround is the design smell: the reviewer is forcing the rest of the system to contort git state so it can see the code. Same hazard applies to reviewing uncommitted work, staged-but-not-committed hunks, split feature branches, or any case where the files of interest aren't exactly what `git diff HEAD` returns.
+
+#### Fix
+
+The reviewer's input is an **explicit, authoritative list of file paths**, supplied to the orchestrator. `git diff` is at most one *optional helper* for computing that list — never the source of truth. Concretely:
+
+1. **Primitive:** a file-list bulker that takes a plain list of paths (absolute or repo-relative) and produces the bulk payload by `cat`-ing each file with a header. Zero git dependency. This is the lowest layer; everything else builds on it. Lives in the Python toolkit (Proposal 07) as something like `millpy/bulk_payload.py`.
+2. **Plan-declared list:** the plan format grows a `Read:` / `Files:` section that lists the files the reviewer should see for a given review round — both the ones being rewritten AND the ones that are just load-bearing context. The planner declares this up front; the orchestrator reads the list at Phase: Review materialization and hands it to the file-list bulker.
+3. **`git diff` becomes optional syntactic sugar.** For the narrow case where "the files of interest" really are "whatever the last N commits touched", the orchestrator is allowed to call a helper like `compute_file_list_from_diff(base, head)` that walks `git diff --name-only` and produces a list — which then goes into the same file-list bulker. But this is one computation method among several, invoked by explicit choice, not baked into the review path.
+
+No review round ever asks for a commit that wouldn't otherwise exist. No thread ever proposes `git reset --soft HEAD~1` as a cleanup step. If that pattern surfaces, it is a signal that the file-list abstraction is being bypassed — push back on the design, don't accommodate the workaround.
+
+#### Open design question (deliberately left open)
+
+What is the *smartest* way to compute the file list? Plan declaration is the baseline — it works, it's explicit, and it makes the dependency on context visible. But it also asks the planner to know up front which files the reviewer will need, which is a nontrivial judgement call. Smarter options that may beat plain plan declaration:
+
+- **Import-walk.** For typed languages, walk imports from the plan's `Touches:` files to depth N and include anything referenced. Accurate but language-specific.
+- **`Touches:` expansion.** Planner lists files *written*; orchestrator walks same-module or same-directory siblings automatically.
+- **LSP-driven.** Run a language server against the touch set and ask it "what other files do you need to type-check these?" High accuracy, high setup cost.
+- **Retry-with-more.** Start with the minimal list (just the diff); if the reviewer output contains phrases like "I don't have the source of X", re-spawn with X added. Self-correcting but burns one wasted review round.
+
+None of these are settled in this proposal. The requirement is only that the underlying primitive (file-list bulker) be agnostic to how the list was computed, so smarter list-computation strategies can slot in later without touching the reviewer path.
+
+**Touches:** `plugins/mill/doc/modules/plan-format.md` (add `Read:` / `Files:` section), `plugins/mill/skills/mill-plan/SKILL.md` or current plan-writing skill (teach the planner to populate the list), the orchestrator's bulk-payload materialization in Phase: Review (call the file-list bulker with the plan's list; never build the payload straight from `git diff`). The file-list bulker primitive itself lives in Proposal 07 (Python toolkit) — this Fix G is the consumer, Proposal 07 is the provider.
 
 ## Goals
 
@@ -193,36 +199,51 @@ This one is independent of the autonomous-fix policy and the worktree-isolation 
 - Update mill-go's completion notification to relay the count and SHAs of any autonomous fixes.
 - Add the worktree-isolation rule to `conversation/SKILL.md`.
 - Audit existing skills for parent-side writes that aren't legitimately in mill-merge / mill-cleanup territory; fix anything found.
-- Rewrite `mill-spawn.ps1`'s task-description parser to capture prose paragraphs, not just bullet-point lines. Verify both `handoff.md` and the spawned worktree's `task/status.md` carry the description correctly.
+- Make `status.md` updates unskippable in Phase: Implement / Test / Review (Fix D). Start with the commit-precondition variant; escalate if needed.
+- Move the `prompt_file_path` / `materialized_prompt` validation in `dispatch_workers` ahead of the `os.makedirs` call, and swap the two leaking validation tests to use `tempfile.TemporaryDirectory()` as `reviews_dir_base` (Fix E).
+- Introduce a `<REVIEW_FILE_PATH>` token in the code-review / plan-review / discussion-review prompt templates and substitute it from the orchestrator before spawning the reviewer (Fix F). Remove the "Generate the timestamp" instruction from those templates.
+- Rewire the reviewer bulk-payload pipeline so it consumes an explicit file list instead of `git diff` (Fix G). The plan format grows a `Read:` / `Files:` section; the orchestrator passes that list to a file-list bulker primitive (provided by Proposal 07); `git diff`-derived lists remain available as an optional helper but never as the default source of truth.
 
 ## Non-goals
 
 - Implementing the stronger version of the autonomous-fix policy (justification file, hard cap, scope limit). Wait until the minimum version proves insufficient.
 - Rewriting mill-go's overall flow. That's Proposal 04+05.
 - Adding similar policies to other skills (mill-start, mill-cleanup, etc.) — only the orchestrator and implementer can self-modify code mid-run.
+- Settling the "smartest way to compute the reviewer file list" question. Fix G locks in the primitive (explicit file list, git-agnostic) and the baseline (planner declaration). Import-walking, LSP-driven, and retry-with-more strategies are out of scope for this proposal but are explicitly reserved as future work that will slot in on top of the same primitive.
 
 ## Open questions for the discussion phase
 
-1. Is the `[autonomous-fix]` prefix sufficient, or should there also be a Git trailer (`Autonomous-Fix: true`) for tooling that grep's commit bodies, not just subjects?
+1. Is the `[autonomous-fix]` prefix sufficient, or should there also be a Git trailer (`Autonomous-Fix: true`) for tooling that greps commit bodies, not just subjects?
 2. Should the orchestrator also write a brief one-line note about each autonomous fix into `_millhouse/task/status.md` (e.g. as a `autonomous_fix_<n>:` field), so the live status reflects them in real time, not just at end-of-run?
 3. The worktree-isolation rule needs an explicit "exception" for mill-merge and mill-cleanup. Should those exceptions be in the rule itself ("...except mill-merge and mill-cleanup, which need to operate on the parent's merge state"), or should those skills explicitly opt in via a comment that acknowledges they're an exception?
+4. Fix D: should the first implementation be the hard commit-precondition (cheapest, model still runs the write) or go straight to tool-call tailing in `spawn-agent.ps1` (more invasive, but removes model agency entirely)? The commit-precondition approach is less work but still trusts the model to write *something*; tool-call tailing is the only option that fully solves the problem.
+5. Fix F: should `<REVIEW_FILE_PATH>` be substituted by the orchestrator into the materialized prompt text, or passed as an environment variable that the reviewer prompt references? The substitution path is simpler; env-var path is more uniform with other parameters but requires the prompt template to grow a new convention.
+6. Fix G: does the `Read:` / `Files:` list have per-file annotations (e.g. `- src/foo.ts — interface definition referenced by Bar`) or is it just a flat path list? Annotations help reviewers prioritize but bloat the plan; flat list is simpler but loses information.
+7. Fix G: where exactly does the file-list bulker primitive live in Proposal 07 — `millpy/bulk_payload.py`, part of `claude_subprocess.py`, or a new module? Leaning toward standalone module so the bulker can be called from non-review paths too (e.g. scratchpad context dumps).
 
 ## Acceptance criteria
 
-- The implementer-brief template (current Sonnet version, in `plugins/mill/doc/modules/implementer-brief.md`) has a section explaining when autonomous fixes are allowed and the tagging requirement.
+- The implementer-brief template (current Sonnet version, in [plugins/mill/doc/modules/implementer-brief.md](../modules/implementer-brief.md)) has a section explaining when autonomous fixes are allowed and the tagging requirement.
 - A test run that triggers an autonomous fix (e.g. inject a known-broken `spawn-agent.ps1` quirk) produces a commit with `[autonomous-fix]` in the subject and a final JSON line containing that commit's SHA.
 - `conversation/SKILL.md` has a "Worktree isolation" section; running a session from a child worktree and asking the agent to commit a parent-side change produces a refusal with reference to the rule.
 - Grep across `plugins/mill/skills/` finds zero `cd <parent>` patterns and zero parent-side `git add/commit/push` outside of mill-merge and mill-cleanup.
-- `mill-spawn.ps1` invoked on a `tasks.md` entry with a prose-paragraph description (no bullets) produces a `_millhouse/handoff.md` whose `## Discussion Summary` section contains the actual prose, and a `_millhouse/task/status.md` whose `task_description:` field also contains the actual prose. Backward-compatible: bullet-only descriptions still work.
+- Fix D: a full end-to-end run produces a `_millhouse/task/status.md` whose final `current_step` matches the final step in the plan, with timeline entries for every step between. No gap greater than one step between the last timeline entry and the commit log at any point during the run. Phase transitions (`implementing → testing → reviewing → complete`) are all reflected in status.md.
+- Fix E: running the full `test_spawn_reviewer.py` suite from repo root leaves zero new directories at repo root.
+- Fix F: three consecutive code-review runs (r1, r2, r3) produce review files whose filename timestamps match their actual mtimes to within 5 seconds. The reviewer prompts contain no `date -u` or "Generate the timestamp" instruction.
+- Fix G: the reviewer bulk-payload pipeline accepts an explicit file list and produces a payload that contains exactly those files, with no involvement from `git diff`. A plan with a populated `Read:` / `Files:` section produces a reviewer payload whose file set equals that list. A review round can be run on uncommitted files with no commits made in the process — verified by a smoke test that reviews a dirty working tree without creating any new commit objects.
 
 ## Risks and mitigations
 
-- **Models ignore the commit tag rule** if the brief language is weak. Mitigation: same lesson as bug 3 from the previous run — make it load-bearing, with a stated consequence and a "before X you must Y" precondition format.
-- **Worktree-isolation rule is too strict for legitimate use cases.** Mitigation: explicit exceptions for mill-merge/mill-cleanup, documented in both the rule and the affected skills.
+- **Models ignore the commit tag rule** if the brief language is weak. Mitigation: same lesson as Fix F — make it load-bearing, with a stated consequence and a "before X you must Y" precondition format.
+- **Worktree-isolation rule is too strict for legitimate use cases.** Mitigation: explicit exceptions for mill-merge / mill-cleanup, documented in both the rule and the affected skills.
 - **Audit misses something.** Mitigation: the audit is small (≤10 skill files) and the grep pattern is unambiguous.
-- **Parser fix breaks bullet-format backward compatibility.** Mitigation: the new parser keeps the same fall-through ("if there are no description lines, fall back to title") and treats bullet lines the same as prose lines (a `- foo` line just becomes a description line that happens to start with `- `). Old tasks.md entries continue to work; only the extracted text differs slightly (bullets included rather than stripped).
+- **Fix D's commit-precondition variant still trusts the model.** If it forgets to call the wrapper, nothing changes. Mitigation: gate commit via `spawn-agent.ps1`'s tool-call hook so the hook enforces it regardless of model intent. This is the escalation path baked into the fix design.
+- **Fix F's `<REVIEW_FILE_PATH>` token collides with existing prompt content.** Mitigation: pick a token that's clearly non-English (`<REVIEW_FILE_PATH>`, full caps, angle brackets) and grep all three review prompt templates before substituting.
+- **Fix G's file list rots.** The planner adds a file to the list for the initial review, but later changes make it no longer relevant, and the list is never pruned. Mitigation: accept this. A stale entry costs a few extra tokens in the reviewer payload but doesn't harm correctness. Pruning is a nice-to-have for later.
+- **Fix G's primitive lives in a different proposal.** The file-list bulker is in Proposal 07 (Python toolkit); the plan-format and orchestrator-wiring changes are in Proposal 02. If Proposal 02 ships first, Fix G has to wait for the primitive to land; conversely, Proposal 07 can ship without Proposal 02's plan-format change and the primitive will just be unused by the review path until 02 lands. Mitigation: explicit ordering note in Dependencies; don't mark Fix G as done until both halves are in place.
 
 ## Dependencies
 
-- None. This proposal can ship before, after, or in parallel with any other proposal.
-- After Proposal 05 lands, the autonomous-fix policy needs to be re-applied to the new Opus orchestrator brief — but the *content* of the policy is the same.
+- None for landing. This proposal can ship before, after, or in parallel with any other proposal.
+- **Proposal 07 (Python toolkit) absorbs the original Fix C** and provides Fix G's file-list bulker primitive. Fix G's plan-format and orchestrator-wiring changes live in this proposal, but the underlying `millpy/bulk_payload.py` module (or equivalent) is Proposal 07's responsibility. Fix G is considered done only when **both** halves are in place. If Proposal 07 has not landed yet when this proposal ships, the parser correctness requirement (original Fix C) is carried as an acceptance criterion on Proposal 07, and Fix G's wiring waits for Proposal 07's bulker primitive to exist before it can be wired through.
+- After Proposal 05 lands, the autonomous-fix policy (Fix A) and the status.md invariant (Fix D) need to be re-applied to the new Opus orchestrator brief — but the *content* is the same. The `<REVIEW_FILE_PATH>` substitution (Fix F) and bulk-payload union (Fix G) also live in the new orchestrator; re-port the same logic.
