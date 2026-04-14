@@ -5,7 +5,7 @@ description: Review fetched GitHub issues and select which to import into tasks.
 
 # mill-inbox
 
-Interactive. Review issues fetched by `fetch-issues.ps1` and select which ones to import into `tasks.md`. Selected issues are added to `tasks.md` and closed on GitHub.
+Interactive. Review issues fetched by `fetch_issues.py` and select which ones to import into `tasks.md`. Selected issues are added to `tasks.md` and closed on GitHub.
 
 ---
 
@@ -24,8 +24,9 @@ Verify `tasks.md` exists in the project root (the working directory where `_mill
 Read `_millhouse/scratch/issues.json`. If the file does not exist, stop and tell the user:
 
 ```
-No issues file found. Run fetch-issues.ps1 first:
-  .\_millhouse\fetch-issues.ps1
+No issues file found. Run fetch_issues.py first:
+  python plugins/mill/scripts/fetch_issues.py
+  (or: .\_millhouse\fetch-issues.cmd from a project that has mill-setup wrappers installed)
 ```
 
 ---
@@ -112,7 +113,7 @@ Where `<repo>` is the `repo` field from `issues.json`.
 
 ### Step 6: Validate
 
-Validate `tasks.md` per `plugins/mill/doc/modules/validation.md` (tasks.md structural rules). If validation fails, report the violation and stop.
+Validate `tasks.md` per `plugins/mill/doc/formats/validation.md` (tasks.md structural rules). If validation fails, report the violation and stop.
 
 ### Step 7: Commit and push
 

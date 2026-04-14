@@ -7,7 +7,7 @@ description: Initialize Mill for a repository. Creates tasks.md, config, directo
 
 One-time initialization per project. Creates `tasks.md` in the project root (the working directory where `_millhouse/` is being created), the `_millhouse/` directory structure with config, scratch space, forwarding wrapper scripts, and VS Code color settings. Idempotent — safe to re-run (skips existing files).
 
-For tasks.md file format details, see `plugins/mill/doc/modules/tasksmd-format.md`.
+For tasks.md file format details, see `plugins/mill/doc/formats/tasksmd.md`.
 
 ---
 
@@ -52,15 +52,15 @@ Validate per `doc/modules/validation.md` (tasks.md structural rules). If validat
 
 Ask the user: "Repo short-name for window titles (default: `<directory-name>`):" where `<directory-name>` is the name of the current working directory. If the user provides a value, use it. If the user presses enter or skips, use the directory name. Store the result as `<SHORT_NAME>`.
 
-**4b: Create or upgrade config.**
+**4b: Create or migrate config.**
 
-If `_millhouse/config.yaml` does not exist, write it with the full template below.
+If `_millhouse/config.yaml` does not exist, write it with the full `pipeline:`-schema template below.
 
-If `_millhouse/config.yaml` already exists, check for missing top-level sections and append only the missing ones. Skip sections that already exist (preserves existing values). The sections to check: `git.auto-merge` (under existing `git:` section), `git.require-pr-to-base` (under existing `git:` section), `repo:`, `reviews:`. Do not overwrite existing keys.
+If `_millhouse/config.yaml` already exists, check for the presence of a top-level `pipeline:` block:
+- **Present:** the config is already in the new schema. Check `git.auto-merge`, `git.require-pr-to-base`, `repo:`, and `notifications:` sections exist; append any missing ones without overwriting. Preserve everything else verbatim. No further migration.
+- **Absent:** the config is pre-W1 legacy. Run the per-key migration below (Step 4c — legacy-to-pipeline migration).
 
-**Important exception for `models:`:** the "skip sections that already exist" short-circuit applies to all top-level sections **except** `models:`. The `models:` block has a per-key migration step (Step 4b — `models:` block migration, below) that inspects and updates individual sub-keys regardless of whether the `models:` block is already present. This is necessary because the schema for `models:` changed in this task (per-round reviewer slots, new `implementer` and `discussion-review` slots), and existing installs need their `models:` block updated in place rather than skipped.
-
-Full config template (used for new creation):
+Full config template (used for new creation and as the migration target shape). Only block-style YAML — the hand-written parser at `plugins/mill/scripts/millpy/core/config.py` does not support inline flow mappings:
 
 ```yaml
 git:
@@ -73,21 +73,17 @@ repo:
   short-name: "<SHORT_NAME>"
   branch-prefix: ~
 
-reviews:
-  discussion: 2
-  plan: 3
-  code: 3
-
-models:
-  session: opus
+pipeline:
   implementer: sonnet
-  explore: haiku
   discussion-review:
-    default: opus
+    rounds: 2
+    default: g3flash-x3-sonnetmax
   plan-review:
-    default: sonnet
+    rounds: 3
+    default: g3flash-x3-sonnetmax
   code-review:
-    default: sonnet
+    rounds: 3
+    default: g3flash-x3-sonnetmax
 
 notifications:
   slack:
@@ -98,315 +94,112 @@ notifications:
     enabled: true
 ```
 
-**Step 4b — `models:` block migration (runs every time mill-setup is invoked).**
+Repo short-name comes from Step 4a. Everything else is a straight template copy.
 
-When `_millhouse/config.yaml` exists, read the existing `models:` block and migrate it in place to the new shape. This runs regardless of whether the `models:` block is already present (the per-key inspection is idempotent on conformant configs).
+**Step 4c — legacy-to-pipeline migration (runs only when the existing config has no `pipeline:` block).**
 
-Migration rules:
-
-1. **Required scalar keys** (`session`, `implementer`, `explore`):
-   - If missing, append the key under `models:` with the default value: `session: opus`, `implementer: sonnet`, `explore: haiku`.
-   - If present, leave alone.
-
-2. **Per-round object keys** (`discussion-review`, `plan-review`, `code-review`):
-   - **Absent:** insert as `<key>:` followed by indented `default: <default-value>`. Defaults: `discussion-review` → `opus`; `plan-review` → `sonnet`; `code-review` → `sonnet`.
-   - **Scalar value** (e.g. `plan-review: sonnet`): rewrite to `<key>:` followed by indented `default: <existing-scalar-value>`. The user's existing scalar choice is preserved as the new `default` sub-key.
-   - **Object with `default` sub-key:** leave alone (already conformant).
-   - **Object missing `default` sub-key:** insert `default: <hardcoded-default>` under it.
-
-3. **Print a diff of what changed.** Use simple `before:` / `after:` lines per modified key — no fancy diff format. Example:
-   ```
-   models.plan-review:
-     before: sonnet
-     after: {default: sonnet}
-   models.implementer:
-     before: (missing)
-     after: sonnet
-   ```
-
-4. **Write the updated content back to `_millhouse/config.yaml`.** No git commit (`_millhouse/` is gitignored).
-
-**Implementation guidance for the agent doing the migration step at run time:** prefer a YAML round-trip parser if available. Check availability via `Get-Command ConvertFrom-Yaml -ErrorAction SilentlyContinue` — if the result is null, the `powershell-yaml` module is absent. **Never use `Import-Module powershell-yaml` unconditionally** — it errors on machines where the module is not installed. If no YAML library is available, fall back to **inline string editing of the file**: locate the `models:` block by line range, replace each key surgically. Do not rewrite the entire file from scratch — that would lose comments and unrelated sections.
-
-**Validation note.** After migration completes, mill-setup must call the entry-time validation rules from `doc/modules/validation.md` `## _millhouse/config.yaml` section. Validation failure after migration is a hard error — it indicates an edge case the migration could not handle. Stop with the validation error and tell the user to inspect `_millhouse/config.yaml` manually.
-
-Validate `_millhouse/config.yaml` per `doc/modules/validation.md`. If validation fails, report the issue to the user and stop.
-
-**Step 4c — `reviewers:` and `review-modules:` migration (runs every time mill-setup is invoked).**
-
-This step seeds the reviewer-module abstraction. **Idempotent guard:** if `_millhouse/config.yaml` already contains a `review-modules:` top-level key, skip this step entirely (already migrated).
+Migration is text-based line manipulation, not YAML-library round-trip. millpy has **no `yaml` / `pyyaml` dependency** — `millpy/core/config.py` is a hand-written minimal parser that only understands block-style YAML. The migration agent must NOT `Import-Module powershell-yaml` or `import yaml` at any point.
 
 **Before writing:** copy `_millhouse/config.yaml` to `_millhouse/config.yaml.bak`. Skip if `.bak` already exists.
 
-Migration rules:
+**Extraction pass.** Use the millpy config loader (`python -c "from millpy.core.config import load; ..."`) to read the legacy file into a dict. Pull these values with sensible fallbacks:
+- `pipeline.implementer` ← legacy `models.implementer` (fallback: `sonnet`)
+- `pipeline.discussion-review.default` ← legacy `review-modules.discussion.default` → `models.discussion-review.default` → fallback `g3flash-x3-sonnetmax`
+- `pipeline.plan-review.default` ← legacy `review-modules.plan.default` → `models.plan-review.default` (scalar form `models.plan-review: sonnet` is also accepted) → fallback `g3flash-x3-sonnetmax`
+- `pipeline.code-review.default` ← legacy `review-modules.code.default` → `models.code-review.default` (scalar form also accepted) → fallback `g3flash-x3-sonnetmax`
+- `pipeline.discussion-review.rounds` ← legacy `reviews.discussion` → fallback `2`
+- `pipeline.plan-review.rounds` ← legacy `reviews.plan` → fallback `3`
+- `pipeline.code-review.rounds` ← legacy `reviews.code` → fallback `3`
 
-1. **Seed v1 shipped reviewers** in the `reviewers:` block (add each if absent; never overwrite):
-   - `single-opus` — `worker-model: opus`, `worker-count: 1`, `dispatch: tool-use`
-   - `single-sonnet` — `worker-model: sonnet`, `worker-count: 1`, `dispatch: tool-use`
-   - `single-haiku` — `worker-model: haiku`, `worker-count: 1`, `dispatch: tool-use`
-   - `sonnet-single-maxeffort` — `worker-model: sonnet`, `worker-count: 1`, `dispatch: tool-use`
-   - `ensemble-gemini3-opus` — `worker-model: gemini-3-pro`, `worker-count: 3`, `dispatch: bulk`, `handler-model: opus`, `prompt-template: plugins/mill/doc/modules/code-review-bulk.md`, `max-bundle-chars: 200000`, `fallback: sonnet-single-maxeffort`
+**Legacy ensemble rename.** Apply these renames to any extracted `default` value:
+- `ensemble-gemini3flash-x3-sonnetmax` → `g3flash-x3-sonnetmax`
+- `ensemble-gemini3pro-x2-opus` → `g3pro-x2-opus`
+- `ensemble-gemini3pro-x2-gemini3flash` → `g3pro-x2-g3flash`
 
-2. **Migrate legacy `models.<phase>` entries** to `reviewers:` + `review-modules:`:
-   - For each phase in `{discussion-review, plan-review, code-review}`: read `models.<phase>.default` and any per-round overrides.
-   - For each unique model name found, ensure `reviewers.single-<modelname>` exists (using the shape above). Skip if already present.
-   - Build the `review-modules.<short-phase>` block (`short-phase`: `discussion-review` → `discussion`, `plan-review` → `plan`, `code-review` → `code`):
-     - Set `default: single-<default-model>`
-     - Set per-round keys from legacy overrides: `"1": single-<model-for-round-1>`, etc.
+**Rewrite pass.** Read the full file as text. Delete these top-level blocks by indent tracking (a block ends when a line at the same or lesser indent is reached): `models:`, `review-modules:`, `reviews:`. Preserve all other sections (`git:`, `repo:`, `notifications:`, user-added `reviewers:`, comments, blank lines). Append a new `pipeline:` block built from the extracted values:
 
-3. **Override code-review default to ensemble:**
-   - Set `review-modules.code.default: ensemble-gemini3-opus` unconditionally (new v1 default).
-
-4. **Set defaults for plan and discussion:**
-   - If `review-modules.plan.default` was not set by the legacy migration above, set `review-modules.plan.default: single-sonnet`.
-   - If `review-modules.discussion.default` was not set, set `review-modules.discussion.default: single-opus`.
-
-5. **Leave legacy `models:` block intact** (retained for two versions; removal is a follow-up task).
-
-**After writing:** print a summary of what was added/changed.
-
-**Worked example (before → after):**
-
-Before:
 ```yaml
-models:
-  session: opus
-  implementer: sonnet
-  explore: haiku
+pipeline:
+  implementer: <extracted-implementer>
   discussion-review:
-    default: opus
+    rounds: <extracted-rounds>
+    default: <extracted-default>
   plan-review:
-    default: sonnet
+    rounds: <extracted-rounds>
+    default: <extracted-default>
   code-review:
-    default: sonnet
+    rounds: <extracted-rounds>
+    default: <extracted-default>
 ```
 
-After:
-```yaml
-models:
-  session: opus
-  implementer: sonnet
-  explore: haiku
-  discussion-review:
-    default: opus
-  plan-review:
-    default: sonnet
-  code-review:
-    default: sonnet
+**After writing:** print a summary of what was removed and what values were preserved, e.g.:
 
-# Reviewer recipes (added by mill-setup Step 4c migration)
-reviewers:
-  # Single-model tool-use reviewers (degenerate ensemble, no handler)
-  single-opus:
-    worker-model: opus
-    worker-count: 1
-    dispatch: tool-use
-  single-sonnet:
-    worker-model: sonnet
-    worker-count: 1
-    dispatch: tool-use
-  single-haiku:
-    worker-model: haiku
-    worker-count: 1
-    dispatch: tool-use
-  # Max-effort single-Sonnet fallback for ensemble-gemini3-opus
-  sonnet-single-maxeffort:
-    worker-model: sonnet
-    worker-count: 1
-    dispatch: tool-use
-  # v1 default code-reviewer: 3-worker Gemini ensemble with Opus handler
-  ensemble-gemini3-opus:
-    worker-model: gemini-3-pro
-    worker-count: 3
-    dispatch: bulk
-    handler-model: opus
-    prompt-template: plugins/mill/doc/modules/code-review-bulk.md
-    max-bundle-chars: 200000
-    fallback: sonnet-single-maxeffort
-
-# Review phase → reviewer name mapping (added by mill-setup Step 4c migration)
-review-modules:
-  discussion:
-    default: single-opus
-  plan:
-    default: single-sonnet
-  code:
-    default: ensemble-gemini3-opus
 ```
+migrated _millhouse/config.yaml:
+  removed: models:, review-modules:, reviews:
+  preserved: pipeline.implementer=sonnet
+  preserved: pipeline.plan-review.default=g3flash-x3-sonnetmax (renamed from ensemble-gemini3flash-x3-sonnetmax)
+  preserved: pipeline.plan-review.rounds=3
+  (etc.)
+```
+
+**Validation note.** After migration, reload the file via `millpy.core.config.load` and call `millpy.core.config.resolve_reviewer_name(cfg, "plan", 1)` as a smoke test. A `ConfigError` from the resolver indicates an edge case the migration could not handle — stop with the error and tell the user to inspect `_millhouse/config.yaml` manually.
+
+**User-added `reviewers:` block is preserved verbatim.** If the legacy config has a `reviewers:` block (for ad-hoc reviewer experimentation with `test-bulk-*` / `test-tooluse-*` entries), the migration does not touch it. The block stays exactly as the user wrote it.
 
 ### Step 5: Create forwarding wrappers
 
-Create the following forwarding wrappers in `_millhouse/`. For each wrapper, skip creation if the file already exists. If old-named wrappers exist at cwd (`helm-spawn.ps1`, `millhouse-worktree.ps1`, `mill-spawn.ps1`, `fetch-issues.ps1`, `mill-worktree.ps1`), remove them from cwd.
+Create five `.cmd` forwarding wrappers in `_millhouse/`. Each is a one-line batch file that delegates to the corresponding Python entrypoint in the plugin cache.
 
-#### 5a: mill-spawn.ps1
+**Resolve the active plugin-cache version before writing wrappers.** The plugin cache places the mill plugin at `%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\` where `<version>` matches semver (e.g. `1.0.0`). mill-setup must list the subdirectories of `%USERPROFILE%\.claude\plugins\cache\millhouse\mill\`, filter to semver-looking names (ignore `*.bak` and anything else), pick the latest by string-sort-descending, and hardcode that version into every wrapper path. This avoids a version-discovery loop at invocation time (each `.cmd` invocation is a pure one-line `python` call) while still producing a correct absolute path at setup time.
 
-Write `_millhouse/mill-spawn.ps1` with the following content:
+If no semver subdirectory exists, print a hard error: `mill plugin not installed at %USERPROFILE%\.claude\plugins\cache\millhouse\mill\`. Do not fall back to an unversioned path — the plugin cache has no flat layout.
 
-```powershell
-# mill-spawn.ps1 — Forwarding wrapper
-# Canonical script: plugins/mill/scripts/mill-spawn.ps1
-# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
+**Cleanup first.** Remove any legacy PowerShell wrapper files from `_millhouse/` if they exist. Match every file with extension `ps1` in the `_millhouse/` directory — legacy forwarding wrappers shipped as PowerShell scripts under the names `mill-spawn`, `mill-worktree`, `mill-terminal`, `mill-vscode`, `fetch-issues`, plus historical variants (`helm-spawn`, `millhouse-worktree`). Also remove any such legacy wrappers at cwd with matching names.
 
-$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
-if (-not (Test-Path $PluginBase)) {
-    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
-    exit 1
-}
+**For each wrapper, skip creation if the file already exists with the correct content (including the resolved version segment).** Each file is a single line with the resolved `<version>` substituted in:
 
-$VersionDir = Get-ChildItem $PluginBase -Directory |
-    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
+#### 5a: mill-spawn.cmd
 
-if (-not $VersionDir) {
-    Write-Error "No valid version directory found in: $PluginBase"
-    exit 1
-}
+Write `_millhouse/mill-spawn.cmd`:
 
-$Script = Join-Path $VersionDir.FullName "scripts\mill-spawn.ps1"
-if (-not (Test-Path $Script)) {
-    Write-Error "mill-spawn.ps1 not found at: $Script"
-    exit 1
-}
-
-& $Script @args
+```batch
+@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\scripts\spawn_task.py" %*
 ```
 
-#### 5b: fetch-issues.ps1
+#### 5b: fetch-issues.cmd
 
-Write `_millhouse/fetch-issues.ps1` with the following content:
+Write `_millhouse/fetch-issues.cmd`:
 
-```powershell
-# fetch-issues.ps1 — Forwarding wrapper
-# Canonical script: plugins/mill/scripts/fetch-issues.ps1
-# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
-
-$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
-if (-not (Test-Path $PluginBase)) {
-    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
-    exit 1
-}
-
-$VersionDir = Get-ChildItem $PluginBase -Directory |
-    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
-
-if (-not $VersionDir) {
-    Write-Error "No valid version directory found in: $PluginBase"
-    exit 1
-}
-
-$Script = Join-Path $VersionDir.FullName "scripts\fetch-issues.ps1"
-if (-not (Test-Path $Script)) {
-    Write-Error "fetch-issues.ps1 not found at: $Script"
-    exit 1
-}
-
-& $Script @args
+```batch
+@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\scripts\fetch_issues.py" %*
 ```
 
-#### 5c: mill-worktree.ps1
+#### 5c: mill-worktree.cmd
 
-Write `_millhouse/mill-worktree.ps1` with the following content:
+Write `_millhouse/mill-worktree.cmd`:
 
-```powershell
-# mill-worktree.ps1 — Forwarding wrapper
-# Canonical script: plugins/mill/scripts/mill-worktree.ps1
-# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
-
-$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
-if (-not (Test-Path $PluginBase)) {
-    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
-    exit 1
-}
-
-$VersionDir = Get-ChildItem $PluginBase -Directory |
-    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
-
-if (-not $VersionDir) {
-    Write-Error "No valid version directory found in: $PluginBase"
-    exit 1
-}
-
-$Script = Join-Path $VersionDir.FullName "scripts\mill-worktree.ps1"
-if (-not (Test-Path $Script)) {
-    Write-Error "mill-worktree.ps1 not found at: $Script"
-    exit 1
-}
-
-& $Script @args
+```batch
+@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\scripts\worktree.py" %*
 ```
 
-#### 5d: mill-terminal.ps1
+#### 5d: mill-terminal.cmd
 
-Write `_millhouse/mill-terminal.ps1` with the following content:
+Write `_millhouse/mill-terminal.cmd`:
 
-```powershell
-# mill-terminal.ps1 — Forwarding wrapper
-# Canonical script: plugins/mill/scripts/mill-terminal.ps1
-# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
-
-$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
-if (-not (Test-Path $PluginBase)) {
-    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
-    exit 1
-}
-
-$VersionDir = Get-ChildItem $PluginBase -Directory |
-    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
-
-if (-not $VersionDir) {
-    Write-Error "No valid version directory found in: $PluginBase"
-    exit 1
-}
-
-$Script = Join-Path $VersionDir.FullName "scripts\mill-terminal.ps1"
-if (-not (Test-Path $Script)) {
-    Write-Error "mill-terminal.ps1 not found at: $Script"
-    exit 1
-}
-
-& $Script @args
+```batch
+@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\scripts\open_terminal.py" %*
 ```
 
-#### 5e: mill-vscode.ps1
+#### 5e: mill-vscode.cmd
 
-Write `_millhouse/mill-vscode.ps1` with the following content:
+Write `_millhouse/mill-vscode.cmd`:
 
-```powershell
-# mill-vscode.ps1 — Forwarding wrapper
-# Canonical script: plugins/mill/scripts/mill-vscode.ps1
-# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
-
-$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
-if (-not (Test-Path $PluginBase)) {
-    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
-    exit 1
-}
-
-$VersionDir = Get-ChildItem $PluginBase -Directory |
-    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
-
-if (-not $VersionDir) {
-    Write-Error "No valid version directory found in: $PluginBase"
-    exit 1
-}
-
-$Script = Join-Path $VersionDir.FullName "scripts\mill-vscode.ps1"
-if (-not (Test-Path $Script)) {
-    Write-Error "mill-vscode.ps1 not found at: $Script"
-    exit 1
-}
-
-& $Script @args
+```batch
+@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\scripts\open_vscode.py" %*
 ```
+
+**Plugin-cache junction check (detect-only, never mutate).** After writing the wrappers, check whether `%USERPROFILE%\.claude\plugins\cache\millhouse\mill` exists and resolves to a readable directory. If missing or dangling, print a warning line (NOT a hard error) telling the user to run the symlink-plugins repair script (`symlink-plugins` in the millhouse repo checkout) to repair it. **Do not modify the junction** — this is explicit user policy. No `New-Item -ItemType Junction`, no `Remove-Item` against the junction path.
 
 ### Step 6: Write VS Code settings
 
@@ -442,7 +235,7 @@ On first message in a conversation, invoke `mill:conversation` and `mill:workflo
 - Phase tracking: `_millhouse/task/status.md` — `phase:` field is the authoritative source. `## Timeline` section records chronological phase history.
 - `_millhouse/` is gitignored. On spawn, it is copied (excluding `task/`, `scratch/`, and `children/`) from parent to new worktree.
 - Run `mill-setup` to initialize after a fresh clone (safe to re-run; skips existing files).
-- Format reference: `plugins/mill/doc/modules/tasksmd-format.md` (tasks.md format).
+- Format reference: `plugins/mill/doc/formats/tasksmd.md` (tasks.md format).
 ```
 
 If `CLAUDE.md` does not exist, create it with these rules.

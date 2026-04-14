@@ -135,12 +135,11 @@ If the lock file already exists:
 
 Resolve the parent's project root by computing the project subdirectory offset (working directory minus git root) and applying it to the parent worktree path. Read `<parent-project-root>/tasks.md`. Find the task's `## ` heading (match by task title captured in Step 4). Replace the `[phase]` marker with `[abandoned]`. E.g., `## [active] Fix login` becomes `## [abandoned] Fix login`.
 
-Stage, commit, and push from the parent worktree:
+Stage, commit, and push from the parent worktree **without changing cwd** (worktree isolation rule — see `conversation/SKILL.md`):
 ```bash
-cd <parent-path>
-git add tasks.md
-git commit -m "task: mark <task-title> [abandoned]"
-git push
+git -C <parent-path> add tasks.md
+git -C <parent-path> commit -m "task: mark <task-title> [abandoned]"
+git -C <parent-path> push
 ```
 
 **Release the merge-lock** — delete `<parent-path>/_millhouse/scratch/merge.lock`.

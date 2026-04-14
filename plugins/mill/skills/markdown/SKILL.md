@@ -7,7 +7,7 @@ description: Markdown formatting rules for generated files. Use when writing .md
 
 Rules for metadata formatting in generated markdown files. Language-agnostic.
 
-Full format reference: `doc/modules/markdown-format.md`
+Full format reference: `plugins/mill/doc/formats/markdown.md`
 
 ---
 

@@ -10,7 +10,7 @@ You are Thread A — the session agent that owns Phase 2 (plan writing + plan re
 
 Autonomous. Plan, review, spawn Thread B, report.
 
-See `plugins/mill/doc/overview.md` for the two-thread architecture overview, the four-phase flow, and the spawn mechanism. This skill is the runtime spec for Phase 2 + Thread B spawn.
+See `plugins/mill/doc/architecture/overview.md` for the two-thread architecture overview, the four-phase flow, and the spawn mechanism. This skill is the runtime spec for Phase 2 + Thread B spawn.
 
 ---
 
@@ -18,18 +18,19 @@ See `plugins/mill/doc/overview.md` for the two-thread architecture overview, the
 
 Read `_millhouse/config.yaml`. If it does not exist, stop --- tell the user to run `mill-setup` first.
 
-**Entry-time validation.** Validate `_millhouse/config.yaml` per `plugins/mill/doc/modules/validation.md`. Required slots: `models.session` (string), `models.implementer` (string), `models.explore` (string). For review phases, accept either the new `review-modules.<phase>.default` OR the legacy `models.<phase>-review.default` — prefer the new one if present. If neither is present for any phase, stop with:
+**Entry-time validation.** Validate `_millhouse/config.yaml`. Required slots under the `pipeline:` block:
+- `pipeline.implementer` (string) — the subagent model for `spawn_agent.py` dispatch
+- `pipeline.plan-review.default` (string) and `pipeline.plan-review.rounds` (int)
+- `pipeline.code-review.default` (string) and `pipeline.code-review.rounds` (int)
+
+(`pipeline.discussion-review.*` is required by `mill-start` but not by `mill-go`; mill-go only runs plan review and spawns Thread B, which runs code review.)
+
+If any required slot is missing, stop with:
 ```
-Config schema out of date. Expected review-modules.<phase>.default (string). Run 'mill-setup' to auto-migrate.
+Config schema out of date. Expected pipeline.<slot>. Run 'mill-setup' to auto-migrate.
 ```
 
-For legacy configs (no `review-modules:` block), validate the legacy slots: `models.discussion-review.default`, `models.plan-review.default`, `models.code-review.default`. On failure, stop with the exact error message:
-
-```
-Config schema out of date. Expected models.<slot> (<type>). Run 'mill-setup' to auto-migrate.
-```
-
-Do not attempt auto-migration here — that is `mill-setup`'s job. See `plugins/mill/doc/overview.md#config-migration`.
+Legacy slots (`models.session`, `models.explore`, `models.<phase>-review`, `review-modules:`, `reviews:`) are no longer accepted by entry-time validation. The reviewer resolver in `millpy.core.config.resolve_reviewer_name` still reads legacy paths as a fallback during the migration window, and applies the legacy ensemble-name alias table (`ensemble-gemini3flash-x3-sonnetmax` → `g3flash-x3-sonnetmax`, etc.) so pre-rename configs resolve cleanly — but the gate enforces the new schema shape.
 
 Read `_millhouse/task/status.md`. Check the `phase:` field from the YAML code block is exactly `discussed` (the completion sentinel confirming `mill-start` finished normally) **or** `planned` (Pre-Setup resume). If `phase:` is missing, not one of those two, or is a partial value (e.g. `discussing`), check the resume rules below.
 
@@ -54,13 +55,13 @@ Extract the `task:` field from the YAML code block in status.md to identify the 
 | `-pr N` | `3` | Maximum number of plan review rounds. `-pr 0` skips plan review entirely. |
 | `-cr N` | `3` | Maximum number of code review rounds. `-cr 0` is passed through to Thread B and skips Phase: Review there. |
 
-Parse `-pr` and `-cr` values from the skill invocation arguments. If not provided via CLI, read `reviews.plan` and `reviews.code` from `_millhouse/config.yaml` as defaults. CLI args override config. If neither is set, default to `3`. Store as `max_plan_review_rounds` and `max_code_review_rounds`. `max_code_review_rounds` is passed to Thread B via the implementer brief; mill-go itself never enforces it.
+Parse `-pr` and `-cr` values from the skill invocation arguments. If not provided via CLI, read `pipeline.plan-review.rounds` and `pipeline.code-review.rounds` from `_millhouse/config.yaml` as defaults. CLI args override config. If neither is set, default to `3`. Store as `max_plan_review_rounds` and `max_code_review_rounds`. `max_code_review_rounds` is passed to Thread B via the implementer brief; mill-go itself never enforces it.
 
 ---
 
 ## Resume Protocol
 
-mill-go's resume scope is **Pre-Setup only** — Phase: Plan and Phase: Plan Review. Post-Setup resume (the implementation, test, and code-review phases) lives in Thread B and is handled per `plugins/mill/doc/modules/implementer-brief.md`. mill-go does not re-enter Thread B's domain.
+mill-go's resume scope is **Pre-Setup only** — Phase: Plan and Phase: Plan Review. Post-Setup resume (the implementation, test, and code-review phases) lives in Thread B and is handled per `plugins/mill/doc/prompts/implementer-brief.md`. mill-go does not re-enter Thread B's domain.
 
 On entry, check the `phase:` field in `_millhouse/task/status.md`:
 
@@ -76,7 +77,7 @@ On entry, check the `phase:` field in `_millhouse/task/status.md`:
 
 and stop.
 
-Test baseline capture is handled by Thread B per `plugins/mill/doc/modules/implementer-brief.md`. mill-go does not capture or read the baseline.
+Test baseline capture is handled by Thread B per `plugins/mill/doc/prompts/implementer-brief.md`. mill-go does not capture or read the baseline.
 
 ---
 
@@ -94,7 +95,7 @@ mill-go proceeds through named phases. Each phase updates the YAML code block in
    ```
    Use `$TS` for the `started:` frontmatter field.
 
-   Write the plan to `_millhouse/task/plan.md` per the schema in `plugins/mill/doc/modules/plan-format.md`. **Each step card must satisfy the atomicity invariant** — the extraction test in `plan-format.md` must pass for every card. Verbosity is the feature; repetition across cards is acceptable when it lets a fresh agent implement one card without reading another.
+   Write the plan to `_millhouse/task/plan.md` per the schema in `plugins/mill/doc/formats/plan.md`. **Each step card must satisfy the atomicity invariant** — the extraction test in `plan-format.md` must pass for every card. Verbosity is the feature; repetition across cards is acceptable when it lets a fresh agent implement one card without reading another.
 
    **Writing `## Context`:** Copy decisions from the discussion file's `## Decisions` section. Each `### Decision:` subsection must have `**Why:**` and `**Alternatives rejected:**`. These are what reviewers check against.
 
@@ -124,18 +125,20 @@ mill-go proceeds through named phases. Each phase updates the YAML code block in
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists.
 
-   c. **Resolve the reviewer name for round N.** Prefer `review-modules.plan.<N>` from `_millhouse/config.yaml`; if absent, fall back to `review-modules.plan.default`. For legacy configs without `review-modules:`, fall back to `models.plan-review.<N>|default` and wrap as `single-<modelname>` (if a matching `reviewers.single-<modelname>` entry exists) or pass as `--reviewer-name` directly. The integer key is compared as a string. See `plugins/mill/doc/overview.md#config-resolution`.
+   c. **Resolve the reviewer name for round N.** Prefer `pipeline.plan-review.<N>` from `_millhouse/config.yaml`; if absent, fall back to `pipeline.plan-review.default`. The resolver (`millpy.core.config.resolve_reviewer_name`) reads legacy `review-modules.plan.*` and `models.plan-review.*` paths as a migration-window fallback, and applies the legacy ensemble-name alias table on return. The integer key is compared as a string.
 
-   d. **Materialize the prompt.** Read the prompt template from `plugins/mill/doc/modules/plan-review.md`. Substitute `<PLAN_FILE_PATH>` (absolute path to `_millhouse/task/plan.md`), `<TASK_TITLE>` (from status.md), `<CONSTRAINTS_CONTENT>` (CONSTRAINTS.md content or `(no CONSTRAINTS.md)`), and `<N>` (current round number). Write the materialized prompt to `_millhouse/scratch/plan-review-prompt-r<N>.md`. **Do NOT inline the plan content** — the reviewer reads the plan file independently.
+   d. **Materialize the prompt.** Read the prompt template from `plugins/mill/doc/prompts/plan-review.md`. Substitute `<PLAN_FILE_PATH>` (absolute path to `_millhouse/task/plan.md`), `<TASK_TITLE>` (from status.md), `<CONSTRAINTS_CONTENT>` (CONSTRAINTS.md content or `(no CONSTRAINTS.md)`), and `<N>` (current round number). Write the materialized prompt to `_millhouse/scratch/plan-review-prompt-r<N>.md`. **Do NOT inline the plan content** — the reviewer reads the plan file independently.
 
    e. **Spawn the plan-reviewer.** Invoke via Bash (synchronous, not backgrounded):
       ```bash
-      python plugins/mill/scripts/spawn-reviewer.py --reviewer-name <reviewer-name> --prompt-file _millhouse/scratch/plan-review-prompt-r<N>.md --phase plan --round <N>
+      python plugins/mill/scripts/spawn_reviewer.py --reviewer-name <reviewer-name> --prompt-file _millhouse/scratch/plan-review-prompt-r<N>.md --phase plan --round <N>
       ```
 
-   f. **Parse the JSON line** from the script's stdout: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`.
+   f. **Parse the JSON line** from the script's stdout: `{"verdict": "APPROVE" | "REQUEST_CHANGES" | "UNKNOWN", "review_file": "<absolute-path>"}`.
 
    g. If verdict is **APPROVE**: set `approved: true` in plan frontmatter. Update the YAML code block in status.md: `phase: planned`. Use the Edit tool to insert `plan-review-r<N>  <timestamp>` and then `planned  <timestamp>` on new lines before the closing ` ``` ` of the timeline text block in status.md. Proceed to Phase: Setup. Do not read the review file.
+
+   **UNKNOWN verdict fallback (C.2).** If verdict is `UNKNOWN`, the reviewer pipeline failed to recover a recognizable verdict from the worker's output. Do not halt — read the review file at `review_file` and parse its YAML frontmatter `verdict:` field (case-insensitive). If the frontmatter reports `APPROVE`, continue as if the pipeline had returned APPROVE (set `approved: true` and proceed). If the frontmatter reports `REQUEST_CHANGES` (or `GAPS_FOUND`), continue as if the pipeline had returned REQUEST_CHANGES and drop into the fixer branch below. If the frontmatter `verdict:` field is absent, unparseable, or itself says `UNKNOWN`, halt with `Plan reviewer verdict is UNKNOWN and the review file frontmatter is also unparseable. Review file: <path>. Halting; manual intervention required.` Post-W1 this path should be rare — `millpy.core.verdict.extract_verdict_from_text` handles fence-wrapped JSON, frontmatter, and legacy VERDICT: prefix lines — but the fallback stays as a defensive belt-and-suspenders.
 
    h. If verdict is **REQUEST_CHANGES**:
       1. **Invoke the `mill-receiving-review` skill** via the Skill tool. This is mandatory before evaluating any finding — it loads the decision tree you must apply.
@@ -177,29 +180,29 @@ mill-go proceeds through named phases. Each phase updates the YAML code block in
 
 6. **Read constraints.** Resolve repo root: `git rev-parse --show-toplevel`. Read `CONSTRAINTS.md` from repo root if it exists. These are hard invariants — Thread B will receive a copy. If the file does not exist, proceed without it.
 
-7. **Phase: Setup no longer updates the parent's `tasks.md`.** The `[active]` marker written at claim time (by `mill-start` or `mill-spawn.ps1`) remains in place throughout Thread B's implementation and is replaced only by `mill-merge` (`[done]`) or `mill-abandon` (`[abandoned]`). mill-go does not participate in tasks.md writes during Phase: Setup.
+7. **Phase: Setup no longer updates the parent's `tasks.md`.** The `[active]` marker written at claim time (by `mill-start` or `mill-spawn` via `spawn_task.py`) remains in place throughout Thread B's implementation and is replaced only by `mill-merge` (`[done]`) or `mill-abandon` (`[abandoned]`). mill-go does not participate in tasks.md writes during Phase: Setup.
 
 ### Phase: Spawn Thread B
 
-8. **Materialize the implementer brief.** Read the brief template from `plugins/mill/doc/modules/implementer-brief.md`. Substitute the runtime tokens listed in that file's "Substitution Tokens" table:
+8. **Materialize the implementer brief.** Read the brief template from `plugins/mill/doc/prompts/implementer-brief.md`. Substitute the runtime tokens listed in that file's "Substitution Tokens" table:
    - `<PLAN_PATH>` → absolute path to `_millhouse/task/plan.md`
    - `<STATUS_PATH>` → absolute path to `_millhouse/task/status.md`
    - `<WORK_DIR>` → output of `git rev-parse --show-toplevel`
    - `<REPO_ROOT>` → same as `<WORK_DIR>`
    - `<VERIFY_CMD>` → the `verify:` value from plan frontmatter
    - `<MAX_CODE_REVIEW_ROUNDS>` → the resolved `max_code_review_rounds` value
-   - `<CODE_REVIEW_RESOLUTION_SNAPSHOT>` → the `review-modules.code` block from `_millhouse/config.yaml`, copied verbatim (maps round numbers to reviewer names). For legacy configs without `review-modules:`, fall back to copying the `models.code-review` block.
+   - `<CODE_REVIEW_RESOLUTION_SNAPSHOT>` → the `pipeline.code-review` block from `_millhouse/config.yaml`, copied verbatim (maps round numbers to reviewer names plus the `rounds` count and `default` entry).
    - `<TASK_TITLE>` → task title from status.md
 
    Write the materialized brief to `_millhouse/task/implementer-brief-instance.md`.
 
-9. **Resolve the implementer model.** Read `models.implementer` from `_millhouse/config.yaml` (scalar, no per-round indirection).
+9. **Resolve the implementer model.** Read `pipeline.implementer` from `_millhouse/config.yaml` (scalar, no per-round indirection).
 
 10. **Update status.md `phase: implementing`.** Insert `implementing  <timestamp>` and then `thread-b-spawn  <timestamp>` on new lines before the closing ` ``` ` of the timeline text block. The two timeline entries are written together — the `thread-b-spawn` line is the double-spawn-guard signal for any subsequent resume.
 
 11. **Spawn Thread B.** Invoke the Bash tool with `run_in_background: true`:
     ```bash
-    powershell.exe -File plugins/mill/scripts/spawn-agent.ps1 -Role implementer -PromptFile _millhouse/task/implementer-brief-instance.md -ProviderName <implementer-model>
+    python plugins/mill/scripts/spawn_agent.py --role implementer --prompt-file _millhouse/task/implementer-brief-instance.md --provider <implementer-model>
     ```
 
 12. **Capture the background shell ID.** Use the `Monitor` tool on that shell ID to wait for completion. While monitoring, periodically read `_millhouse/task/status.md` and relay each `current_step` change to the user as a brief progress line.
@@ -256,9 +259,9 @@ Implementation, test, and code-review failures are Thread B's domain — they ap
 
 tasks.md changes require commit and push (tasks.md is git-tracked). When running from a child worktree, resolve the parent's project root by computing the project subdirectory offset (working directory minus git root) and applying it to the parent worktree path from `git worktree list --porcelain`. Modify the parent's `tasks.md` at that project root.
 
-Phase transitions are tracked via `phase:` in the YAML code block of `_millhouse/task/status.md` and the `## Timeline` section (entries inserted before the closing ` ``` ` of the text fence). See `doc/modules/discussion-format.md` for the status.md schema and timeline format.
+Phase transitions are tracked via `phase:` in the YAML code block of `_millhouse/task/status.md` and the `## Timeline` section (entries inserted before the closing ` ``` ` of the text fence). See `plugins/mill/doc/formats/discussion.md` for the status.md schema and timeline format.
 
-mill-go (Thread A) does not write `[implementing]` or any other marker to the parent's `tasks.md`. The claim marker `[active]` is written at claim time by `mill-start` / `mill-spawn.ps1`; `mill-merge` writes `[done]` on successful merge; `mill-abandon` writes `[abandoned]` on abandonment. mill-go does not participate in tasks.md writes.
+mill-go (Thread A) does not write `[implementing]` or any other marker to the parent's `tasks.md`. The claim marker `[active]` is written at claim time by `mill-start` / `mill-spawn` (via `spawn_task.py`); `mill-merge` writes `[done]` on successful merge; `mill-abandon` writes `[abandoned]` on abandonment. mill-go does not participate in tasks.md writes.
 
 **Plan stale:** mill-go updates `_millhouse/task/status.md` with `blocked: true` but does NOT remove or modify the `[active]` marker in the parent's tasks.md. The task is still active (just blocked).
 
@@ -298,19 +301,19 @@ Replace `<EVENT>` with `BLOCKED` or `COMPLETE`, `<detail>` with the reason, and 
 | Phase: Spawn Thread B — spawn-script early failure | `BLOCKED: Thread B spawn failure` | High |
 | Phase: Spawn Thread B — Thread B stall (no Monitor or status.md activity for N minutes) | `BLOCKED: Thread B stalled` | High |
 
-Thread B's own call sites (test failure, code reviewer dispute, merge failure, completion) live in `plugins/mill/doc/modules/implementer-brief.md` `### 11. Notification Procedure`. Thread B sends those notifications itself; mill-go relays the blocked state and exits.
+Thread B's own call sites (test failure, code reviewer dispute, merge failure, completion) live in `plugins/mill/doc/prompts/implementer-brief.md` `### 11. Notification Procedure`. Thread B sends those notifications itself; mill-go relays the blocked state and exits.
 
 ---
 
 ## Systematic Debugging Protocol
 
-The Systematic Debugging Protocol applies during **Thread B's** Phase: Implement. See `plugins/mill/doc/modules/implementer-brief.md` `### 9. Systematic Debugging Protocol` for the full protocol. mill-go (Thread A) does not debug code — it only spawns and reports.
+The Systematic Debugging Protocol applies during **Thread B's** Phase: Implement. See `plugins/mill/doc/prompts/implementer-brief.md` `### 9. Systematic Debugging Protocol` for the full protocol. mill-go (Thread A) does not debug code — it only spawns and reports.
 
 ---
 
 ## Failure Classification
 
-The Failure Classification taxonomy applies during **Thread B's** Phase: Implement. See `plugins/mill/doc/modules/implementer-brief.md` `### 10. Failure Classification`. mill-go (Thread A) classifies its own failures as one of three types: plan-review escalation, plan staleness, or Thread B spawn / monitoring failure — all handled inline above.
+The Failure Classification taxonomy applies during **Thread B's** Phase: Implement. See `plugins/mill/doc/prompts/implementer-brief.md` `### 10. Failure Classification`. mill-go (Thread A) classifies its own failures as one of three types: plan-review escalation, plan staleness, or Thread B spawn / monitoring failure — all handled inline above.
 
 ---
 

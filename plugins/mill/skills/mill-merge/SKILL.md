@@ -114,16 +114,12 @@ Determine the merge method:
 
 If `gh pr create` fails, treat as a Step 4 failure: roll back to the checkpoint (same rollback procedure as below), release merge lock (Step 7), and report error.
 
-**Otherwise (default):** direct squash merge.
+**Otherwise (default):** direct squash merge. Use `git -C <parent-path>` for every git command so the shell cwd stays inside the child worktree (worktree isolation rule — see `conversation/SKILL.md`).
 
 ```bash
-# Switch to parent in the parent worktree or repo root
-cd <parent-path>
-git merge --squash <worktree-branch>
-```
-```bash
-git commit -m "<task title>"
-git push
+git -C <parent-path> merge --squash <worktree-branch>
+git -C <parent-path> commit -m "<task title>"
+git -C <parent-path> push
 ```
 Squash merge collapses all worktree commits into a single commit on the parent branch.
 

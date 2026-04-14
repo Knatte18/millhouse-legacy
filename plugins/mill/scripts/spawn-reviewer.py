@@ -1,18 +1,9 @@
-#!/usr/bin/env python3
-"""
-spawn-reviewer — CLI entry point.
-
-This file exists so the script can be invoked as:
-  python plugins/mill/scripts/spawn-reviewer.py --phase code --round 1 ...
-
-The actual implementation lives in spawn_reviewer.py (importable module).
-"""
-
-import os
+#!/usr/bin/env python
+"""Forwarding shim. Canonical implementation: millpy.entrypoints.spawn_reviewer."""
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from spawn_reviewer import main  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from millpy.entrypoints.spawn_reviewer import main
 
-if __name__ == '__main__':
-    main()
+sys.exit(main(sys.argv[1:]))

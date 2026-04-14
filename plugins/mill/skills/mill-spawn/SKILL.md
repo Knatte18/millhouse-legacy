@@ -5,9 +5,9 @@ description: Add a task to tasks.md and create a worktree for it in one command.
 
 # mill-spawn
 
-One-shot. Add a task with `[spawn]` marker to `tasks.md`, commit, then call `mill-spawn.ps1` to claim it and create a worktree.
+One-shot. Add a task with `[spawn]` marker to `tasks.md`, commit, then call `spawn_task.py` to claim it and create a worktree.
 
-For tasks.md file format details, see `plugins/mill/doc/modules/tasksmd-format.md`.
+For tasks.md file format details, see `plugins/mill/doc/formats/tasksmd.md`.
 
 ---
 
@@ -64,21 +64,21 @@ git commit -m "task: spawn <title>"
 git push
 ```
 
-### Step 6: Call mill-spawn.ps1
+### Step 6: Call spawn_task.py
 
-Locate mill-spawn.ps1 using three-tier resolution:
+Locate `spawn_task.py` using three-tier resolution:
 
-1. **Plugin source** (works in the millhouse repo itself): `<repo-root>/plugins/mill/scripts/mill-spawn.ps1`
-2. **Plugin cache** (works in any repo with mill plugin installed): `~/.claude/plugins/cache/millhouse/mill/<latest-version>/scripts/mill-spawn.ps1`
-3. **Sibling script**: same directory as this skill's location
+1. **Plugin source** (works in the millhouse repo itself): `<repo-root>/plugins/mill/scripts/spawn_task.py`
+2. **Plugin cache** (works in any repo with mill plugin installed): `~/.claude/plugins/cache/millhouse/mill/<latest-version>/scripts/spawn_task.py`
+3. **Forwarding wrapper**: `_millhouse/mill-spawn.cmd` (written by `mill-setup`, delegates to the plugin-cache path)
 
 Run via bash:
 
 ```bash
-pwsh -File "<resolved-path>"
+python "<resolved-path>"
 ```
 
-The script reads the first `## [>] ` task from `tasks.md`, claims it (removes the task block, commits), creates the worktree via `mill-worktree.ps1` (passing `WorktreeName` and `BranchName`), writes `_millhouse/task/status.md` in the new worktree, and writes a child registry entry to the parent's `_millhouse/children/` directory and a junction at `_millhouse/children/<slug>/` pointing to the new worktree's `_millhouse/task/`. The `task/`, `children/`, and `scratch/` folders are excluded from copy-on-spawn. Like all of `_millhouse/`, these folders are gitignored — registry entries and task state are local to each clone/worktree.
+The script reads the first `## [>] ` task from `tasks.md`, claims it (removes the task block, commits), creates the worktree via the Python `worktree.py` entrypoint (passing `WorktreeName` and `BranchName`), writes `_millhouse/task/status.md` in the new worktree, and writes a child registry entry to the parent's `_millhouse/children/` directory and a junction at `_millhouse/children/<slug>/` pointing to the new worktree's `_millhouse/task/`. The `task/`, `children/`, and `scratch/` folders are excluded from copy-on-spawn. Like all of `_millhouse/`, these folders are gitignored — registry entries and task state are local to each clone/worktree.
 
 ### Step 7: Report
 

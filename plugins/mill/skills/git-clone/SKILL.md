@@ -139,42 +139,18 @@ If the command fails, report the error and stop.
 
 #### 2.11. Create mill-worktree forwarding wrapper
 
-Write `$hub_path/main/_millhouse/mill-worktree.ps1` with the following content:
+Write `$hub_path/main/_millhouse/mill-worktree.cmd` with the following one-line content:
 
-```powershell
-# mill-worktree.ps1 — Forwarding wrapper
-# Canonical script: plugins/mill/scripts/mill-worktree.ps1
-# This wrapper delegates to the mill plugin in the Claude Code plugin cache.
-
-$PluginBase = Join-Path $env:USERPROFILE ".claude\plugins\cache\millhouse\mill"
-if (-not (Test-Path $PluginBase)) {
-    Write-Error "Mill plugin not found in cache at: $PluginBase. Install the mill plugin first: claude plugin install mill@millhouse"
-    exit 1
-}
-
-$VersionDir = Get-ChildItem $PluginBase -Directory |
-    Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
-
-if (-not $VersionDir) {
-    Write-Error "No valid version directory found in: $PluginBase"
-    exit 1
-}
-
-$Script = Join-Path $VersionDir.FullName "scripts\mill-worktree.ps1"
-if (-not (Test-Path $Script)) {
-    Write-Error "mill-worktree.ps1 not found at: $Script"
-    exit 1
-}
-
-& $Script @args
+```batch
+@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\worktree.py" %*
 ```
+
+The wrapper delegates to `worktree.py` in the Claude Code plugin cache. A more robust version that picks the latest installed mill version on each invocation can be substituted at a later time; for bootstrap purposes the single-line form is sufficient.
 
 Commit and push the wrapper so it propagates to all worktrees via git:
 
 ```bash
-git -C "$hub_path/main" add _millhouse/mill-worktree.ps1
+git -C "$hub_path/main" add -f _millhouse/mill-worktree.cmd
 git -C "$hub_path/main" commit -m "chore: add mill-worktree forwarding wrapper"
 git -C "$hub_path/main" push
 ```

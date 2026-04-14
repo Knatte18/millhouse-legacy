@@ -28,7 +28,7 @@ _codeguide/
    - Config.yaml not found anywhere → **first-time root setup**
    - Config.yaml is in cwd's own `_codeguide/` → **root refresh**
    - Config.yaml is in an ancestor's `_codeguide/`, and cwd has `_codeguide/root.txt` → **subfolder refresh**
-   - Config.yaml is in an ancestor's `_codeguide/`, and cwd has no `_codeguide/` → **new subfolder** — report what was found and ask user to confirm before proceeding
+   - Config.yaml is in an ancestor's `_codeguide/`, and either cwd has no `_codeguide/` OR cwd's `_codeguide/` has no `root.txt` → **new subfolder** — report what was found and ask user to confirm before proceeding. (The second case covers half-manual state where an earlier workflow created `_codeguide/Overview.md` or `_codeguide/modules/` without registering the folder as a subfolder workspace.)
 
 ---
 
@@ -103,15 +103,17 @@ _codeguide/
 
 ### New subfolder activation
 
-3. **Report findings:** "Found repo-level `_codeguide/` at `<path>`. Set up this folder as a subfolder workspace?"
+3. **Report findings:** "Found repo-level `_codeguide/` at `<path>`." If cwd already has a `_codeguide/` directory without `root.txt`, add: "cwd already has `_codeguide/` with files: `<list>`. Promote this folder to a subfolder workspace without touching existing files?" Otherwise: "Set up this folder as a subfolder workspace?"
 
 4. **Wait for user confirmation.** If denied, stop.
 
-5. **Create `_codeguide/root.txt`** with the resolved path to the ancestor `_codeguide/`.
+5. **Create `_codeguide/` directory** if it does not exist. If it already exists, leave existing files untouched — this step is the promote case.
 
-6. **Create `_codeguide/cgexclude.md`** from template.
+6. **Create `_codeguide/root.txt`** with the resolved path to the ancestor `_codeguide/`.
 
-7. **Report** what was created.
+7. **Create `_codeguide/cgexclude.md`** from template — only if it does not already exist.
+
+8. **Report** what was created (distinguish "created new subfolder workspace" vs "promoted existing `_codeguide/` to subfolder workspace", listing which files were touched).
 
 ## Rules
 

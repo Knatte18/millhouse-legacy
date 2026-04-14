@@ -16,17 +16,18 @@ Interactive. Pick a task and design the solution.
 
 Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
 
-**Entry-time validation.** After the config-existence check, validate `_millhouse/config.yaml` per `plugins/mill/doc/modules/validation.md`. Required slots: `models.session` (string), `models.implementer` (string), `models.explore` (string). For review phases, accept either `review-modules.<phase>.default` OR the legacy `models.<phase>-review.default` — prefer the new one if present. If neither is present, stop with:
-```
-Config schema out of date. Expected review-modules.<phase>.default (string). Run 'mill-setup' to auto-migrate.
-```
-For legacy configs (no `review-modules:` block), validate: `models.discussion-review.default`, `models.plan-review.default`, `models.code-review.default`. On failure, stop with the exact error message:
+**Entry-time validation.** After the config-existence check, validate `_millhouse/config.yaml`. Required slots under the `pipeline:` block:
+- `pipeline.implementer` (string) — the subagent model for `spawn_agent.py` dispatch
+- `pipeline.discussion-review.default` (string) and `pipeline.discussion-review.rounds` (int)
+- `pipeline.plan-review.default` (string) and `pipeline.plan-review.rounds` (int)
+- `pipeline.code-review.default` (string) and `pipeline.code-review.rounds` (int)
 
+If any required slot is missing, stop with:
 ```
-Config schema out of date. Expected models.<slot> (<type>). Run 'mill-setup' to auto-migrate.
+Config schema out of date. Expected pipeline.<slot>. Run 'mill-setup' to auto-migrate.
 ```
 
-Do not attempt auto-migration here — that is `mill-setup`'s job. See `plugins/mill/doc/overview.md#config-migration` for the two-layer migration spec.
+Legacy slots (`models.session`, `models.explore`, `models.<phase>-review`, `review-modules:`, `reviews:`) are no longer accepted by validation — `mill-setup` migrates them to the `pipeline:` form on re-run. The reviewer resolver (`millpy.core.config.resolve_reviewer_name`) still reads the legacy paths as a fallback during the migration window so mid-migration configs keep working, but this skill's entry gate requires the new schema.
 
 Read `tasks.md` in the project root (the working directory where `_millhouse/` lives). If it does not exist, stop and tell the user to run `mill-setup` first or create `tasks.md` manually.
 
@@ -40,7 +41,7 @@ Read `tasks.md` in the project root (the working directory where `_millhouse/` l
 |----------|---------|-------------|
 | `-dr N` | `2` | Maximum number of discussion review rounds. `-dr 0` skips discussion review entirely (Phase: Discussion Review is not executed). |
 
-Parse the `-dr` value from the skill invocation arguments. If not provided via CLI, read `reviews.discussion` from `_millhouse/config.yaml` as the default. CLI arg overrides config. If neither is set, default to `2`. Store the value as `max_review_rounds` for use in Phase: Discussion Review.
+Parse the `-dr` value from the skill invocation arguments. If not provided via CLI, read `pipeline.discussion-review.rounds` from `_millhouse/config.yaml` as the default. CLI arg overrides config. If neither is set, default to `2`. Store the value as `max_review_rounds` for use in Phase: Discussion Review.
 
 ---
 
@@ -169,11 +170,11 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
 
-   c. **Resolve the reviewer name for round N.** Prefer `review-modules.discussion.<N>` from `_millhouse/config.yaml`; if absent, fall back to `review-modules.discussion.default`. For legacy configs without `review-modules:`, fall back to `models.discussion-review.<N>|default`. The integer key is compared as a string. See `doc/overview.md#config-resolution` for the resolution rule.
+   c. **Resolve the reviewer name for round N.** Prefer `pipeline.discussion-review.<N>` from `_millhouse/config.yaml`; if absent, fall back to `pipeline.discussion-review.default`. The integer key is compared as a string. The resolver (`millpy.core.config.resolve_reviewer_name`) internally falls through to legacy `review-modules.discussion.*` and `models.discussion-review.*` keys for mid-migration configs, and applies the legacy ensemble-name alias table on return so pre-rename configs still resolve to modern short forms.
 
-   d. **Materialize the prompt.** Read the prompt template from `doc/modules/discussion-review.md`. Substitute `<DISCUSSION_FILE_PATH>` (absolute path to `_millhouse/task/discussion.md`), `<TASK_TITLE>` (from `tasks.md`), and `<CONSTRAINTS_CONTENT>` (the contents of `CONSTRAINTS.md` from the repo root if it exists, or the literal string `(no CONSTRAINTS.md)` if not). Write the materialized prompt to `_millhouse/scratch/discussion-review-prompt-r<N>.md`.
+   d. **Materialize the prompt.** Read the prompt template from `plugins/mill/doc/prompts/discussion-review.md`. Substitute `<DISCUSSION_FILE_PATH>` (absolute path to `_millhouse/task/discussion.md`), `<TASK_TITLE>` (from `tasks.md`), and `<CONSTRAINTS_CONTENT>` (the contents of `CONSTRAINTS.md` from the repo root if it exists, or the literal string `(no CONSTRAINTS.md)` if not). Write the materialized prompt to `_millhouse/scratch/discussion-review-prompt-r<N>.md`.
 
-   Note: discussion-review rejects bulk dispatch at the engine level. If `review-modules.discussion.*` points at a bulk recipe, spawn-reviewer.py exits with a ConfigError and mill-start surfaces the error to the user.
+   Note: discussion-review rejects bulk dispatch at the engine level. If `pipeline.discussion-review.*` points at a bulk recipe, `spawn_reviewer.py` exits with a ConfigError and mill-start surfaces the error to the user.
 
    e. **Spawn the discussion-reviewer.** Invoke via Bash:
       ```bash
@@ -181,9 +182,11 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
       ```
       The script is synchronous from the caller's perspective. Reviewers are short — do not run in background.
 
-   f. **Parse the JSON line** from the script's stdout: `{"verdict": "APPROVE" | "GAPS_FOUND", "review_file": "<absolute-path>"}`.
+   f. **Parse the JSON line** from the script's stdout: `{"verdict": "APPROVE" | "GAPS_FOUND" | "UNKNOWN", "review_file": "<absolute-path>"}`.
 
    g. If verdict is **APPROVE**: proceed to Phase: Handoff.
+
+   **UNKNOWN verdict fallback (C.2).** If verdict is `UNKNOWN`, the reviewer pipeline failed to recover a recognizable verdict from the worker's output even though the review file at `review_file` was written correctly. Do not halt — read the review file and parse its YAML frontmatter `verdict:` field (case-insensitive). If the frontmatter reports `APPROVE`, continue as if the pipeline had returned APPROVE. If the frontmatter reports `GAPS_FOUND` (or `REQUEST_CHANGES`), continue as if the pipeline had returned GAPS_FOUND and proceed to the GAPS_FOUND branch below. If the frontmatter `verdict:` field is absent, unparseable, or itself says `UNKNOWN`, halt with a clear message: `Reviewer verdict is UNKNOWN and the review file frontmatter is also unparseable. Review file: <path>. Halting; manual intervention required.` This fallback exists because of a known bug class where fence-wrapped JSON or multi-format worker output causes `spawn_reviewer.py` to return UNKNOWN despite the review file being written correctly. Post-W1 this should be rare — `millpy.core.verdict.extract_verdict_from_text` handles the multi-format extraction — but the fallback stays as a defensive belt-and-suspenders.
 
    h. If verdict is **GAPS_FOUND**: read the review file at `review_file`.
 
