@@ -2,14 +2,16 @@
 reviewers/engine.py — Reviewer dispatch engine.
 
 Entry point: run_reviewer(*, reviewer_name, prompt_file, phase, round,
-    review_file_path, plan_start_hash, plan_path, files_from)
+    review_file_path, plan_start_hash, plan_path, files_from,
+    plan_overview, plan_batch, plan_dir_path)
 
 Execution order (load-bearing for Fix E):
   1. Resolve reviewer name → ConfigError on unknown.
   2. Discussion-bulk guard → ConfigError if bulk worker + discussion phase.
-  3. Derive review_file_path if None (timestamp-based).
-  4. mkdir _millhouse/scratch/reviews/ — ONLY after validation passes.
-  5. Delegate to reviewer.run().
+  3. Plan-whole-bulk guard → ConfigError if bulk worker + plan phase + plan_dir_path set.
+  4. Derive review_file_path if None (timestamp-based).
+  5. mkdir _millhouse/scratch/reviews/ — ONLY after validation passes.
+  6. Delegate to reviewer.run().
 
 ConfigError is imported from millpy.core.config — the authoritative source.
 """
@@ -37,6 +39,9 @@ def run_reviewer(
     plan_start_hash: str | None,
     plan_path: Path | None,
     files_from: Path | None,
+    plan_overview: Path | None = None,
+    plan_batch: Path | None = None,
+    plan_dir_path: Path | None = None,
 ) -> ReviewerResult:
     """Resolve reviewer, guard, derive path, mkdir, then dispatch.
 
@@ -56,9 +61,15 @@ def run_reviewer(
     plan_start_hash:
         Git hash of the plan start commit (for diff-based file selection).
     plan_path:
-        Path to the plan file.
+        Path to the plan file (v1) or directory (v2) for PLAN_CONTENT substitution.
     files_from:
         Optional path to a file listing source files for bulk payload.
+    plan_overview:
+        Optional path to 00-overview.md for v2 per-batch plan review.
+    plan_batch:
+        Optional path to NN-<slug>.md batch file for v2 per-batch plan review.
+    plan_dir_path:
+        Optional path to plan/ directory for v2 whole-plan plan review.
 
     Returns
     -------
@@ -67,8 +78,9 @@ def run_reviewer(
     Raises
     ------
     ConfigError
-        On unknown reviewer name or discussion-phase bulk guard violation.
-        Both are raised BEFORE any directory is created (Fix E).
+        On unknown reviewer name, discussion-phase bulk guard, or
+        plan-whole-plan bulk guard. All raised BEFORE any directory is
+        created (Fix E).
     """
     # Step 1: Resolve reviewer name.
     reviewer = _resolve_reviewer(reviewer_name)
@@ -76,7 +88,10 @@ def run_reviewer(
     # Step 2: Discussion-phase bulk guard.
     _guard_discussion_bulk(reviewer_name, reviewer, phase)
 
-    # Step 3: Derive review_file_path if None.
+    # Step 3: Plan-whole-plan bulk guard (belt-and-suspenders).
+    _guard_plan_whole_bulk(reviewer_name, reviewer, phase, plan_dir_path)
+
+    # Step 4: Derive review_file_path if None.
     root = project_root()
     reviews_dir = root / "_millhouse" / "scratch" / "reviews"
 
@@ -84,11 +99,11 @@ def run_reviewer(
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
         review_file_path = reviews_dir / f"{ts}-{reviewer_name}-r{round}.md"
 
-    # Step 4: Create the reviews directory (after validation succeeded).
+    # Step 5: Create the reviews directory (after validation succeeded).
     reviews_dir.mkdir(parents=True, exist_ok=True)
     log("engine", f"reviews dir: {reviews_dir}")
 
-    # Step 5: Delegate to the reviewer.
+    # Step 6: Delegate to the reviewer.
     log("engine", f"dispatching {reviewer_name!r} phase={phase} round={round}")
     result = reviewer.run(
         prompt_file=prompt_file,
@@ -97,6 +112,9 @@ def run_reviewer(
         review_file_path=review_file_path,
         files_from=files_from,
         plan_path=plan_path,
+        plan_overview=plan_overview,
+        plan_batch=plan_batch,
+        plan_dir_path=plan_dir_path,
     )
 
     # Write bot-gate marker if applicable.
@@ -175,4 +193,47 @@ def _guard_discussion_bulk(reviewer_name: str, reviewer, phase: str) -> None:
             raise ConfigError(
                 f"discussion phase does not support bulk dispatch: "
                 f"reviewer {reviewer_name!r} has bulk-mode worker"
+            )
+
+
+def _guard_plan_whole_bulk(
+    reviewer_name: str,
+    reviewer,
+    phase: str,
+    plan_dir_path: Path | None,
+) -> None:
+    """Raise ConfigError if a bulk-mode worker is used for whole-plan plan review.
+
+    Whole-plan plan review (plan_dir_path set) requires tool-use dispatch.
+    Bulk workers receive a single prompt with all files inlined; they cannot
+    iterate through the plan directory or call tools to read individual files.
+
+    Parameters
+    ----------
+    reviewer_name:
+        The reviewer name (for error messages).
+    reviewer:
+        The resolved reviewer instance.
+    phase:
+        The review phase.
+    plan_dir_path:
+        The plan directory path, or None for per-batch / non-plan review.
+    """
+    if phase != "plan" or plan_dir_path is None:
+        return
+
+    if isinstance(reviewer, SingleWorker):
+        if reviewer.worker.dispatch_mode == "bulk":
+            raise ConfigError(
+                f"plan-review whole-plan mode does not support bulk dispatch: "
+                f"reviewer {reviewer_name!r} has bulk-mode worker. "
+                f"Use a tool-use reviewer for whole-plan review."
+            )
+    elif isinstance(reviewer, EnsembleReviewer):
+        worker_obj = WORKERS.get(reviewer.ensemble.worker)
+        if worker_obj is not None and worker_obj.dispatch_mode == "bulk":
+            raise ConfigError(
+                f"plan-review whole-plan mode does not support bulk dispatch: "
+                f"reviewer {reviewer_name!r} has bulk-mode worker. "
+                f"Use a tool-use reviewer for whole-plan review."
             )

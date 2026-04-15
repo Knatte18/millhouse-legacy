@@ -149,6 +149,9 @@ class Reviewer(Protocol):
         review_file_path: Path,
         files_from: Path | None,
         plan_path: Path | None = None,
+        plan_overview: Path | None = None,
+        plan_batch: Path | None = None,
+        plan_dir_path: Path | None = None,
     ) -> ReviewerResult:
         """Execute the review.
 
@@ -167,6 +170,12 @@ class Reviewer(Protocol):
         plan_path:
             Optional path to the plan file — used by bulk-template substitution
             to inline plan content into `<PLAN_CONTENT>`.
+        plan_overview:
+            Optional path to 00-overview.md for v2 per-batch review mode.
+        plan_batch:
+            Optional path to NN-<slug>.md batch file for v2 per-batch review mode.
+        plan_dir_path:
+            Optional path to the plan/ directory for v2 whole-plan review mode.
         """
         ...
 
@@ -194,13 +203,17 @@ class SingleWorker:
         review_file_path: Path,
         files_from: Path | None,
         plan_path: Path | None = None,
+        plan_overview: Path | None = None,
+        plan_batch: Path | None = None,
+        plan_dir_path: Path | None = None,
     ) -> ReviewerResult:
         """Dispatch the review to the worker's backend.
 
         Reads the prompt from prompt_file, dispatches via the backend,
-        writes the result to review_file_path. `plan_path` is accepted for
-        Protocol parity but not used by SingleWorker — tool-use reviewers
-        read files via tools and do not need the plan inlined.
+        writes the result to review_file_path. The plan-related kwargs
+        (`plan_path`, `plan_overview`, `plan_batch`, `plan_dir_path`) are
+        accepted for Protocol parity. Tool-use dispatch ignores them because
+        SKILL.md already substituted the path tokens at materialization time.
         """
         prompt = prompt_file.read_text(encoding="utf-8", errors="replace")
         backend = BACKENDS[self.worker.provider]

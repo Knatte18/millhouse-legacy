@@ -25,10 +25,14 @@ def test_workers_effort_and_extras():
 
 
 def test_reviewers_count_and_keys():
-    assert len(REVIEWERS) == 3
+    assert len(REVIEWERS) == 4
     assert "ensemble-gemini3pro-x2-opus" in REVIEWERS
     assert REVIEWERS["ensemble-gemini3pro-x2-opus"].worker_count == 2
     assert REVIEWERS["ensemble-gemini3pro-x2-opus"].handler == "opus"
+    assert "g3flash-x3-sonnetmax-plan" in REVIEWERS
+    assert REVIEWERS["g3flash-x3-sonnetmax-plan"].worker == "gemini3flash"
+    assert REVIEWERS["g3flash-x3-sonnetmax-plan"].worker_count == 3
+    assert REVIEWERS["g3flash-x3-sonnetmax-plan"].handler == "sonnetmax"
 
 
 def test_no_cross_import():

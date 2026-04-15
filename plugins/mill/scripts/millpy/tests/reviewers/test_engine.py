@@ -75,7 +75,7 @@ class TestNonePathDerivation:
     def test_none_path_is_derived(self, tmp_path: Path):
         mock_reviewer = MagicMock()
 
-        def fake_run(*, prompt_file, phase, round, review_file_path, files_from, plan_path=None):
+        def fake_run(*, prompt_file, phase, round, review_file_path, files_from, plan_path=None, plan_overview=None, plan_batch=None, plan_dir_path=None):
             review_file_path.write_text("VERDICT: APPROVE\n", encoding="utf-8")
             return ReviewerResult(verdict="APPROVE", review_file=review_file_path, exit_code=0, failure_kind=None)
 

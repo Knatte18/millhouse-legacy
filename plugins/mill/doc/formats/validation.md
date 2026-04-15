@@ -28,23 +28,45 @@ After writing status.md, verify fields within the YAML code block (` ```yaml ```
 
 > **Note:** The `phase:` vocabulary in `status.md` is a separate validation domain from `tasks.md` phase markers. The `status.md` vocabulary retains the full phase lifecycle (`discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `complete`) — `done` is not a valid `phase:` value in `status.md`, only in `tasks.md`. Only the `tasks.md` marker set is trimmed to `['>', 'active', 'done', 'abandoned']`.
 
-## plan.md (`_millhouse/task/plan.md`)
+## Plan validation (`_millhouse/task/plan/` or `_millhouse/task/plan.md`)
 
-### File validation
+> **Validation exists in code, not prose.** The authoritative check list lives in
+> `plugins/mill/scripts/millpy/core/plan_validator.py`. Do not add prose rules
+> here that will drift out of sync with the Python module. This section is a
+> human-readable summary only.
 
-1. **File exists when expected.** `mill-go` Phase: Setup requires `_millhouse/task/plan.md` to exist (it was written by Phase: Plan and approved by Phase: Plan Review). If missing on Setup entry, mill-go stops with an error pointing the user to re-run mill-go.
+`plan_validator.validate(loc)` accepts a `PlanLocation` (from `plan_io.resolve_plan_path`)
+and returns a list of `ValidationError` objects. All errors have `severity: "BLOCKING"`.
+Called at plan-write time by mill-go Phase: Plan, and at pre-dispatch time by
+`spawn_reviewer.py` before spawning a plan reviewer.
 
-### Structural validation
+### Checks that apply to both v1 and v2
 
-After writing plan.md (Phase: Plan), verify all of the following:
+| Check | What it verifies |
+|---|---|
+| Frontmatter keys present | v1 requires: `verify`, `dev-server`, `approved`, `started`. v2 overview requires: `kind: plan-overview`, `task`, `verify`, `dev-server`, `approved`, `started`, `batches`. v2 batch files require: `kind: plan-batch`, `batch-name`, `batch-depends`, `approved`. |
+| Required sections | v1: `## Context`, `## Files`, `## Steps`. v2 overview: `## Context`, `## Shared Constraints`, `## Shared Decisions`, `## Batch Graph`, `## All Files Touched`. v2 batch: `## Batch-Specific Context`, `## Batch Files`, `## Steps` (heading required even if body empty). |
+| Step card non-empty creates/modifies | Every card must have at least one of `Creates:` or `Modifies:` non-empty. A card with both `none` does nothing and is a structural violation. |
+| `depends-on:` references resolve | Integer values in `depends-on:` must reference existing step numbers that precede the current card (within the batch or in batches listed in `batch-depends:`). |
 
-1. **Frontmatter present.** YAML frontmatter must include keys `verify`, `dev-server`, `approved`, `started`. The `approved` value is `true` or `false`. The `started` value matches `YYYYMMDD-HHMMSS` (UTC).
-2. **Required sections.** A single `# <Task Title>` h1, and h2 sections `## Context`, `## Files`, `## Steps` (in that order). Other h2 sections may follow.
-3. **Step structure.** Each `### Step N: <description>` heading must be followed by a step card containing the bolded fields **Creates:**, **Modifies:**, **Requirements:**, **Explore:**, **Test approach:**, **Key test scenarios:**, **Commit:**. The **TDD:** field is optional.
-4. **Atomic step granularity.** A step that bundles unrelated file operations is a structural violation. Heuristic: more than ~5 distinct paths in **Modifies:** that span unrelated subdirectories. The heuristic is documented as guidance — reviewers enforce it during plan review (`plan-review.md` evaluation criteria), not programmatically.
-5. **Decision subsections.** Each `### Decision: <title>` inside `## Context` must contain `**Why:**` and `**Alternatives rejected:**` lines.
+### Checks that apply to v2 only
 
-See `doc/modules/plan-format.md` for the full schema and the atomicity invariant.
+| Check | What it verifies |
+|---|---|
+| `Reads:` non-empty | Every v2 step card must have `Reads:` non-empty. v1 cards have no `Reads:` field — this check **must not fire on v1**. |
+| `Explore:` ⊆ `Reads:` | Every path in `Explore:` must appear in the card's `Reads:` list. v1-only absence of `Reads:` makes this v2-only. |
+| Card numbering globally unique | No duplicate step numbers and no gaps across all batches in the plan directory. |
+| `batch-depends:` references resolve | Every batch slug in `batch-depends:` must exist in the overview's `batches:` list. |
+
+### File validation (v2 directory)
+
+`mill-go` Phase: Setup expects the plan to exist at the location stored in `status.md`'s `plan:` field. If missing, mill-go stops and asks the user to re-run Phase: Plan. Existence checking is at the `plan_io.resolve_plan_path` level — it returns `None` when neither v1 nor v2 is present.
+
+### Atomic step granularity (heuristic only)
+
+A step that bundles unrelated file operations is a structural violation. Heuristic: more than ~5 distinct paths in **Modifies:** spanning unrelated subdirectories. This heuristic is guidance — plan reviewers enforce it during plan review (`plan-review.md` evaluation criteria), not programmatically.
+
+See `plugins/mill/doc/formats/plan.md` for the full v2 schema and atomicity invariant.
 
 ## _millhouse/config.yaml
 

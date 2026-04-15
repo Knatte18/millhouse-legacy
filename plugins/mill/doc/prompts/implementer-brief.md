@@ -10,7 +10,7 @@ The template lives in `doc/modules/` (alongside `handoff-brief.md`) so that the 
 
 | Token | Replaced with |
 |---|---|
-| `<PLAN_PATH>` | Absolute path to `_millhouse/task/plan.md` |
+| `<PLAN_PATH>` | Absolute path to the plan: `_millhouse/task/plan` (v2 directory) or `_millhouse/task/plan.md` (v1 file). Use `plan_io.resolve_plan_path(task_dir)` to read the correct format. |
 | `<STATUS_PATH>` | Absolute path to `_millhouse/task/status.md` |
 | `<WORK_DIR>` | Absolute path to the worktree (output of `git rev-parse --show-toplevel`) |
 | `<REPO_ROOT>` | Same as `<WORK_DIR>` (alias kept for clarity in the brief body) |
@@ -45,7 +45,7 @@ These are the rules Thread B historically breaks when it is tired or when a brie
 
 Call the shell and capture the result per write. Do NOT copy a timestamp from an earlier line in the same session. Do NOT compute offsets ("it's been about 5 minutes since the last one so let me add 5 minutes"). Do NOT read the system clock through any API other than `date -u` — Python's `datetime.now()`, JavaScript's `new Date()`, and similar all produce output that Thread B has repeatedly mangled. Shell `date -u` is the only acceptable source. If the shell is unavailable (impossible in this environment), write `phase: blocked` with `blocked_reason: timestamp-source-unavailable` — do NOT fabricate.
 
-**I2. `phase: complete` requires every planned test to have been attempted at least once.** Cross-check `tests_run` (the list of commands you actually executed in Phase: Test) against every test file the plan creates or modifies under `## Files`. If any plan-added test file is not covered by at least one `tests_run` entry (directly or transitively via an enclosing pytest target), you have NOT completed the plan — write `phase: blocked`, `blocked_reason: planned tests were never attempted: <list>`, notify, and exit. "Completion" means "everything the plan asked for was exercised." It does not mean "the verify command happened to pass."
+**I2. `phase: complete` requires every planned test to have been attempted at least once.** Cross-check `tests_run` (the list of commands you actually executed in Phase: Test) against every test file the plan creates or modifies. For v1 plans: check `## Files`. For v2 plans: check `## All Files Touched` (overview) and each `## Batch Files` section. Use `plan_io.read_files_touched(loc)` to get the unified list. If any plan-added test file is not covered by at least one `tests_run` entry (directly or transitively via an enclosing pytest target), you have NOT completed the plan — write `phase: blocked`, `blocked_reason: planned tests were never attempted: <list>`, notify, and exit. "Completion" means "everything the plan asked for was exercised." It does not mean "the verify command happened to pass."
 
 **I3. Skip-clauses require active-attempt-then-document.** If the brief or the plan contains a "skip X if Y" escape clause (VPN, network, missing credentials, flaky infra, whatever), you MUST:
 - Attempt the command once. No preemptive skip based on reading the clause.
@@ -58,7 +58,7 @@ A silent skip — one where the command was never attempted, or was attempted bu
 
 You are Thread B, the implementer-orchestrator. Your job is:
 
-1. Read the approved plan at `<PLAN_PATH>`.
+1. Read the approved plan at `<PLAN_PATH>`. If `<PLAN_PATH>` is a directory (v2 format), use `plan_io.resolve_plan_path` and `plan_io.read_plan_content` to load the concatenated overview + batch content. If it is a file (v1 format), read it directly. Both formats expose the same API via `plan_io`.
 2. Implement each step atomically — write code, run tests, commit per step.
 3. When all steps are committed, run full verification.
 4. Spawn the code-reviewer subagent (read-only). Apply review fixes yourself.
@@ -162,7 +162,7 @@ When all plan steps are committed, run full verification:
    b. **If the attempt fails with a connectivity / infrastructure error** that matches the clause's precondition (network timeout, VPN down, external service 5xx, missing credentials the clause names), record the result in `_millhouse/scratch/test-baseline.md` as a line `SKIPPED: <command> — <reason>`. Do NOT treat it as a test failure.
    c. **If the attempt fails in a way the clause does NOT cover** (real test assertion failure, unexpected exception, timeout that isn't network-related), treat it as a test failure and enter the retry loop.
    d. **Add the command to `tests_run` regardless of outcome** — attempted, passed, skipped-with-reason, and failed-then-retried all get recorded. The rule: if a test was supposed to exist but was never even attempted, that is a protocol violation, not a valid completion.
-   e. **Never mark `phase: complete` while an "expected" test command is missing from `tests_run`.** Cross-check `tests_run` against the plan's `## Files` entries: if the plan adds a test file under a path like `tests/integration/**` or `**/test_*.py`, there must be a `tests_run` entry that invoked it (directly or via an enclosing pytest target).
+   e. **Never mark `phase: complete` while an "expected" test command is missing from `tests_run`.** Cross-check `tests_run` against the plan's file list (v1: `## Files`; v2: `plan_io.read_files_touched(loc)` which reads `## All Files Touched` from the overview): if the plan adds a test file under a path like `tests/integration/**` or `**/test_*.py`, there must be a `tests_run` entry that invoked it (directly or via an enclosing pytest target).
 9. **If `<MAX_CODE_REVIEW_ROUNDS>` is `0`:** skip Phase: Review entirely. Proceed directly to Phase: Finalize.
 
 ### 7. Phase: Review
@@ -177,7 +177,7 @@ a. Compute the diff: `git diff <plan_start_hash>..HEAD` (read `plan_start_hash` 
 
 b. Read `_codeguide/Overview.md` if it exists, and `CONSTRAINTS.md` from repo root if it exists. These will be inlined into the prompt.
 
-c. Materialize the prompt template from `plugins/mill/doc/prompts/code-review.md` into `_millhouse/scratch/code-review-prompt-r<N>.md`, substituting `<DIFF>`, `<PLAN_CONTENT>` (read from `<PLAN_PATH>`), `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`. This file is used as `--prompt-file` by spawn-reviewer.py for tool-use recipes and retained for debugging traceability on bulk recipes (bulk recipes ignore it and use their own template).
+c. Materialize the prompt template from `plugins/mill/doc/prompts/code-review.md` into `_millhouse/scratch/code-review-prompt-r<N>.md`, substituting `<DIFF>`, `<PLAN_CONTENT>` (read via `plan_io.read_plan_content(loc)` — handles both v1 file and v2 directory), `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`. This file is used as `--prompt-file` by spawn-reviewer.py for tool-use recipes and retained for debugging traceability on bulk recipes (bulk recipes ignore it and use their own template).
 
 d. Resolve the reviewer name for round `N` from `<CODE_REVIEW_RESOLUTION_SNAPSHOT>`: look up integer key `N` (as string); fall back to `default`. The snapshot contains the `pipeline.code-review` block verbatim from the config (reviewer names, not model names). Each reviewer name resolves via `millpy.core.config.resolve_reviewer_name` internally, which reads `pipeline.code-review.<N>|default` with legacy fallback paths.
 

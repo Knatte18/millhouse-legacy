@@ -1,16 +1,374 @@
 # Plan File Format
 
-The plan file is the autonomous-execution contract written by `mill-go` Phase: Plan and consumed by Thread B (the implementer-orchestrator) per `implementer-brief.md`. It captures every decision and step needed to implement the task without further human interpretation.
+The plan is the autonomous-execution contract written by `mill-go` Phase: Plan and consumed by Thread B (the implementer-orchestrator) per `implementer-brief.md`. It captures every decision and step needed to implement the task without further human interpretation.
 
-**The plan file is the authoritative scope for Thread B.** Thread B reads this file and the codebase; it has no access to the discussion conversation or to Thread A's reasoning beyond what is written here. The plan must be self-contained at the document level and **each step card must be self-contained at the card level** (see "Atomicity Invariant" below).
+**The plan is the authoritative scope for Thread B.** Thread B reads this file and the codebase; it has no access to the discussion conversation or to Thread A's reasoning beyond what is written here. Each step card must be self-contained at the card level (see "Atomicity Invariant" below).
 
-## File Location
+## v2 Directory Layout (current format)
 
-`_millhouse/task/plan.md`
+For all new tasks, `mill-go` Phase: Plan writes a `_millhouse/task/plan/` directory:
 
-`mill-go` discovers this file via the `plan:` field in `_millhouse/task/status.md`. Thread B receives the path through its spawn brief.
+```
+_millhouse/task/
+├── plan/
+│   ├── 00-overview.md
+│   ├── 01-core.md
+│   ├── 02-tasks-worktree.md
+│   └── 03-backends.md
+├── discussion.md
+└── status.md
+```
 
-## Frontmatter
+Filename convention `NN-<slug>.md`: two-digit prefix for filesystem sort, hyphenated slug. `mill-go` reads the `batch-name:` frontmatter field — renames are safe.
+
+## `00-overview.md` — the shared backbone
+
+```markdown
+---
+kind: plan-overview
+task: <task title>
+verify: <build/test command, or "N/A">
+dev-server: <dev-server command, or "N/A">
+approved: false
+started: <UTC YYYYMMDD-HHMMSS>
+batches: [core, tasks-worktree, backends]
+---
+
+# <Task Title>
+
+## Context
+(Problem statement, approach framing, high-level what-and-why.)
+
+## Shared Constraints
+(Invariants that apply across every batch unless explicitly overridden.
+ One-line rule per bullet + brief rationale.)
+
+## Shared Decisions
+
+### Decision: <title>
+**Why:** Reasoning behind the choice.
+**Alternatives rejected:** What else was considered and why not.
+
+## Batch Graph
+
+```yaml
+batches:
+  core:
+    depends-on: []
+    summary: "Skeleton + core utilities."
+  tasks-worktree:
+    depends-on: [core]
+    summary: "tasks/ and worktree/ modules."
+  backends:
+    depends-on: [core]
+    summary: "Backend Protocol + implementations."
+```
+
+## All Files Touched
+
+- plugins/mill/scripts/millpy/core/foo.py
+- plugins/mill/scripts/millpy/core/bar.py
+```
+
+### `00-overview.md` frontmatter fields
+
+| Field | Required | Description |
+|---|---|---|
+| `kind` | yes | Must be `plan-overview`. |
+| `task` | yes | Task title from `tasks.md`. |
+| `verify` | yes | Build/test command used by Thread B. |
+| `dev-server` | yes | Dev-server command, or the literal `N/A`. |
+| `approved` | yes | Starts `false`; Plan Review sets it `true`. Thread B refuses to spawn if `false`. |
+| `started` | yes | UTC timestamp generated via `date -u +"%Y%m%d-%H%M%S"`. Used by Phase: Setup for the staleness window. |
+| `batches` | yes | Inline YAML list of batch slugs in filename order. `batches: [core, tasks-worktree, backends]` — square-bracket form only. |
+
+### Sections in `00-overview.md`
+
+- **`# <Task Title>`** — single h1 matching the task title from `tasks.md`.
+- **`## Context`** — problem statement and approach framing. Decisions that affect more than one batch go here as `### Decision:` subsections (same format as `discussion.md`).
+- **`## Shared Constraints`** — invariants enforced across every batch. Reviewers and Thread B read these first.
+- **`## Shared Decisions`** — one `### Decision: <title>` subsection each. Batch files reference these instead of duplicating them.
+- **`## Batch Graph`** — YAML fenced block with a `batches:` dict. Each key is a batch slug mapped to `depends-on: [...]` and `summary: "..."`. The graph must be acyclic (`plan_validator` checks this).
+- **`## All Files Touched`** — flat bulleted list of every file any batch creates, modifies, or reads. Used by:
+  - `mill-go` Phase: Setup staleness check.
+  - The whole-plan reviewer's "read all source files" step.
+  - Thread B's exploration anchor in Phase: Implement.
+
+The overview file is never directly implemented. It has no step cards. It is read by every reviewer and every implementer.
+
+## `NN-<slug>.md` — one batch file per batch
+
+```markdown
+---
+kind: plan-batch
+batch-name: core
+batch-depends: []
+approved: false
+---
+
+# Batch 01: core utilities
+
+## Batch-Specific Context
+(Decisions specific to this batch only. Most batches have none — they inherit
+ from the overview's Shared Constraints and Shared Decisions. This heading must
+ be present even if the section body is empty.)
+
+## Batch Files
+
+- plugins/mill/scripts/millpy/core/plan_io.py
+- plugins/mill/scripts/millpy/tests/core/test_plan_io.py
+
+## Steps
+
+### Step 3: Create plan_io.py module with tests
+
+- **Creates:** `plugins/mill/scripts/millpy/core/plan_io.py`, `plugins/mill/scripts/millpy/tests/core/test_plan_io.py`
+- **Modifies:** none
+- **Reads:** `plugins/mill/scripts/millpy/core/config.py`, `plugins/mill/scripts/millpy/core/log_util.py`
+- **Requirements:**
+  - Requirement 1 (specific, testable)
+  - Requirement 2
+- **Explore:**
+  - `plugins/mill/scripts/millpy/core/config.py` — for the module style and `_parse_yaml_mapping` reuse.
+- **depends-on:** []
+- **TDD:** RED -> GREEN -> REFACTOR
+- **Test approach:** unit
+- **Key test scenarios:**
+  - Happy: resolve v2 directory → returns PlanLocation with kind="v2".
+  - Error: directory exists but missing 00-overview.md → raises ValueError.
+  - Edge: both plan.md and plan/ present → v2 wins, logs INFO warning.
+- **Commit:** `feat(plan_io): add plan_io module for v1/v2 plan location and read abstractions`
+```
+
+### Batch file frontmatter fields
+
+| Field | Required | Description |
+|---|---|---|
+| `kind` | yes | Must be `plan-batch`. |
+| `batch-name` | yes | Slug matching the overview's `batches:` list entry. |
+| `batch-depends` | yes | Inline list of batch slugs this batch depends on. `batch-depends: []` for independent batches. |
+| `approved` | yes | Starts `false`. Present for forward compatibility — W2 writes approval only to the overview. |
+
+### Sections in `NN-<slug>.md`
+
+- **`# Batch NN: <description>`** — h1 title for the batch.
+- **`## Batch-Specific Context`** — decisions scoped to this batch only. **The heading must be present even if empty.**
+- **`## Batch Files`** — strict subset of the overview's `## All Files Touched` that this batch touches.
+- **`## Steps`** — the step cards for this batch (see "Step Card Schema" below).
+
+## Step Card Schema (v2)
+
+Every v2 step card must contain these fields, in this order:
+
+```markdown
+### Step N: <short description>
+
+- **Creates:** `path/to/new/file` (or `none`)
+- **Modifies:** `path/to/existing/file` (or `none`)
+- **Reads:** `path/to/file/read/for/context` (one path per bullet, or `none`)
+- **Requirements:**
+  - Requirement 1
+  - Requirement 2
+- **Explore:**
+  - `path/to/exemplar/file` — what to learn from it and why
+- **depends-on:** [N, M] (or `[]` for no dependencies)
+- **TDD:** RED -> GREEN -> REFACTOR (omit if not test-driven)
+- **Test approach:** unit / integration / documentation review / smoke-test
+- **Key test scenarios:**
+  - Happy: <observable behavior on the success path>
+  - Error: <observable behavior on the failure path>
+  - Edge: <boundary condition or unusual input>
+- **Commit:** `type: commit message in conventional-commit form`
+```
+
+### Field rules (v2)
+
+- **Creates:** new files this step adds. Use `none` if the step only modifies existing files.
+- **Modifies:** existing files this step changes. Use `none` if purely additive. A card with both `Creates: none` and `Modifies: none` is a structural violation.
+- **Reads:** NEW in v2. Existing files the card reads for context — imports, helpers, exemplars, types — OR that a reviewer needs to verify the card. Must be complete. Every path in `Explore:` must also appear in `Reads:` (`plan_validator` checks this). A card that imports from file X but does not list X in `Reads:` is a BLOCKING plan-review finding.
+- **Explore:** purpose-driven exploration targets. Each entry pairs a path with **what to learn from it and why**. Every `Explore:` path must be a subset of `Reads:`.
+- **depends-on:** NEW in v2. List of prior step numbers this card depends on. Inline-list form: `[3, 5]` or `[]`. References must resolve to step numbers that precede this card (within this batch or in batches listed in `batch-depends:`). Written by the planner; read by W3's DAG executor.
+- **TDD:** present only when the step is test-driven.
+- **Test approach:** what kind of testing applies. Documentation steps use `documentation review`.
+- **Key test scenarios:** at minimum one Happy and one Error or Edge.
+- **Commit:** exact commit message in conventional-commit form.
+
+### Card numbering
+
+Card numbering is **global across batches**. Batch `01-core` contains cards 1–7, batch `02-tasks-worktree` starts at 8, etc. Within a batch, cards are numbered in filename order, not dependency order. `plan_validator` enforces global uniqueness with no gaps.
+
+### `touches-files:` is derived, not declared
+
+v2 cards do NOT have a `touches-files:` field. The write-set (`Creates ∪ Modifies`) and read-set (`Reads`) are declared separately. Tooling derives `touches-files` as needed — no "forgot to update one of two" failure mode.
+
+## Atomicity Invariant
+
+**Each step card must be implementable in isolation by a fresh agent that has read only the card and the repo.**
+
+### The extraction test
+
+> Rip out one step card. Hand it (and only it) to a fresh agent that has not read the rest of the plan. Tell the agent to implement that step. Can it succeed?
+
+If the answer is "no, it would need to read another step's `## Decisions` for context" — the card is not atomic enough. Rewrite it.
+
+### What the invariant requires of every card
+
+- **Absolute repo-rooted paths** in `Creates:`, `Modifies:`, and `Reads:`. No relative paths, no shorthand.
+- **Pattern exemplars in `Explore:`**, with file paths AND what the agent should learn from them.
+- **Self-contained `Requirements:`**. A requirement that reads "follow the pattern from Step 3" fails the extraction test. Inline the pattern or restate it.
+- **Self-contained `Commit:` message**. No back-references to other commits.
+
+### Verbosity is the feature
+
+Repetition across step cards (the same exemplar path cited in multiple `Explore:` lists, the same constraint restated in multiple `Requirements:` blocks) is acceptable and expected. Compression and DRY are anti-goals here.
+
+## Step Granularity
+
+Each step must touch a small, reviewable scope. Bundling unrelated file operations in a single step is forbidden. Examples of violations:
+
+- A step that creates a new doc and rewrites an unrelated skill in one commit.
+- A step whose `Modifies:` list spans more than ~5 unrelated paths.
+
+When a step's natural scope is large, split it into smaller steps. Each split step gets its own commit and its own atomic step card.
+
+## Backwards Compatibility
+
+- If `_millhouse/task/plan/` (directory) exists → **v2**.
+- Else if `_millhouse/task/plan.md` (file) exists → **v1**.
+- Both present → **v2 wins**; an INFO-level warning is logged. Never halts.
+- Neither → `plan_io.resolve_plan_path` returns `None`.
+
+`plan_io.py` (the reader shim) handles this resolution. All callers go through `plan_io` — no inline v1-vs-v2 branching at call sites.
+
+## v2 Worked Examples
+
+### Example `00-overview.md` (two-batch plan)
+
+```markdown
+---
+kind: plan-overview
+task: Add plan_io module
+verify: python -m pytest plugins/mill/scripts/millpy/tests
+dev-server: N/A
+approved: false
+started: 20260415-120000
+batches: [core, tests]
+---
+
+# Add plan_io module
+
+## Context
+
+This task adds `plan_io.py` to handle v1/v2 plan path resolution.
+
+### Decision: v2 wins on both-present
+**Why:** Prevents confusion when a migration is partially complete.
+**Alternatives rejected:** Halt on both-present (overly strict).
+
+## Shared Constraints
+
+- Use `log()` from `millpy.core.log_util` — do NOT import Python's stdlib `logging`.
+- All paths use forward slashes (Path.as_posix()) for Windows compatibility.
+
+## Shared Decisions
+
+(None beyond those in ## Context.)
+
+## Batch Graph
+
+```yaml
+batches:
+  core:
+    depends-on: []
+    summary: "plan_io module implementation."
+  tests:
+    depends-on: [core]
+    summary: "Unit tests for plan_io."
+```
+
+## All Files Touched
+
+- plugins/mill/scripts/millpy/core/plan_io.py
+- plugins/mill/scripts/millpy/tests/core/test_plan_io.py
+```
+
+### Example `01-core.md` (two cards)
+
+```markdown
+---
+kind: plan-batch
+batch-name: core
+batch-depends: []
+approved: false
+---
+
+# Batch 01: plan_io implementation
+
+## Batch-Specific Context
+
+(None — all constraints in the overview apply.)
+
+## Batch Files
+
+- plugins/mill/scripts/millpy/core/plan_io.py
+
+## Steps
+
+### Step 1: Create plan_io.py with PlanLocation dataclass and resolve_plan_path
+
+- **Creates:** `plugins/mill/scripts/millpy/core/plan_io.py`
+- **Modifies:** none
+- **Reads:** `plugins/mill/scripts/millpy/core/config.py`, `plugins/mill/scripts/millpy/core/log_util.py`
+- **Requirements:**
+  - Dataclass `PlanLocation(kind: Literal["v1","v2"], path: Path, overview: Path|None, batches: list[Path])`.
+  - `resolve_plan_path(task_dir: Path) -> PlanLocation | None` — v2 if `task_dir/"plan"` is a directory, v1 if `task_dir/"plan.md"` is a file, both → v2 + INFO warning, neither → None.
+- **Explore:**
+  - `plugins/mill/scripts/millpy/core/config.py` — module style, `_parse_yaml_mapping` for frontmatter parsing reference.
+  - `plugins/mill/scripts/millpy/core/log_util.py` — `log()` signature to use for the both-present warning.
+- **depends-on:** []
+- **TDD:** RED -> GREEN -> REFACTOR
+- **Test approach:** unit
+- **Key test scenarios:**
+  - Happy: `task_dir` has `plan/` with `00-overview.md` → `PlanLocation(kind="v2", ...)`.
+  - Edge: both present → v2 wins, INFO warning logged to stderr (check via capsys, not caplog).
+  - Edge: neither present → `None`.
+- **Commit:** `feat(plan_io): add PlanLocation dataclass and resolve_plan_path`
+
+### Step 2: Add read helpers to plan_io.py
+
+- **Creates:** none
+- **Modifies:** `plugins/mill/scripts/millpy/core/plan_io.py`
+- **Reads:** `plugins/mill/scripts/millpy/core/plan_io.py`, `plugins/mill/doc/formats/plan.md`
+- **Requirements:**
+  - `read_plan_content(loc) -> str` — v1: file text verbatim; v2: concatenated with `"=== <path> ===\n\n"` headers and `"\n\n---\n\n"` separators, no trailing separator on the last file.
+  - `read_files_touched(loc) -> list[str]` — v1: parse `## Files` bullets; v2: parse `## All Files Touched` bullets in `00-overview.md`.
+  - `read_approved(loc) -> bool`, `write_approved(loc, value) -> None`.
+  - `read_started(loc) -> str`, `read_verify(loc) -> str`, `read_dev_server(loc) -> str | None`.
+- **Explore:**
+  - `plugins/mill/scripts/millpy/core/plan_io.py` — the PlanLocation structure from Step 1 to dispatch on `loc.kind`.
+- **depends-on:** [1]
+- **Test approach:** unit
+- **Key test scenarios:**
+  - Happy v2: `read_plan_content` returns `=== plan/00-overview.md ===\n\n...\n\n---\n\n=== plan/01-core.md ===\n\n...` (final file without trailing separator).
+  - Happy: `write_approved` flips the frontmatter field without touching any other line.
+  - Edge: `read_dev_server` returns `None` for `dev-server: N/A`.
+- **Commit:** `feat(plan_io): add read/write helpers`
+```
+
+## Relationship to Other Documents
+
+- `plan_io.py` — the reader shim that resolves v1 vs v2 paths. All callers use this module; no inline path logic.
+- `plan_validator.py` — the structural checker. Called at plan-write time (by Phase: Plan) and at pre-dispatch time (by `spawn_reviewer.py`).
+- `plan-review.md` — the reviewer protocol. Reviewer prompts are materialized per-mode (v1 / v2 per-batch / v2 whole-plan) using sentinel `N/A` tokens.
+- `implementer-brief.md` — Thread B's consumer. Thread B receives `<PLAN_PATH>` which may be a file (v1) or directory (v2) and uses `plan_io` to read it.
+
+---
+
+## v1 Legacy Format
+
+v1 uses a single `_millhouse/task/plan.md` file. In-flight v1 tasks are read via `plan_io.resolve_plan_path` which dispatches on `loc.kind == "v1"`. New tasks always use v2.
+
+### v1 Frontmatter
 
 ```yaml
 ---
@@ -21,148 +379,23 @@ started: <UTC YYYYMMDD-HHMMSS>
 ---
 ```
 
-- `verify:` is copied from the discussion file's `## Config` section. Used by Thread B for the test baseline and the full verification step.
-- `dev-server:` is copied from the same section. Optional reference for UI tasks.
-- `approved:` starts as `false`. Plan Review flips it to `true` when the reviewer (or the orchestrator after fixer rounds) is satisfied. Thread B refuses to spawn if `approved: false`.
-- `started:` must be generated via shell `date -u +"%Y%m%d-%H%M%S"` (see `@mill:cli` timestamp rules — never guess timestamps). Used by `mill-go` Phase: Setup to compute the staleness check window: any commit to a file in `## Files` newer than this timestamp triggers the staleness halt.
+### v1 Mandatory Sections
 
-## Mandatory Sections
+`## Context`, `## Files`, `## Steps`.
 
-### `# <Task Title>`
-
-Single h1, matches the task title from `tasks.md`.
-
-### `## Context`
-
-Summary of the problem and what was discussed. This is what reviewers and Thread B read first.
-
-Inside `## Context`, one `### Decision: <title>` subsection per significant design choice. Each decision must contain:
-
-```markdown
-### Decision: <title>
-**Why:** Reasoning behind the choice.
-**Alternatives rejected:** What else was considered and why not.
-```
-
-These are copied from the discussion file's `## Decisions` section. The plan reviewer checks `Why:` and `Alternatives rejected:` for completeness — omitting them means reviewers review in a vacuum.
-
-### `## Files`
-
-Bullet list of every file the plan touches (creates, modifies, or deletes). Used by:
-
-- `mill-go` Phase: Setup staleness check (any commit to these files since `started:` triggers a halt).
-- The plan-reviewer's "read all source files referenced in the plan's `## Files` section" step.
-- Thread B's exploration anchor in Phase: Implement.
-
-Use repo-relative paths (no leading `/`, no `./` prefix).
-
-### `## Steps`
-
-The implementation steps, in execution order. Each step is one `### Step N: <description>` heading followed by a step card (see "Step Card Schema" below).
-
-Steps are 1-indexed and execute sequentially. Thread B does not parallelize.
-
-## Step Card Schema
-
-Every step card must contain these fields, in this order:
+### v1 Step Card Schema
 
 ```markdown
 ### Step N: <short description>
 
-- **Creates:** `path/to/new/file` (or `none`)
-- **Modifies:** `path/to/existing/file` (or `none`)
-- **Requirements:**
-  - Requirement 1 (specific, testable, and complete enough to implement without further interpretation)
-  - Requirement 2
-- **Explore:**
-  - `path/to/exemplar/file` — what to learn from it and why
-  - `path/to/related/file` — what to look for and why
-- **TDD:** RED -> GREEN -> REFACTOR (omit if not test-driven)
-- **Test approach:** unit / handler-level / browser / documentation review / smoke-test
-- **Key test scenarios:**
-  - Happy: <observable behavior on the success path>
-  - Error: <observable behavior on the failure path>
-  - Edge: <boundary condition or unusual input>
-- **Commit:** `type: commit message in conventional-commit form`
+- **Creates:** `path` (or `none`)
+- **Modifies:** `path` (or `none`)
+- **Requirements:** ...
+- **Explore:** `path` — what to learn
+- **TDD:** RED -> GREEN -> REFACTOR (optional)
+- **Test approach:** ...
+- **Key test scenarios:** ...
+- **Commit:** `type: message`
 ```
 
-### Field rules
-
-- **Creates:** the new files this step adds. Use `none` if the step only modifies existing files. A step that is purely additive (only `Creates:`) is valid; in that case `Modifies:` must read `none`.
-- **Modifies:** the existing files this step changes. Use `none` if the step is purely additive. A step with both `Creates: none` and `Modifies: none` is a structural violation — it does nothing.
-- **Requirements:** the contract for the step. Each requirement must be specific enough to implement and testable enough that a reviewer can decide whether the diff meets it. Vague language ("handle errors properly", "make it fast") is not a requirement.
-- **Explore:** purpose-driven exploration targets. Each entry pairs a path with **what to learn from it and why**. Generic ("read the codebase") fails. Specific ("read `plugins/mill/doc/prompts/discussion-review.md` for the prompt-template format we are mirroring") passes.
-- **TDD:** present only when the step is test-driven. When present, Thread B follows RED → GREEN → REFACTOR strictly: write the failing test first, confirm it fails, implement minimum code to pass, refactor with tests green.
-- **Test approach:** what kind of testing applies to this step. Documentation steps use `documentation review`. Script-only steps use `smoke-test` (manual invocation) or `structural review`.
-- **Key test scenarios:** at minimum one Happy and one Error or Edge. Reviewers flag happy-only test coverage as BLOCKING.
-- **Commit:** the exact commit message Thread B will use. Conventional commit form. Used by Thread B for both committing and for the Post-Setup resume sub-protocol's git-log-based step detection.
-
-## Atomicity Invariant
-
-**Each step card must be implementable in isolation by a fresh agent that has read only the card and the repo.**
-
-This is the key discipline that distinguishes an atomic plan from a "context-shared" plan. The plan as a whole still has `## Context` and `## Decisions` for human review and reviewer evaluation, but **each step card must survive the extraction test**.
-
-### The extraction test
-
-> Rip out one step card. Hand it (and only it) to a fresh agent that has not read the rest of the plan. Tell the agent to implement that step. Can it succeed?
-
-If the answer is "no, it would need to read another step's `## Decisions` for context" or "no, the path in `Modifies:` is ambiguous without the `## Files` list" — the card is **not atomic enough**. Rewrite it.
-
-### What the invariant requires of every card
-
-- **Absolute repo-rooted paths** in `Creates:` and `Modifies:`. No relative paths, no shorthand. `plugins/mill/doc/formats/plan.md` — not `plan-format.md` and not `./plan.md`.
-- **Pattern exemplars in Explore:**, with file paths AND what the agent should learn from them. The agent needs to know which existing pattern to mirror without reading every other step.
-- **Self-contained Requirements.** A requirement that reads "follow the pattern from Step 3" fails the extraction test. Inline the pattern or restate it.
-- **Self-contained Commit message.** No back-references to other commits.
-
-### Verbosity is the feature
-
-Repetition across step cards (the same exemplar path cited in multiple `Explore:` lists, the same constraint restated in multiple `Requirements:` blocks) is acceptable and expected. The whole point is to let a fresh agent read one card and implement without referencing other cards. Compression and DRY are anti-goals here.
-
-## Step Granularity
-
-Each step must touch a small, reviewable scope. Bundling unrelated file operations in a single step is forbidden — flag as a structural violation. Examples of violations:
-
-- A step that creates a new doc and rewrites an unrelated skill in one commit.
-- A step that modifies five files in five different subdirectories with no shared theme.
-- A step whose `Modifies:` list spans more than ~5 unrelated paths.
-
-`validation.md` documents this heuristic. Reviewers enforce it during plan review.
-
-When a step's natural scope is large, split it into smaller steps with explicit ordering. Each split step gets its own commit, its own test scenarios, and its own atomic step card.
-
-## Relationship to Other Documents
-
-- The plan is fed by **`discussion-format.md`** (the discussion file). `mill-go` Phase: Plan reads the discussion to write the plan.
-- The plan is consumed by **`implementer-brief.md`** (Thread B's prompt). Thread B reads the plan to implement.
-- The plan is reviewed via **`plan-review.md`** (the reviewer protocol). The review-only reviewer reads the plan independently.
-- Validation rules for plan structure live in **`validation.md`** (`## plan.md` section).
-- The two-thread architecture and per-phase model resolution are documented in **`overview.md`**.
-
-## Worked Example: One Atomic Step Card
-
-```markdown
-### Step 7: Create spawn-agent.ps1
-
-- **Creates:** `plugins/mill/scripts/spawn-agent.ps1`
-- **Modifies:** none
-- **Requirements:**
-  - PowerShell script. Param block: `[Parameter(Mandatory=$true)][ValidateSet('reviewer','implementer')][string]$Role`, `[Parameter(Mandatory=$true)][string]$PromptFile`, `[Parameter(Mandatory=$true)][string]$ProviderName`, `[int]$MaxTurns`, `[string]$WorkDir = $PWD`.
-  - Defaults: `-MaxTurns` defaults by role (`reviewer = 20`, `implementer = 200`).
-  - Synchronous from the script's perspective. No `Start-Process`, no `Start-Job`, no detachment. Backgrounding is the Bash tool's responsibility.
-  - Backend dispatch: `opus`, `sonnet`, `haiku` → claude backend (uses `claude -p --model <name>`). Anything else → exit 3 with stderr "[spawn-agent] Provider '<name>' not implemented in this task."
-  - Claude backend pipes the prompt file to `claude -p --model <model> --max-turns <max> --output-format json` via stdin. Captures stdout, parses JSON, extracts `result`. Empty/unparseable result → exit 1.
-  - Stdout reserved for the final JSON line. All informational logging goes to stderr.
-- **Explore:**
-  - `git show 0d15316:plugins/mill/scripts/spawn-agent.ps1` — lift the stdin-pipe-to-claude pattern and the prompt-file-existence check.
-  - `plugins/mill/scripts/mill-spawn.ps1` — local PowerShell style: param block, `$ErrorActionPreference`, error handling.
-- **Test approach:** smoke-test (manual invocation), structural review.
-- **Key test scenarios:**
-  - Happy: `powershell.exe -File plugins/mill/scripts/spawn-agent.ps1 -Role reviewer -PromptFile <fake> -ProviderName ollama-7b` exits 3 with the "not implemented" stderr message.
-  - Error: missing `-PromptFile` causes a parameter-binding error (exit non-zero).
-  - Edge: stdout when invoked with `-ProviderName ollama-7b` is empty — the not-implemented error goes to stderr only.
-- **Commit:** `feat: add spawn-agent.ps1 unified subagent spawn script`
-```
-
-This card is implementable by a fresh agent: paths are absolute, exemplars cite specific files with what to learn, requirements are testable, scenarios cover happy + error + edge, commit message is verbatim.
+v1 cards have no `Reads:` field and no `depends-on:` field. The `plan_validator` v2-only checks (`Explore:` ⊆ `Reads:`, card numbering uniqueness, `batch-depends:` resolution) do not apply to v1 plans. Atomicity invariant and step granularity heuristics are unchanged from v1 to v2.

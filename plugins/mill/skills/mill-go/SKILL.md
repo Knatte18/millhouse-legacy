@@ -89,21 +89,26 @@ mill-go proceeds through named phases. Each phase updates the YAML code block in
 
 0. Read the discussion file for all context: problem, approach, decisions, constraints, technical context, testing strategy, Q&A log, config.
 
-1. **Write the implementation plan.** Generate the timestamp via shell (see `@mill:cli` timestamp rules — never guess timestamps):
+1. **Write the implementation plan in v2 directory format.** Generate the timestamp via shell (see `@mill:cli` timestamp rules — never guess timestamps):
    ```bash
    TS=$(date -u +"%Y%m%d-%H%M%S")
    ```
    Use `$TS` for the `started:` frontmatter field.
 
-   Write the plan to `_millhouse/task/plan.md` per the schema in `plugins/mill/doc/formats/plan.md`. **Each step card must satisfy the atomicity invariant** — the extraction test in `plan-format.md` must pass for every card. Verbosity is the feature; repetition across cards is acceptable when it lets a fresh agent implement one card without reading another.
+   **Decompose the work into batches.** A batch is a cohesive unit of work that can be reviewed and (optionally) implemented independently. Typical decompositions: (a) one batch for the whole task when the task is small, (b) "core" + "tasks" + "tests" when the task has layered dependencies. Each batch must declare `batch-depends: [<slug>, ...]` listing other batches it depends on.
 
-   **Writing `## Context`:** Copy decisions from the discussion file's `## Decisions` section. Each `### Decision:` subsection must have `**Why:**` and `**Alternatives rejected:**`. These are what reviewers check against.
+   Write the plan to `_millhouse/task/plan/` per the v2 schema in `plugins/mill/doc/formats/plan.md`:
 
-   Include quality & testing strategy from the discussion file. Each step touches a small, reviewable scope. Never bundle unrelated file operations into a single step.
+   - **`_millhouse/task/plan/00-overview.md`** — frontmatter (`kind: plan-overview`, `task`, `verify`, `dev-server`, `approved: false`, `started: $TS`, `batches: [<slug1>, <slug2>, ...]`), then `## Context` (copy decisions from discussion), `## Shared Constraints`, `## Shared Decisions`, `## Batch Graph` (YAML block), `## All Files Touched` (unified list across all batches).
+   - **`_millhouse/task/plan/01-<slug>.md`**, `02-<slug>.md`, etc. — one file per batch, frontmatter (`kind: plan-batch`, `batch-name`, `batch-depends`, `approved: false`), then `## Batch-Specific Context`, `## Batch Files`, `## Steps` (step cards for this batch only).
+
+   **Each step card must satisfy the atomicity invariant** — the extraction test in `plan-format.md` must pass for every card. Verbosity is the feature; repetition is acceptable when it lets a fresh agent implement one card without reading another. Each v2 card must include `Reads:` (non-empty) and `depends-on:` fields. Step numbers must be globally unique across all batch files.
+
+   **Writing `## Context` / `## Shared Decisions`:** Copy decisions from the discussion file's `## Decisions` section. Each `### Decision:` subsection must have `**Why:**` and `**Alternatives rejected:**`. These are what reviewers check against.
 
    Write the full plan autonomously --- no incremental approval checkpoints.
 
-   Update the YAML code block in status.md: add `plan: _millhouse/task/plan.md`.
+   Update the YAML code block in status.md: add `plan: _millhouse/task/plan` (directory path, no `.md` suffix).
 
 ### Phase: Plan Review (BLOCKING GATE) (round N/max_plan_review_rounds)
 
@@ -117,60 +122,110 @@ mill-go proceeds through named phases. Each phase updates the YAML code block in
 
 **Verification:** You MUST have spawned the plan-reviewer before proceeding to Phase: Setup. If you have not, go back and run Phase: Plan Review now.
 
-2. **Plan review loop:**
+2. **Plan review loop (v2 parallel N+1 fan-out):**
 
-   **Setup:** Ensure `_millhouse/task/reviews/` directory exists (`mkdir -p` if not). Initialize `prev_fixer_report_path` to empty (no previous fixer report on first round).
+   **Setup:** Ensure `_millhouse/task/reviews/` directory exists (`mkdir -p` if not). Resolve the plan location via `python -c "from millpy.core.plan_io import resolve_plan_path; ..."` or by checking whether `_millhouse/task/plan/` is a directory (v2) or `_millhouse/task/plan.md` exists (v1). The instructions below cover the v2 case; v1 falls through to the legacy single-reviewer path.
+
+   Read `batch_slugs` from the `batches:` field of `00-overview.md` frontmatter. Instantiate the loop object **once** before the first round:
+   ```python
+   from millpy.core.plan_review_loop import PlanReviewLoop, PlanOverview
+   loop = PlanReviewLoop(PlanOverview(batch_slugs=batch_slugs), max_rounds=max_plan_review_rounds)
+   ```
+
+   **v2 per-batch parallel fan-out:**
 
    a. Report to user: **"Plan Review --- round N/&lt;max_plan_review_rounds&gt;"** (where N is the current round number, starting at 1)
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists.
 
-   c. **Resolve the reviewer name for round N.** Prefer `pipeline.plan-review.<N>` from `_millhouse/config.yaml`; if absent, fall back to `pipeline.plan-review.default`. The resolver (`millpy.core.config.resolve_reviewer_name`) reads legacy `review-modules.plan.*` and `models.plan-review.*` paths as a migration-window fallback, and applies the legacy ensemble-name alias table on return. The integer key is compared as a string.
+   c. **Resolve the reviewer name for round N.** Prefer `pipeline.plan-review.<N>` from `_millhouse/config.yaml`; if absent, fall back to `pipeline.plan-review.default`. The resolver (`millpy.core.config.resolve_reviewer_name`) reads legacy paths as a migration-window fallback and applies the ensemble-name alias table on return.
 
-   d. **Materialize the prompt.** Read the prompt template from `plugins/mill/doc/prompts/plan-review.md`. Substitute `<PLAN_FILE_PATH>` (absolute path to `_millhouse/task/plan.md`), `<TASK_TITLE>` (from status.md), `<CONSTRAINTS_CONTENT>` (CONSTRAINTS.md content or `(no CONSTRAINTS.md)`), and `<N>` (current round number). Write the materialized prompt to `_millhouse/scratch/plan-review-prompt-r<N>.md`. **Do NOT inline the plan content** — the reviewer reads the plan file independently.
+   d. **Advance the loop and spawn all N+1 reviewers in parallel.** Call `slices = loop.next_round_plan()` to increment the round counter and obtain the slice list (`["batch-<slug>", ..., "whole-plan"]`). Use `run_in_background: true` for all but the last, then Monitor each.
 
-   e. **Spawn the plan-reviewer.** Invoke via Bash (synchronous, not backgrounded):
+      **Per-batch reviewers** — one per batch file `_millhouse/task/plan/NN-<slug>.md`:
+
+      Before each per-batch spawn, materialize the prompt:
+      1. Read the Per-Batch Mode section from `plugins/mill/doc/prompts/plan-review.md`.
+      2. Substitute `<PLAN_OVERVIEW_PATH>`, `<PLAN_BATCH_PATH>`, `<BATCH_NAME>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<N>`.
+      3. Write to `_millhouse/scratch/plan-review-prompt-r<N>-<slug>.md`.
+
       ```bash
-      python plugins/mill/scripts/spawn_reviewer.py --reviewer-name <reviewer-name> --prompt-file _millhouse/scratch/plan-review-prompt-r<N>.md --phase plan --round <N>
+      python plugins/mill/scripts/spawn_reviewer.py \
+        --reviewer-name <reviewer-name> \
+        --prompt-file _millhouse/scratch/plan-review-prompt-r<N>-<slug>.md \
+        --phase plan \
+        --round <N> \
+        --plan-overview _millhouse/task/plan/00-overview.md \
+        --plan-batch _millhouse/task/plan/NN-<slug>.md
       ```
 
-   f. **Parse the JSON line** from the script's stdout: `{"verdict": "APPROVE" | "REQUEST_CHANGES" | "UNKNOWN", "review_file": "<absolute-path>"}`.
+      **Whole-plan reviewer** (exactly one):
 
-   g. If verdict is **APPROVE**: set `approved: true` in plan frontmatter. Update the YAML code block in status.md: `phase: planned`. Use the Edit tool to insert `plan-review-r<N>  <timestamp>` and then `planned  <timestamp>` on new lines before the closing ` ``` ` of the timeline text block in status.md. Proceed to Phase: Setup. Do not read the review file.
+      Before the whole-plan spawn, materialize the prompt:
+      1. Read the Whole-Plan Mode section from `plugins/mill/doc/prompts/plan-review.md`.
+      2. Substitute `<PLAN_DIR_PATH>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<N>`.
+      3. Write to `_millhouse/scratch/plan-review-prompt-r<N>-whole.md`.
 
-   **UNKNOWN verdict fallback (C.2).** If verdict is `UNKNOWN`, the reviewer pipeline failed to recover a recognizable verdict from the worker's output. Do not halt — read the review file at `review_file` and parse its YAML frontmatter `verdict:` field (case-insensitive). If the frontmatter reports `APPROVE`, continue as if the pipeline had returned APPROVE (set `approved: true` and proceed). If the frontmatter reports `REQUEST_CHANGES` (or `GAPS_FOUND`), continue as if the pipeline had returned REQUEST_CHANGES and drop into the fixer branch below. If the frontmatter `verdict:` field is absent, unparseable, or itself says `UNKNOWN`, halt with `Plan reviewer verdict is UNKNOWN and the review file frontmatter is also unparseable. Review file: <path>. Halting; manual intervention required.` Post-W1 this path should be rare — `millpy.core.verdict.extract_verdict_from_text` handles fence-wrapped JSON, frontmatter, and legacy VERDICT: prefix lines — but the fallback stays as a defensive belt-and-suspenders.
+      ```bash
+      python plugins/mill/scripts/spawn_reviewer.py \
+        --reviewer-name <reviewer-name> \
+        --prompt-file _millhouse/scratch/plan-review-prompt-r<N>-whole.md \
+        --phase plan \
+        --round <N> \
+        --plan-dir-path _millhouse/task/plan/
+      ```
 
-   h. If verdict is **REQUEST_CHANGES**:
+      Collect each result: `{"verdict": ..., "review_file": ...}`.
+      The whole-plan slice_id for aggregation is `"whole-plan"`.
+
+   e. **Collect verdicts and advance the loop.** Build a `verdicts` dict mapping each slice_id (e.g. `"batch-core"`, `"whole-plan"`) to its verdict (`"APPROVE"` or `"REQUEST_CHANGES"`). If all slices approved, call:
+      ```python
+      outcome = loop.record_round_result(verdicts, fixer_report_path=None)
+      # outcome == "APPROVED" → step 2f
+      ```
+      If any slice rejected, proceed to step 2h to apply fixes and write the fixer report, then call:
+      ```python
+      outcome = loop.record_round_result(verdicts, fixer_report_path)
+      # outcome is one of: "APPROVED", "CONTINUE", "BLOCKED_NON_PROGRESS", "BLOCKED_MAX_ROUNDS"
+      ```
+
+   f. **On `outcome == "APPROVED"`:** set `approved: true` in `_millhouse/task/plan/00-overview.md` frontmatter. Update the YAML code block in status.md: `phase: planned`. Insert `plan-review-r<N>  <timestamp>` and then `planned  <timestamp>` before the closing ` ``` ` of the timeline text block. Proceed to Phase: Setup.
+
+   g. **UNKNOWN verdict fallback (C.2).** If any batch returns `UNKNOWN`, read the batch's review file and parse its YAML frontmatter `verdict:` field. If APPROVE, treat as APPROVE for that batch. If REQUEST_CHANGES, treat as REQUEST_CHANGES. If absent or UNKNOWN, halt: `Plan reviewer verdict is UNKNOWN and review file frontmatter is unparseable. Halting; manual intervention required.`
+
+   h. **On any slice returning `"REQUEST_CHANGES"`:** For each slice whose verdict is `"REQUEST_CHANGES"` (filter the `verdicts` dict from step 2d):
       1. **Invoke the `mill-receiving-review` skill** via the Skill tool. This is mandatory before evaluating any finding — it loads the decision tree you must apply.
-      2. Read the review report from `review_file`.
-      3. For each BLOCKING finding, apply the receiving-review decision tree: VERIFY accuracy (cite actual code if inaccurate), then HARM CHECK (breaks functionality / conflicts with documented design decision / destabilizes out-of-scope code). If none apply: FIX IT. If harm found: PUSH BACK with cited evidence.
-      4. Apply fixes inline to the plan file. Check systemic implications — a fix in one step may require updates to other steps or decisions.
-      5. Write a fixer report to `_millhouse/task/reviews/<timestamp>-plan-fix-r<N>.md` with `## Fixed` and `## Pushed Back` sections. Format:
+      2. Read the review report from that slice's `review_file`.
+      3. For each BLOCKING finding, apply the receiving-review decision tree: VERIFY accuracy (cite actual code if inaccurate), then HARM CHECK (breaks functionality / conflicts with documented design decision). If none apply: FIX IT. If harm found: PUSH BACK with cited evidence.
+      4. Apply fixes inline to the affected batch file (and `00-overview.md` if shared context changed). Check systemic implications — a fix in one batch may require updates to other batches.
+      5. Write ONE consolidated fixer report `_millhouse/task/reviews/<timestamp>-plan-fix-r<N>.md` with `## Fixed` and `## Pushed Back` sections. The `## Pushed Back` section must have a `### <slice-id>` subsection for every slice that was reviewed this round — use `(empty — slice approved this round)` as the body for any slice that approved or had no pushed-back findings:
          ```markdown
-         # Plan Fix Report --- Round <N>
-
-         ## Fixed
-         - Finding <N>: what was changed and where in the plan
-
          ## Pushed Back
-         - Finding <N>: evidence why the fix would cause harm (cite code/docs)
+         ### batch-core
+         - Finding X: description (or "(empty — slice approved this round)")
+         ### whole-plan
+         (empty — slice approved this round)
          ```
+      6. Call `outcome = loop.record_round_result(verdicts, fixer_report_path)` and route: `"CONTINUE"` → step 2k; `"BLOCKED_NON_PROGRESS"` → step 2i; `"BLOCKED_MAX_ROUNDS"` → step 2j.
 
-   i. **Progress detection.** Update `prev_fixer_report_path` to the current fixer report path. If `prev_fixer_report_path` was set before this round: read the `## Pushed Back` section from the previous fixer report and compare it against the `## Pushed Back` section from the current fixer report. If the pushed-back findings are identical (same finding numbers and descriptions), non-progress is detected: update the YAML code block in `_millhouse/task/status.md` with `blocked: true`, `blocked_reason: Plan review non-progress — agent pushed back identical findings in consecutive rounds`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Run the **Notification Procedure** with `BLOCKED: Plan review non-progress after consecutive rounds`. Escalate to user immediately rather than spending remaining rounds.
+   i. **On `outcome == "BLOCKED_NON_PROGRESS"`:** Non-progress detected by `PlanReviewLoop` — a requesting slice has identical pushed-back findings in consecutive rounds. Update status.md with `blocked: true`, `blocked_reason: Plan review non-progress — identical pushed-back findings in consecutive rounds`, `phase: blocked`. Insert `blocked  <timestamp>` in the timeline. Run the **Notification Procedure** with `BLOCKED: Plan review non-progress after consecutive rounds`. Escalate to user immediately.
 
-   j. Insert `plan-review-r<N>  <timestamp>` and `plan-fix-r<N>  <timestamp>` lines before the closing ` ``` ` of the timeline text block in status.md.
+   j. **On `outcome == "BLOCKED_MAX_ROUNDS"`** (max rounds exhausted): Update status.md with `blocked: true`, `blocked_reason: Plan review dispute after <max_plan_review_rounds> rounds`, `phase: blocked`. Insert `blocked  <timestamp>` in the timeline. Run the **Notification Procedure** with `BLOCKED: Plan review dispute after <max_plan_review_rounds> rounds`. Present remaining BLOCKING issues to user.
 
-   k. Re-spawn the reviewer with the **updated plan only**. Do NOT pass the fixer report path. The reviewer always starts fresh from the updated plan alone, with no context from prior rounds. Report: **"Plan Review --- round N/&lt;max_plan_review_rounds&gt;"**
+   k. Insert `plan-review-r<N>  <timestamp>` and `plan-fix-r<N>  <timestamp>` lines in the timeline text block.
 
-   l. Max `max_plan_review_rounds` rounds. If unresolved BLOCKING issues remain after all rounds: this likely indicates a design flaw rather than something fixable with another review round. Update the YAML code block in `_millhouse/task/status.md` with `blocked: true`, `blocked_reason: Plan review dispute after <max_plan_review_rounds> rounds`, `phase: blocked`. Use the Edit tool to insert `blocked  <timestamp>` before the closing ` ``` ` of the timeline text block. Run the **Notification Procedure** with `BLOCKED: Plan review dispute after <max_plan_review_rounds> rounds`. Present remaining BLOCKING issues to user for decision.
+   l. Re-spawn **all N+1 reviewers** (all batch slices + whole-plan) with the updated plan directory. Do not carry forward prior-round approvals — stale approvals are not trusted (a fix in one batch can invalidate the whole-plan reviewer's prior approval). The cost is the same wall time since all run in parallel. Report: **"Plan Review --- round N/&lt;max_plan_review_rounds&gt;"**
+
+   **v1 legacy single-file path** (if `_millhouse/task/plan.md` exists, no `plan/` directory):
+   Materialize the prompt from the v1-single template section of `plugins/mill/doc/prompts/plan-review.md`, substituting `<PLAN_FILE_PATH>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<N>`. Spawn a single reviewer with `--plan-path _millhouse/task/plan.md`. Fixer reports and progress detection work identically to the v2 path above (single "batch" named `plan`).
 
 ### Phase: Setup
 
 3. Record `PLAN_START_HASH=$(git rev-parse HEAD)`. Store in the YAML code block of `_millhouse/task/status.md` as `plan_start_hash:`. On resume, read from the YAML code block in status.md instead of re-computing.
 
-4. Read plan (path from the YAML code block in `_millhouse/task/status.md` `plan:` field). Read all files listed in `## Files`.
+4. Resolve the plan via `plan_io.resolve_plan_path(task_dir)` (where `task_dir = _millhouse/task/`). This returns a `PlanLocation` with `kind == "v1"` or `"v2"`. Read files via `plan_io.read_files_touched(loc)` — v1 reads `## Files`, v2 reads `## All Files Touched` from the overview. Also read `plan_io.read_verify(loc)`, `plan_io.read_dev_server(loc)`, and `plan_io.read_started(loc)`.
 
-5. **Staleness check.** Run `git log --since=<started> -- <file1> <file2> ...` using the `started:` timestamp from plan frontmatter and files from `## Files`.
+5. **Staleness check.** Run `git log --since=<started> -- <file1> <file2> ...` using the `started:` timestamp from `plan_io.read_started(loc)` and files from `plan_io.read_files_touched(loc)`.
    - No changes: proceed.
    - Minor changes (formatting, comments, unrelated areas): log warning in status.md, proceed.
    - Major changes (files restructured, APIs changed, interfaces modified): halt. Plan-stale revert:
@@ -185,11 +240,11 @@ mill-go proceeds through named phases. Each phase updates the YAML code block in
 ### Phase: Spawn Thread B
 
 8. **Materialize the implementer brief.** Read the brief template from `plugins/mill/doc/prompts/implementer-brief.md`. Substitute the runtime tokens listed in that file's "Substitution Tokens" table:
-   - `<PLAN_PATH>` → absolute path to `_millhouse/task/plan.md`
+   - `<PLAN_PATH>` → absolute path to the plan location: `_millhouse/task/plan` (v2 directory) or `_millhouse/task/plan.md` (v1 file). Use `plan_io.resolve_plan_path(task_dir).path` to get the authoritative path; this is the same `loc` resolved in Phase: Setup step 4.
    - `<STATUS_PATH>` → absolute path to `_millhouse/task/status.md`
    - `<WORK_DIR>` → output of `git rev-parse --show-toplevel`
    - `<REPO_ROOT>` → same as `<WORK_DIR>`
-   - `<VERIFY_CMD>` → the `verify:` value from plan frontmatter
+   - `<VERIFY_CMD>` → from `plan_io.read_verify(loc)` (handles v1 and v2)
    - `<MAX_CODE_REVIEW_ROUNDS>` → the resolved `max_code_review_rounds` value
    - `<CODE_REVIEW_RESOLUTION_SNAPSHOT>` → the `pipeline.code-review` block from `_millhouse/config.yaml`, copied verbatim (maps round numbers to reviewer names plus the `rounds` count and `default` entry).
    - `<TASK_TITLE>` → task title from status.md

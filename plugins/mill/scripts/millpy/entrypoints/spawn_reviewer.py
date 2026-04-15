@@ -98,6 +98,21 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Path to a file listing source files for bulk payload.",
     )
+    parser.add_argument(
+        "--plan-overview",
+        default=None,
+        help="Path to 00-overview.md for v2 per-batch plan review.",
+    )
+    parser.add_argument(
+        "--plan-batch",
+        default=None,
+        help="Path to NN-<slug>.md batch file for v2 per-batch plan review.",
+    )
+    parser.add_argument(
+        "--plan-dir-path",
+        default=None,
+        help="Path to plan/ directory for v2 whole-plan plan review (tool-use only).",
+    )
 
     args = parser.parse_args(argv)
 
@@ -134,6 +149,26 @@ def main(argv: list[str] | None = None) -> int:
             }))
             return 1
 
+    plan_overview_path = Path(args.plan_overview) if args.plan_overview else None
+    plan_batch_path = Path(args.plan_batch) if args.plan_batch else None
+    plan_dir_path = Path(args.plan_dir_path) if args.plan_dir_path else None
+
+    # plan_validator pre-dispatch gate (plan phase only)
+    if args.phase == "plan":
+        validation_result = _run_plan_validation(
+            plan_path=Path(args.plan_path) if args.plan_path else None,
+            plan_batch=plan_batch_path,
+            plan_dir_path=plan_dir_path,
+        )
+        if validation_result is not None:
+            log("spawn_reviewer", f"plan validation failed: {validation_result}")
+            print(json.dumps({
+                "verdict": "ERROR",
+                "review_file": None,
+                "error": validation_result,
+            }))
+            return 1
+
     # Dispatch
     try:
         result = run_reviewer(
@@ -145,6 +180,9 @@ def main(argv: list[str] | None = None) -> int:
             plan_start_hash=args.plan_start_hash,
             plan_path=Path(args.plan_path) if args.plan_path else None,
             files_from=Path(args.files_from) if args.files_from else None,
+            plan_overview=plan_overview_path,
+            plan_batch=plan_batch_path,
+            plan_dir_path=plan_dir_path,
         )
         print(json.dumps({
             "verdict": result.verdict,
@@ -176,6 +214,42 @@ def main(argv: list[str] | None = None) -> int:
             "error": str(exc),
         }))
         return 1
+
+
+def _run_plan_validation(
+    plan_path: Path | None,
+    plan_batch: Path | None,
+    plan_dir_path: Path | None,
+) -> str | None:
+    """Run plan_validator before dispatch. Return error string on failure, None on pass.
+
+    task_dir is always the canonical absolute path project_root()/_millhouse/task —
+    never derived from CLI args, which may be relative.
+    Returns None if no plan path arg was provided (nothing to validate).
+    """
+    from millpy.core.plan_io import resolve_plan_path
+    from millpy.core.plan_validator import validate
+
+    if plan_path is None and plan_batch is None and plan_dir_path is None:
+        return None
+
+    from millpy.core.paths import project_root
+    task_dir = project_root() / "_millhouse" / "task"
+
+    loc = resolve_plan_path(task_dir)
+    if loc is None:
+        return None
+
+    errors = validate(loc)
+    if not errors:
+        return None
+
+    blocking = [e for e in errors if e.severity == "BLOCKING"]
+    if not blocking:
+        return None
+
+    lines = [f"{e.location}: {e.message}" for e in blocking]
+    return f"Plan validation failed ({len(blocking)} BLOCKING error(s)):\n" + "\n".join(lines)
 
 
 def _print_reviewer_registries() -> None:
