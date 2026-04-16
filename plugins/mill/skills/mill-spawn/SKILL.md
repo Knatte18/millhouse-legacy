@@ -68,9 +68,9 @@ git push
 
 Locate `spawn_task.py` using three-tier resolution:
 
-1. **Plugin source** (works in the millhouse repo itself): `<repo-root>/plugins/mill/scripts/spawn_task.py`
-2. **Plugin cache** (works in any repo with mill plugin installed): `~/.claude/plugins/cache/millhouse/mill/<latest-version>/scripts/spawn_task.py`
-3. **Forwarding wrapper**: `_millhouse/mill-spawn.cmd` (written by `mill-setup`, delegates to the plugin-cache path)
+1. **Forwarding wrapper**: `_millhouse/mill-spawn.py` (written by `mill-setup`, resolves the plugin-cache path at runtime)
+2. **Plugin source** (works in the millhouse repo itself): `<repo-root>/plugins/mill/scripts/spawn_task.py`
+3. **Plugin cache** (works in any repo with mill plugin installed): `~/.claude/plugins/cache/millhouse/mill/<latest-version>/scripts/spawn_task.py`
 
 Run via bash:
 

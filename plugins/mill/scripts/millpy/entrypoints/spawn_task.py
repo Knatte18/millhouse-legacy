@@ -6,7 +6,7 @@ creates the worktree, writes status.md, discussion placeholder, and
 updates the parent's tasks.md.
 
 Live after W1 Step 10 skill-text flip: called directly by the mill-spawn
-skill and by the _millhouse/mill-spawn.cmd forwarding wrapper.
+skill via `_millhouse/mill-spawn.py` or direct plugin-source resolution.
 
 Prose-paragraph parser fix (Proposal 02 Fix C): tasks_md.parse handles both
 bullet-list and prose-paragraph task bodies.
@@ -255,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.vscode:
         print("Run mill-start in the new VS Code window to continue planning.")
     else:
-        print("Run mill-terminal from the parent terminal (_millhouse/mill-terminal.cmd or python plugins/mill/scripts/open_terminal.py) to open a Claude Code session.")
+        print("Run mill-terminal from the parent terminal (python _millhouse/mill-terminal.py) to open a Claude Code session.")
 
     # Emit the project path as the final stdout line (parity with PS1)
     print(str(project_path))

@@ -25,8 +25,7 @@ Read `_millhouse/scratch/issues.json`. If the file does not exist, stop and tell
 
 ```
 No issues file found. Run fetch_issues.py first:
-  python plugins/mill/scripts/fetch_issues.py
-  (or: .\_millhouse\fetch-issues.cmd from a project that has mill-setup wrappers installed)
+  python _millhouse/fetch-issues.py
 ```
 
 ---

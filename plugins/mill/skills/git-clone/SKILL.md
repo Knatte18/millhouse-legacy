@@ -137,25 +137,7 @@ git -C "$hub_path/.bare" show-ref --verify "refs/heads/<default-branch>" 2>/dev/
 
 If the command fails, report the error and stop.
 
-#### 2.11. Create mill-worktree forwarding wrapper
-
-Write `$hub_path/main/_millhouse/mill-worktree.cmd` with the following one-line content:
-
-```batch
-@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\worktree.py" %*
-```
-
-The wrapper delegates to `worktree.py` in the Claude Code plugin cache. A more robust version that picks the latest installed mill version on each invocation can be substituted at a later time; for bootstrap purposes the single-line form is sufficient.
-
-Commit and push the wrapper so it propagates to all worktrees via git:
-
-```bash
-git -C "$hub_path/main" add -f _millhouse/mill-worktree.cmd
-git -C "$hub_path/main" commit -m "chore: add mill-worktree forwarding wrapper"
-git -C "$hub_path/main" push
-```
-
-#### 2.12. Report
+#### 2.11. Report
 
 Tell the user:
 

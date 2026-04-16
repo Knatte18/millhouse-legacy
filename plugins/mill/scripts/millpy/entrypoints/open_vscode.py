@@ -6,7 +6,7 @@ then opens VS Code in the selected worktree. Applies the B.4
 project-within-worktree offset in nested-project layouts.
 
 Live after W1 Step 10 skill-text flip: called directly via
-_millhouse/mill-vscode.cmd or `python plugins/mill/scripts/open_vscode.py`.
+`_millhouse/mill-vscode.py` or `python plugins/mill/scripts/open_vscode.py`.
 """
 from __future__ import annotations
 

@@ -4,7 +4,7 @@ entrypoints/fetch_issues.py — GitHub issues fetcher for millpy (live).
 Fetches open GitHub issues and writes them to _millhouse/scratch/issues.json.
 
 Live after W1 Step 10 skill-text flip: called directly by the mill-inbox
-skill and by the _millhouse/fetch-issues.cmd forwarding wrapper.
+skill via `_millhouse/fetch-issues.py` or direct plugin-source resolution.
 """
 from __future__ import annotations
 

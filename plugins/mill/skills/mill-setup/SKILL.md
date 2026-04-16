@@ -105,55 +105,19 @@ runtime:
 
 ### Step 5: Create forwarding wrappers
 
-Create five `.cmd` forwarding wrappers in `_millhouse/`. Each is a one-line batch file that delegates to the corresponding Python entrypoint in the plugin cache.
+Generate five `.py` forwarding wrappers in `_millhouse/`. Each delegates to the corresponding entrypoint in the mill plugin cache, with runtime semver discovery (no hardcoded version).
 
-**Resolve the active plugin-cache version before writing wrappers.** The plugin cache places the mill plugin at `%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\` where `<version>` matches semver (e.g. `1.0.0`). mill-setup must list the subdirectories of `%USERPROFILE%\.claude\plugins\cache\millhouse\mill\`, filter to semver-looking names (ignore `*.bak` and anything else), pick the latest by string-sort-descending, and hardcode that version into every wrapper path. This avoids a version-discovery loop at invocation time (each `.cmd` invocation is a pure one-line `python` call) while still producing a correct absolute path at setup time.
+**Cleanup first.** Remove any legacy wrappers from `_millhouse/`: `.ps1` files (PowerShell-era: `mill-spawn`, `mill-worktree`, `mill-terminal`, `mill-vscode`, `fetch-issues`, plus historical variants `helm-spawn`, `millhouse-worktree`) and `.cmd` files (`mill-spawn.cmd`, `mill-worktree.cmd`, `mill-terminal.cmd`, `mill-vscode.cmd`, `fetch-issues.cmd`). Also remove any such legacy wrappers at cwd with matching names.
 
-If no semver subdirectory exists, print a hard error: `mill plugin not installed at %USERPROFILE%\.claude\plugins\cache\millhouse\mill\`. Do not fall back to an unversioned path — the plugin cache has no flat layout.
+**Template.** Read `plugins/mill/templates/wrapper.py`. For each wrapper, substitute `<ENTRYPOINT>` with the entrypoint module name and write to `_millhouse/`. Skip creation if the file already exists with the correct content.
 
-**Cleanup first.** Remove any legacy PowerShell wrapper files from `_millhouse/` if they exist. Match every file with extension `ps1` in the `_millhouse/` directory — legacy forwarding wrappers shipped as PowerShell scripts under the names `mill-spawn`, `mill-worktree`, `mill-terminal`, `mill-vscode`, `fetch-issues`, plus historical variants (`helm-spawn`, `millhouse-worktree`). Also remove any such legacy wrappers at cwd with matching names.
-
-**For each wrapper, skip creation if the file already exists with the correct content (including the resolved version segment).** Each file is a single line with the resolved `<version>` substituted in:
-
-#### 5a: mill-spawn.cmd
-
-Write `_millhouse/mill-spawn.cmd`:
-
-```batch
-@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\scripts\spawn_task.py" %*
-```
-
-#### 5b: fetch-issues.cmd
-
-Write `_millhouse/fetch-issues.cmd`:
-
-```batch
-@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\scripts\fetch_issues.py" %*
-```
-
-#### 5c: mill-worktree.cmd
-
-Write `_millhouse/mill-worktree.cmd`:
-
-```batch
-@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\scripts\worktree.py" %*
-```
-
-#### 5d: mill-terminal.cmd
-
-Write `_millhouse/mill-terminal.cmd`:
-
-```batch
-@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\scripts\open_terminal.py" %*
-```
-
-#### 5e: mill-vscode.cmd
-
-Write `_millhouse/mill-vscode.cmd`:
-
-```batch
-@python "%USERPROFILE%\.claude\plugins\cache\millhouse\mill\<version>\scripts\open_vscode.py" %*
-```
+| Wrapper file | `<ENTRYPOINT>` |
+|---|---|
+| `_millhouse/mill-spawn.py` | `spawn_task` |
+| `_millhouse/fetch-issues.py` | `fetch_issues` |
+| `_millhouse/mill-worktree.py` | `worktree` |
+| `_millhouse/mill-terminal.py` | `open_terminal` |
+| `_millhouse/mill-vscode.py` | `open_vscode` |
 
 **Plugin-cache junction check (detect-only, never mutate).** After writing the wrappers, check whether `%USERPROFILE%\.claude\plugins\cache\millhouse\mill` exists and resolves to a readable directory. If missing or dangling, print a warning line (NOT a hard error) telling the user to run the symlink-plugins repair script (`symlink-plugins` in the millhouse repo checkout) to repair it. **Do not modify the junction** — this is explicit user policy. No `New-Item -ItemType Junction`, no `Remove-Item` against the junction path.
 

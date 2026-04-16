@@ -7,7 +7,7 @@ project-within-worktree offset in nested-project layouts (see
 main() for details).
 
 Live after W1 Step 10 skill-text flip: called directly via
-_millhouse/mill-terminal.cmd or `python plugins/mill/scripts/open_terminal.py`.
+`_millhouse/mill-terminal.py` or `python plugins/mill/scripts/open_terminal.py`.
 """
 from __future__ import annotations
 

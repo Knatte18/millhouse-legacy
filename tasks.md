@@ -1,16 +1,18 @@
 # Tasks
 
-## [done] mill-go v2 (W3) — three-skill split + DAG-aware executor
 
-Second half of the rewrite. Splits today's `mill-go` into `mill-start` / `mill-plan` / `mill-go` with a pre-arm wait pattern. Rewrites `mill-go` as a DAG-aware layer-parallel executor: Thread A (Opus, in `mill-plan`) owns WHAT by writing cards with `depends-on:` metadata; Thread B (Opus, in `mill-go`) owns HOW by building the DAG, spawning Sonnet sub-agents per layer, running pytest per layer, and handling receiving-review. Adds a lightweight independence-signal check in `mill-start` Phase: Discussion (only prompts when the discussion touches pieces that genuinely need different merge schedules, cross-repo boundaries, or independent rollback — not a size-based heuristic, since W2's batching solves the size axis). Sets Sonnet as the default implementer floor with Haiku out of the default pipeline. Ships as a v2 batch-plan in the format delivered by W2 (dogfood #1 of the new format).
+## Self-reinforcement by automated bug-reporting and no hardcoded templates in skill files
 
-**Design doc:** [plugins/mill/doc/proposals/03-mill-go-v2.md](plugins/mill/doc/proposals/03-mill-go-v2.md)
+- Self-reinforcement: The two orchestrators (and potentailly also some of the other subthreads): IF a clear bug is detected by the thread, it can ITSELF invoke the "millhouse-issue" skill and report the bug. 
+Perhaps wait to do this until the thread's task is fully done. Then an accumulated reports can be destilled to create an accurate bug-issue for the millhous eto be set. 
+I can then manually pull down the issues, have Opus analyse them as an ensamble, and fix in one-go.
+
+- Do not hardcode templates in a skill: INGEN av skillene som oppretter filer skal ha hardkodet template. Jeg ser at f.eks step *Step 4c i mill-setup har en hardkodet "config". Vi har laget "millhouse-config.yaml" som en template som skal bruke i stedet. INGEN slik hardkodet template skal inn i noen skill. Det skal brukes en template-fil i stedet. Dette gjør det mye enklere å ender templaten. Sjekk også om det er noen andre skill som gjør dette. 
 
 
+## Planner-grouped plan review for large plans 
+- When a plan has 30+ cards, per-card bulk review + holistic tool-use review may not catch inter-group issues effectively. Add an optional Planner-grouped review mode where Planner creates ad-hoc review groups (overlapping subsets of cards) and spawns one reviewer per group in parallel. Same card can appear in multiple groups. Pure Planner-side change — no plan format changes needed.
 
-## Planner-grouped plan review for large plans
-
-When a plan has 30+ cards, per-card bulk review + holistic tool-use review may not catch inter-group issues effectively. Add an optional Planner-grouped review mode where Planner creates ad-hoc review groups (overlapping subsets of cards) and spawns one reviewer per group in parallel. Same card can appear in multiple groups. Pure Planner-side change — no plan format changes needed.
 
 ## Track task state across machines (W4 — needs design)
 
@@ -18,11 +20,3 @@ Invert the `_millhouse/` gitignore so task state (discussion, plan, status, revi
 
 **Design doc:** [plugins/mill/doc/proposals/04-track-task-state.md](plugins/mill/doc/proposals/04-track-task-state.md)
 
-
-
-## Self-reinforcement by automated bug-reporting
-
-Self-reinforcement: The two orchestrators (and potentailly also some of the other subthreads): IF a clear bug is detected by the thread, it can ITSELF invoke the "millhouse-issue" skill and report the bug. 
-Perhaps wait to do this until the thread's task is fully done. Then an accumulated reports can be destilled to create an accurate bug-issue for the millhous eto be set. 
-
-I can then manually pull down the issues, have Opus analyse them as an ensamble, and fix in one-go.

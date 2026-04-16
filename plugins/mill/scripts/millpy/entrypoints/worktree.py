@@ -4,7 +4,7 @@ entrypoints/worktree.py — Worktree creator for millpy (live).
 Creates a git worktree with millhouse setup (colors, .env copy, config).
 
 Live after W1 Step 10 skill-text flip: called directly via
-_millhouse/mill-worktree.cmd or `python plugins/mill/scripts/worktree.py`.
+`_millhouse/mill-worktree.py` or `python plugins/mill/scripts/worktree.py`.
 """
 from __future__ import annotations
 
