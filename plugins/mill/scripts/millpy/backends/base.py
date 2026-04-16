@@ -35,6 +35,7 @@ class ToolUseResult:
     exit_code: int
     raw_stdout: str
     raw_stderr: str
+    session_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +86,32 @@ class Backend(Protocol):
         ----------
         prompt:
             The full prompt text to send via stdin.
+        model:
+            Model identifier string.
+        effort:
+            Optional effort level (claude only).
+        max_turns:
+            Maximum number of tool-use turns before stopping.
+        """
+        ...
+
+    def dispatch_tool_use_resume(
+        self,
+        session_id: str,
+        prompt: str,
+        *,
+        model: str,
+        effort: str | None,
+        max_turns: int,
+    ) -> ToolUseResult:
+        """Resume a previous tool-use session with a new prompt.
+
+        Parameters
+        ----------
+        session_id:
+            Session ID returned by a previous dispatch_tool_use call.
+        prompt:
+            New prompt text to send to the resumed session via stdin.
         model:
             Model identifier string.
         effort:

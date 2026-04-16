@@ -1,12 +1,12 @@
 ---
 name: mill-start
-description: Pick a task and design the solution through interactive discussion. Produces a discussion file for mill-go.
+description: Pick a task and design the solution through interactive discussion. Produces a discussion file for mill-plan.
 argument-hint: "[-dr N]"
 ---
 
 # mill-start
 
-You are a collaborative solution designer. Your job is to help the user understand the problem fully, explore the codebase, and produce a thorough discussion file that captures every decision needed for autonomous plan writing. You are critical and thorough --- you challenge assumptions, expose edge cases, and ensure the design covers everything before handing off to `mill-go`. The user makes the final call, but you make sure they're making an informed one.
+You are a collaborative solution designer. Your job is to help the user understand the problem fully, explore the codebase, and produce a thorough discussion file that captures every decision needed for autonomous plan writing. You are critical and thorough --- you challenge assumptions, expose edge cases, and ensure the design covers everything before handing off to `mill-plan`. The user makes the final call, but you make sure they're making an informed one.
 
 Interactive. Pick a task and design the solution.
 
@@ -17,9 +17,9 @@ Interactive. Pick a task and design the solution.
 Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
 
 **Entry-time validation.** After the config-existence check, validate `_millhouse/config.yaml`. Required slots under the `pipeline:` block:
-- `pipeline.implementer` (string) — the subagent model for `spawn_agent.py` dispatch
+- `pipeline.implementer` (string) — the subagent model for `millpy.entrypoints.spawn_agent` dispatch
 - `pipeline.discussion-review.default` (string) and `pipeline.discussion-review.rounds` (int)
-- `pipeline.plan-review.default` (string) and `pipeline.plan-review.rounds` (int)
+- `pipeline.plan-review.holistic` (string) and `pipeline.plan-review.per-card` (string) and `pipeline.plan-review.rounds` (int)
 - `pipeline.code-review.default` (string) and `pipeline.code-review.rounds` (int)
 
 If any required slot is missing, stop with:
@@ -27,7 +27,7 @@ If any required slot is missing, stop with:
 Config schema out of date. Expected pipeline.<slot>. Run 'mill-setup' to auto-migrate.
 ```
 
-Legacy slots (`models.session`, `models.explore`, `models.<phase>-review`, `review-modules:`, `reviews:`) are no longer accepted by validation — `mill-setup` migrates them to the `pipeline:` form on re-run. The reviewer resolver (`millpy.core.config.resolve_reviewer_name`) still reads the legacy paths as a fallback during the migration window so mid-migration configs keep working, but this skill's entry gate requires the new schema.
+Legacy slots (`models.session`, `models.explore`, `models.<phase>-review`, `review-modules:`, `reviews:`) are not accepted. The `pipeline:` block is the only config schema.
 
 Read `tasks.md` in the project root (the working directory where `_millhouse/` lives). If it does not exist, stop and tell the user to run `mill-setup` first or create `tasks.md` manually.
 
@@ -156,7 +156,7 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
    - Complete Q&A log (all questions and answers)
    - Config (verify command, dev server). **Verify must not be `N/A` when the project has a test suite.** Detect the verify command from the codebase: check `pyproject.toml`, `*.csproj`, `package.json`, `Makefile`, test directories (`tests/`, `test/`, `*Tests/`), etc. Only write `N/A` if the project genuinely has no build or test infrastructure.
 
-   The discussion file must be self-contained — a fresh `mill-go` session with no conversation history must be able to write a complete implementation plan from this file alone.
+   The discussion file must be self-contained — a fresh `mill-plan` session with no conversation history must be able to write a complete implementation plan from this file alone.
 
 ### Phase: Discussion Review (round N/max_review_rounds)
 
@@ -170,15 +170,15 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
 
-   c. **Resolve the reviewer name for round N.** Prefer `pipeline.discussion-review.<N>` from `_millhouse/config.yaml`; if absent, fall back to `pipeline.discussion-review.default`. The integer key is compared as a string. The resolver (`millpy.core.config.resolve_reviewer_name`) internally falls through to legacy `review-modules.discussion.*` and `models.discussion-review.*` keys for mid-migration configs, and applies the legacy ensemble-name alias table on return so pre-rename configs still resolve to modern short forms.
+   c. **Resolve the reviewer name for round N.** Prefer `pipeline.discussion-review.<N>` from `_millhouse/config.yaml`; if absent, fall back to `pipeline.discussion-review.default`. The integer key is compared as a string.
 
    d. **Materialize the prompt.** Read the prompt template from `plugins/mill/doc/prompts/discussion-review.md`. Substitute `<DISCUSSION_FILE_PATH>` (absolute path to `_millhouse/task/discussion.md`), `<TASK_TITLE>` (from `tasks.md`), and `<CONSTRAINTS_CONTENT>` (the contents of `CONSTRAINTS.md` from the repo root if it exists, or the literal string `(no CONSTRAINTS.md)` if not). Write the materialized prompt to `_millhouse/scratch/discussion-review-prompt-r<N>.md`.
 
-   Note: discussion-review rejects bulk dispatch at the engine level. If `pipeline.discussion-review.*` points at a bulk recipe, `spawn_reviewer.py` exits with a ConfigError and mill-start surfaces the error to the user.
+   Note: discussion-review rejects bulk dispatch at the engine level. If `pipeline.discussion-review.*` points at a bulk recipe, `millpy.entrypoints.spawn_reviewer` exits with a ConfigError and mill-start surfaces the error to the user.
 
    e. **Spawn the discussion-reviewer.** Invoke via Bash:
       ```bash
-      python plugins/mill/scripts/spawn-reviewer.py --reviewer-name <reviewer-name> --prompt-file _millhouse/scratch/discussion-review-prompt-r<N>.md --phase discussion --round <N>
+      (cd plugins/mill/scripts && python -m millpy.entrypoints.spawn_reviewer) --reviewer-name <reviewer-name> --prompt-file _millhouse/scratch/discussion-review-prompt-r<N>.md --phase discussion --round <N>
       ```
       The script is synchronous from the caller's perspective. Reviewers are short — do not run in background.
 
@@ -186,7 +186,7 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    g. If verdict is **APPROVE**: proceed to Phase: Handoff.
 
-   **UNKNOWN verdict fallback (C.2).** If verdict is `UNKNOWN`, the reviewer pipeline failed to recover a recognizable verdict from the worker's output even though the review file at `review_file` was written correctly. Do not halt — read the review file and parse its YAML frontmatter `verdict:` field (case-insensitive). If the frontmatter reports `APPROVE`, continue as if the pipeline had returned APPROVE. If the frontmatter reports `GAPS_FOUND` (or `REQUEST_CHANGES`), continue as if the pipeline had returned GAPS_FOUND and proceed to the GAPS_FOUND branch below. If the frontmatter `verdict:` field is absent, unparseable, or itself says `UNKNOWN`, halt with a clear message: `Reviewer verdict is UNKNOWN and the review file frontmatter is also unparseable. Review file: <path>. Halting; manual intervention required.` This fallback exists because of a known bug class where fence-wrapped JSON or multi-format worker output causes `spawn_reviewer.py` to return UNKNOWN despite the review file being written correctly. Post-W1 this should be rare — `millpy.core.verdict.extract_verdict_from_text` handles the multi-format extraction — but the fallback stays as a defensive belt-and-suspenders.
+   **UNKNOWN verdict fallback (C.2).** If verdict is `UNKNOWN`, the reviewer pipeline failed to recover a recognizable verdict from the worker's output even though the review file at `review_file` was written correctly. Do not halt — read the review file and parse its YAML frontmatter `verdict:` field (case-insensitive). If the frontmatter reports `APPROVE`, continue as if the pipeline had returned APPROVE. If the frontmatter reports `GAPS_FOUND` (or `REQUEST_CHANGES`), continue as if the pipeline had returned GAPS_FOUND and proceed to the GAPS_FOUND branch below. If the frontmatter `verdict:` field is absent, unparseable, or itself says `UNKNOWN`, halt with a clear message: `Reviewer verdict is UNKNOWN and the review file frontmatter is also unparseable. Review file: <path>. Halting; manual intervention required.` This fallback exists because of a known bug class where fence-wrapped JSON or multi-format worker output causes `millpy.entrypoints.spawn_reviewer` to return UNKNOWN despite the review file being written correctly. Post-W1 this should be rare — `millpy.core.verdict.extract_verdict_from_text` handles the multi-format extraction — but the fallback stays as a defensive belt-and-suspenders.
 
    h. If verdict is **GAPS_FOUND**: read the review file at `review_file`.
 
@@ -211,13 +211,20 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    b. Use the Edit tool to insert `discussed  <timestamp>` on a new line before the closing ` ``` ` of the timeline text block in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
-   c. Report: "Discussion complete. Discussion file written to `_millhouse/task/discussion.md`. Run `mill-go` to start autonomous execution."
+   c. **Prompt user: "Plan this now?"**
+
+      Present as a numbered list:
+      1. Yes — invoke `mill-plan` now to start autonomous plan writing (Recommended)
+      2. No — run `mill-plan` manually later
+
+      - **On `1` (Yes, default):** Invoke `mill-plan` via the Skill tool. Report: "mill-plan spawned. Run `mill-go` in another terminal to pre-arm the Builder."
+      - **On `2` (No):** Report: "Discussion complete. Run `mill-plan` to start autonomous plan writing, then `mill-go` to start implementation."
 
 ---
 
 ## Todo Scope
 
-If you use TodoWrite to track your own progress, only include mill-start phases: Color, Select, Explore, Discuss, Discussion File, Discussion Review, Handoff. Never add implementation steps (creating files, modifying files, writing code, running tests) --- those belong to mill-go.
+If you use TodoWrite to track your own progress, only include mill-start phases: Color, Select, Explore, Discuss, Discussion File, Discussion Review, Handoff. Never add implementation steps (creating files, modifying files, writing code, running tests) --- those belong to mill-plan and mill-go.
 
 ---
 

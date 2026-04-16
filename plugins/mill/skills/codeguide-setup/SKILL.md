@@ -22,7 +22,7 @@ _codeguide/
 
 ## Steps
 
-1. **Detect context:** Run `python ${CLAUDE_PLUGIN_ROOT}/scripts/_resolve.py` to find the nearest `_codeguide/` with config.yaml.
+1. **Detect context:** Run `python ${CLAUDE_PLUGIN_ROOT}/scripts/millpy/codeguide/resolve.py` to find the nearest `_codeguide/` with config.yaml.
 
 2. **Determine mode:**
    - Config.yaml not found anywhere → **first-time root setup**

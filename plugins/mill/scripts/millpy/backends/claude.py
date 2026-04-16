@@ -16,6 +16,7 @@ from pathlib import Path
 
 from millpy.backends.base import Backend, BulkResult, ToolUseResult
 from millpy.core import subprocess_util
+from millpy.core.log_util import log
 
 
 def _resolve_claude_binary() -> str:
@@ -35,11 +36,11 @@ def _resolve_claude_binary() -> str:
 # Pure helper — unit-tested
 # ---------------------------------------------------------------------------
 
-def _parse_claude_json_wrapper(stdout: str) -> dict:
+def _parse_claude_json_wrapper(stdout: str) -> tuple[dict, str | None]:
     """Parse the JSON wrapper emitted by `claude -p --output-format json`.
 
     The claude CLI wraps the agent's result text in:
-        {"result": "<agent-output>", "cost": ..., ...}
+        {"result": "<agent-output>", "session_id": "...", "cost": ..., ...}
 
     The agent's output may itself be:
       1. Plain JSON (already valid)
@@ -57,8 +58,10 @@ def _parse_claude_json_wrapper(stdout: str) -> dict:
 
     Returns
     -------
-    dict
-        The parsed inner JSON dict.
+    tuple[dict, str | None]
+        A 2-tuple of (parsed_inner_dict, session_id). session_id is None when
+        the outer wrapper does not contain a ``session_id`` field or when
+        stdout is not valid JSON (fallback path).
 
     Raises
     ------
@@ -70,7 +73,11 @@ def _parse_claude_json_wrapper(stdout: str) -> dict:
         wrapper = json.loads(stdout)
     except json.JSONDecodeError:
         # stdout itself is not JSON — scan lines for last JSON object
-        return _fallback_line_scan(stdout, context="unparseable")
+        return _fallback_line_scan(stdout, context="unparseable"), None
+
+    # Extract session_id from the outer wrapper (present in real claude output)
+    raw_session_id = wrapper.get("session_id")
+    session_id: str | None = raw_session_id if isinstance(raw_session_id, str) else None
 
     result_raw = wrapper.get("result")
 
@@ -81,7 +88,7 @@ def _parse_claude_json_wrapper(stdout: str) -> dict:
         # Scalar unboxing: the result was already parsed as a non-string JSON value
         # Treat it as a JSON value and wrap it back
         if isinstance(result_raw, dict):
-            return result_raw
+            return result_raw, session_id
         raise ValueError(
             f"unparseable result: expected string in 'result' field, got {type(result_raw).__name__}"
         )
@@ -90,7 +97,7 @@ def _parse_claude_json_wrapper(stdout: str) -> dict:
     if not result_text:
         raise ValueError("empty result: claude returned empty string in 'result' field")
 
-    return _parse_result_text(result_text)
+    return _parse_result_text(result_text), session_id
 
 
 def _parse_result_text(text: str) -> dict:
@@ -189,18 +196,27 @@ class ClaudeBackend:
         parsed_json: dict | None = None
         result_text = ""
         parse_error: str | None = None
+        session_id: str | None = None
 
         if result.returncode == 0 and result.stdout:
+            # Extract session_id and result_text from outer JSON first —
+            # these must survive even if inner result parsing fails.
             try:
-                parsed_json = _parse_claude_json_wrapper(result.stdout)
-                # Extract the inner result text for convenience (raw outer JSON)
                 outer = json.loads(result.stdout)
-                result_text = outer.get("result", "") or ""
+                session_id = outer.get("session_id") if isinstance(outer.get("session_id"), str) else None
+                result_text = str(outer.get("result", "") or "")
+            except json.JSONDecodeError:
+                pass
+
+            if session_id is None:
+                log("claude", "session_id not found in claude output; session resume unavailable")
+
+            try:
+                parsed_json, _ = _parse_claude_json_wrapper(result.stdout)
             except (ValueError, json.JSONDecodeError) as exc:
-                # Do NOT silently swallow — record the error. The caller gets
-                # exit_code=0, result_text="", parse_error=<message>, raw_stdout
-                # so it can diagnose why parsing failed instead of seeing a
-                # mysterious empty result.
+                # Inner result is not parseable as JSON dict — that's fine
+                # for implementers that return free text. session_id and
+                # result_text are already captured above.
                 parse_error = f"{type(exc).__name__}: {exc}"
 
         return ToolUseResult(
@@ -209,6 +225,74 @@ class ClaudeBackend:
             exit_code=result.returncode,
             raw_stdout=result.stdout,
             raw_stderr=result.stderr + (f"\n[claude parse_error] {parse_error}" if parse_error else ""),
+            session_id=session_id,
+        )
+
+    def dispatch_tool_use_resume(
+        self,
+        session_id: str,
+        prompt: str,
+        *,
+        model: str,
+        effort: str | None,
+        max_turns: int,
+    ) -> ToolUseResult:
+        """Resume a previous claude session via --resume <session_id>.
+
+        Parameters
+        ----------
+        session_id:
+            Session ID from a prior dispatch_tool_use call.
+        prompt:
+            New prompt text piped via stdin to the resumed session.
+        model:
+            Model name (e.g. "sonnet", "opus").
+        effort:
+            Optional effort level ("low"|"medium"|"high"|"max").
+        max_turns:
+            Maximum number of tool-use turns.
+
+        Returns
+        -------
+        ToolUseResult
+            Contains result_text, parsed_json (if parseable), exit_code,
+            raw_stdout, raw_stderr, and the new session_id (may be same or
+            forked if claude creates a new session branch).
+        """
+        argv = [
+            _resolve_claude_binary(), "-p",
+            "--resume", session_id,
+            "--model", model,
+            "--max-turns", str(max_turns),
+            "--output-format", "json",
+        ]
+        if effort is not None:
+            argv += ["--effort", effort]
+
+        result = subprocess_util.run(argv, input=prompt)
+
+        parsed_json: dict | None = None
+        result_text = ""
+        parse_error: str | None = None
+        new_session_id: str | None = None
+
+        if result.returncode == 0 and result.stdout:
+            try:
+                parsed_json, new_session_id = _parse_claude_json_wrapper(result.stdout)
+                outer = json.loads(result.stdout)
+                result_text = outer.get("result", "") or ""
+                if new_session_id is None:
+                    log("claude", "session_id not found in resume output; session chain broken")
+            except (ValueError, json.JSONDecodeError) as exc:
+                parse_error = f"{type(exc).__name__}: {exc}"
+
+        return ToolUseResult(
+            result_text=result_text,
+            parsed_json=parsed_json,
+            exit_code=result.returncode,
+            raw_stdout=result.stdout,
+            raw_stderr=result.stderr + (f"\n[claude parse_error] {parse_error}" if parse_error else ""),
+            session_id=new_session_id,
         )
 
     def dispatch_bulk(

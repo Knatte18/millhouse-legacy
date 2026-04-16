@@ -18,6 +18,16 @@
       "category": "productivity"
     },
     {
+      "name": "mill-plan",
+      "description": "Autonomous plan writing phase — writes v3 flat-card plan from discussion file and reviews it.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Knatte18"
+      },
+      "source": "./plugins/mill/skills/mill-plan",
+      "category": "productivity"
+    },
+    {
       "name": "taskmill-legacy",
       "description": "Legacy task management (archived — replaced by mill)",
       "version": "1.0.0",

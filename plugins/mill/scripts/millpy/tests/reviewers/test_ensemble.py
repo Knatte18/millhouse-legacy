@@ -86,7 +86,7 @@ class TestEnsembleDegradation:
             )
         failing_backend.dispatch_bulk = dispatch_bulk_fail
 
-        ensemble = Ensemble(worker="gemini3pro", worker_count=2, handler="opus")
+        ensemble = Ensemble(worker="g3pro", worker_count=2, handler="opus")
         reviewer = EnsembleReviewer(ensemble)
 
         fake_root = tmp_path
@@ -143,7 +143,7 @@ class TestEnsembleDegradation:
 
         tool_use_backend = _make_tool_use_backend("VERDICT: APPROVE\n")
 
-        ensemble = Ensemble(worker="gemini3pro", worker_count=2, handler="opus")
+        ensemble = Ensemble(worker="g3pro", worker_count=2, handler="opus")
         reviewer = EnsembleReviewer(ensemble)
 
         fake_root = tmp_path
@@ -196,7 +196,7 @@ class TestBulkPayloadSubstitution:
         files_from = tmp_path / "files.txt"
         files_from.write_text("", encoding="utf-8")
 
-        worker = WORKERS["gemini3pro"]  # bulk dispatch
+        worker = WORKERS["g3pro"]  # bulk dispatch
 
         with patch("millpy.reviewers.ensemble.repo_root", return_value=tmp_path):
             with pytest.raises(ConfigError, match="FILES_PAYLOAD"):
@@ -221,7 +221,7 @@ class TestBulkPayloadSubstitution:
         prompt_file = tmp_path / "prompt.md"
         prompt_file.write_text("plain prompt\n", encoding="utf-8")
 
-        worker = WORKERS["gemini3pro"]
+        worker = WORKERS["g3pro"]
 
         with patch("millpy.reviewers.ensemble.repo_root", return_value=tmp_path):
             result = _materialize_prompt(prompt_file, "code", worker, files_from)
@@ -235,7 +235,7 @@ class TestBulkPayloadSubstitution:
         prompt_file = tmp_path / "prompt.md"
         prompt_file.write_text("plain prompt\n", encoding="utf-8")
 
-        worker = WORKERS["gemini3pro"]  # bulk dispatch
+        worker = WORKERS["g3pro"]  # bulk dispatch
 
         result = _materialize_prompt(prompt_file, "code", worker, files_from=None)
         assert result == "plain prompt\n"

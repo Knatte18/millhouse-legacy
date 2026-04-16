@@ -239,17 +239,48 @@ class SingleWorker:
             output_text = result.result_text
             exit_code = result.exit_code
 
-        if output_text and exit_code == 0:
+        # Worker process failed — return ERROR, not UNKNOWN.
+        if exit_code != 0:
+            log("single_worker", f"worker exited non-zero: {exit_code}")
+            return ReviewerResult(
+                verdict="ERROR",
+                review_file=review_file_path,
+                exit_code=exit_code,
+                failure_kind="worker_exit_nonzero",
+            )
+
+        if output_text and self.worker.dispatch_mode == "bulk":
+            # Bulk workers don't write files themselves — engine writes output.
             review_file_path.write_text(output_text, encoding="utf-8")
+        # Tool-use workers write their own review file via tool calls.
+        # Don't duplicate their output to scratch — it creates confusing
+        # dual-location files (issue #30).
 
         # Extract verdict from the output text. Multi-format extraction
         # recognizes YAML frontmatter, JSON last line (with optional markdown
         # fences), and the legacy VERDICT: prefix. See millpy.core.verdict.
         verdict = extract_verdict_from_text(output_text)
 
+        # For tool-use workers, try to extract the actual review file path
+        # from the agent's JSON output line (the agent writes the file itself).
+        actual_review_file = review_file_path
+        if self.worker.dispatch_mode == "tool-use" and output_text:
+            import json as _json
+            for line in reversed(output_text.strip().splitlines()):
+                line = line.strip().strip("`")
+                try:
+                    obj = _json.loads(line)
+                    if isinstance(obj, dict) and "review_file" in obj:
+                        candidate = Path(obj["review_file"])
+                        if candidate.exists():
+                            actual_review_file = candidate
+                    break
+                except (ValueError, _json.JSONDecodeError):
+                    continue
+
         return ReviewerResult(
             verdict=verdict,
-            review_file=review_file_path,
+            review_file=actual_review_file,
             exit_code=exit_code,
-            failure_kind=None if exit_code == 0 else "unclassified",
+            failure_kind=None,
         )

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from millpy.core.plan_io import PlanLocation, parse_frontmatter
+from millpy.core.plan_io import PlanLocation, parse_frontmatter, read_card_index
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +67,8 @@ def validate(loc: PlanLocation) -> list[ValidationError]:
     """
     if loc.kind == "v1":
         return _validate_v1(loc)
+    elif loc.kind == "v3":
+        return _validate_v3(loc)
     else:
         return _validate_v2(loc)
 
@@ -236,6 +238,170 @@ def _validate_v2(loc: PlanLocation) -> list[ValidationError]:
             errors.extend(_validate_card_common(
                 card_text, step_num, batch_rel, valid_step_nums, v2=True,
             ))
+
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# v3 validation
+# ---------------------------------------------------------------------------
+
+_V3_OVERVIEW_REQUIRED_FM_KEYS = ["kind", "task", "verify", "dev-server", "approved", "started", "root"]
+_V3_CARD_REQUIRED_FM_KEYS = ["kind", "card-number", "card-slug"]
+
+
+def _validate_v3(loc: PlanLocation) -> list[ValidationError]:
+    errors: list[ValidationError] = []
+
+    # Validate overview
+    overview_text = loc.overview.read_text(encoding="utf-8")  # type: ignore[union-attr]
+    overview_rel = _to_repo_rel(loc.overview)  # type: ignore[arg-type]
+    overview_fm = parse_frontmatter(overview_text)
+
+    # Overview frontmatter required keys — "root" is allowed to be empty string
+    for key in _V3_OVERVIEW_REQUIRED_FM_KEYS:
+        if key not in overview_fm:
+            errors.append(ValidationError(
+                severity="BLOCKING",
+                location=overview_rel,
+                message=f"Frontmatter missing required key: '{key}'",
+            ))
+
+    # Must have ## Card Index section
+    if not _has_section(overview_text, "## Card Index"):
+        errors.append(ValidationError(
+            severity="BLOCKING",
+            location=overview_rel,
+            message="Required section missing: ## Card Index",
+        ))
+
+    # Parse Card Index
+    card_index = read_card_index(loc)
+
+    # Build map of card-number → (card_path, card_text, card_fm) from actual files
+    card_files_by_num: dict[int, tuple[Path, str]] = {}
+    for card_path in loc.cards:
+        card_text = card_path.read_text(encoding="utf-8")
+        card_fm = parse_frontmatter(card_text)
+        card_num = card_fm.get("card-number")
+        if isinstance(card_num, int):
+            card_files_by_num[card_num] = (card_path, card_text)
+
+    # Every card number in Card Index must have a matching file
+    for card_num in card_index:
+        if card_num not in card_files_by_num:
+            errors.append(ValidationError(
+                severity="BLOCKING",
+                location=overview_rel,
+                message=f"Card Index entry {card_num} has no matching card file",
+            ))
+
+    # Card numbering: sequential starting at 1, no gaps
+    all_card_nums = sorted(card_index.keys())
+    if all_card_nums:
+        expected = list(range(1, len(all_card_nums) + 1))
+        if all_card_nums != expected:
+            errors.append(ValidationError(
+                severity="BLOCKING",
+                location=overview_rel,
+                message=(
+                    f"Card numbering not sequential (no gaps allowed): "
+                    f"found {all_card_nums}, expected {expected}"
+                ),
+            ))
+
+    # Validate each card file
+    for card_path in loc.cards:
+        card_text = card_path.read_text(encoding="utf-8")
+        card_rel = _to_repo_rel(card_path)
+        card_fm = parse_frontmatter(card_text)
+
+        # Required frontmatter keys
+        for key in _V3_CARD_REQUIRED_FM_KEYS:
+            if key not in card_fm or card_fm[key] is None:
+                errors.append(ValidationError(
+                    severity="BLOCKING",
+                    location=card_rel,
+                    message=f"Frontmatter missing required key: '{key}'",
+                ))
+
+        # kind must be plan-card
+        if card_fm.get("kind") not in (None, "plan-card"):
+            errors.append(ValidationError(
+                severity="BLOCKING",
+                location=card_rel,
+                message=f"Frontmatter 'kind' must be 'plan-card', got '{card_fm.get('kind')}'",
+            ))
+
+        card_num = card_fm.get("card-number")
+        if not isinstance(card_num, int):
+            continue  # Already flagged above; cannot proceed with per-card checks
+
+        # Parse the step card from the file body
+        cards = _parse_step_cards(card_text)
+        if not cards:
+            continue
+        _, card_body = cards[0]
+
+        # depends-on validation: references must be lower card numbers that exist
+        depends_on_raw = _extract_field(card_body, "depends-on")
+        if depends_on_raw is not None:
+            dep_nums = _parse_int_list(depends_on_raw)
+            for dep in dep_nums:
+                if dep not in card_index or dep >= card_num:
+                    errors.append(ValidationError(
+                        severity="BLOCKING",
+                        location=card_rel,
+                        message=(
+                            f"Step {card_num}: depends-on references non-existent "
+                            f"or forward-reference card {dep}"
+                        ),
+                    ))
+
+        # Reads ⊇ Explore
+        reads_val = _extract_field(card_body, "Reads")
+        if reads_val and reads_val.strip().lower() != "none":
+            reads_paths = _extract_bullet_paths(reads_val)
+            explore_val = _extract_field(card_body, "Explore")
+            if explore_val:
+                for ep in _extract_bullet_paths(explore_val):
+                    if ep not in reads_paths:
+                        errors.append(ValidationError(
+                            severity="BLOCKING",
+                            location=card_rel,
+                            message=(
+                                f"Step {card_num}: Explore path '{ep}' is not in Reads "
+                                f"(Explore ⊆ Reads required)"
+                            ),
+                        ))
+        else:
+            reads_paths = set()
+
+        # Cross-validate Card Index reads vs card file Reads
+        if card_num in card_index:
+            index_entry = card_index[card_num]
+            index_reads = set(index_entry.get("reads", []))
+            if index_reads != reads_paths:
+                errors.append(ValidationError(
+                    severity="BLOCKING",
+                    location=card_rel,
+                    message=(
+                        f"Step {card_num}: Card Index reads {sorted(index_reads)} "
+                        f"does not match card file Reads {sorted(reads_paths)}"
+                    ),
+                ))
+
+            # Card Index creates ∪ modifies must not both be empty
+            index_creates = index_entry.get("creates", [])
+            index_modifies = index_entry.get("modifies", [])
+            if not index_creates and not index_modifies:
+                errors.append(ValidationError(
+                    severity="BLOCKING",
+                    location=overview_rel,
+                    message=(
+                        f"Card {card_num}: Card Index creates and modifies are both empty"
+                    ),
+                ))
 
     return errors
 

@@ -179,6 +179,9 @@ def main(argv: list[str] | None = None) -> int:
 
     log("spawn_task", f"Worktree created at {project_path}")
 
+    # Write .vscode/settings.json with a unique worktree color
+    _write_vscode_settings(project_path, slug, root, config_path)
+
     # Copy _millhouse/ (excluding task/, scratch/, children/)
     src_millhouse = root / "_millhouse"
     dst_millhouse = project_path / "_millhouse"
@@ -402,6 +405,120 @@ def _write_discussion_placeholder(discussion_path: Path, task_title: str) -> Non
         f"(Fill in context here before running mill-start)\n"
     )
     discussion_path.write_text(content, encoding="utf-8", newline="\n")
+
+
+# Color palette for worktree title bars. Round-robin from this list.
+_WORKTREE_COLOR_PALETTE = [
+    "#2d7d46",  # green
+    "#7d2d6b",  # purple
+    "#2d4f7d",  # blue
+    "#7d5c2d",  # yellow
+    "#6b2d2d",  # red
+    "#2d6b6b",  # cyan
+    "#4a2d7d",  # indigo
+    "#7d462d",  # orange
+]
+
+
+def _read_vscode_color(vscode_settings_path: Path) -> str | None:
+    """Read titleBar.activeBackground hex value from a .vscode/settings.json file.
+
+    Returns the hex string if found, None otherwise.
+    """
+    try:
+        text = vscode_settings_path.read_text(encoding="utf-8")
+        import json
+        data = json.loads(text)
+        customizations = data.get("workbench.colorCustomizations", {})
+        return customizations.get("titleBar.activeBackground")
+    except Exception:
+        return None
+
+
+def _pick_worktree_color(worktrees_dir: Path) -> str:
+    """Pick the first color from the palette not used by any sibling worktree.
+
+    Scans `.vscode/settings.json` in each directory under ``worktrees_dir``.
+    If all colors are in use, wraps around to the first color in the palette.
+    """
+    used_colors: set[str] = set()
+    if worktrees_dir.exists():
+        for entry in worktrees_dir.iterdir():
+            if not entry.is_dir():
+                continue
+            settings_path = entry / ".vscode" / "settings.json"
+            color = _read_vscode_color(settings_path)
+            if color:
+                used_colors.add(color.lower())
+
+    for color in _WORKTREE_COLOR_PALETTE:
+        if color.lower() not in used_colors:
+            return color
+
+    # All colors in use — wrap around
+    return _WORKTREE_COLOR_PALETTE[0]
+
+
+def _write_vscode_settings(
+    project_path: Path,
+    slug: str,
+    repo_root: Path,
+    config_path: Path,
+) -> None:
+    """Write .vscode/settings.json in the new worktree with a unique color.
+
+    Idempotent — skips if .vscode/settings.json already exists.
+    """
+    import json
+
+    vscode_dir = project_path / ".vscode"
+    settings_path = vscode_dir / "settings.json"
+
+    if settings_path.exists():
+        return
+
+    # Read short-name from config
+    short_name = slug
+    try:
+        text = config_path.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            m = re.match(r"^\s*short-name:\s*(.+)$", line)
+            if m:
+                val = m.group(1).strip().strip("'\"")
+                if val not in ("~", "null", ""):
+                    short_name = val
+                    break
+    except Exception:
+        pass
+
+    # Read template
+    template_path = repo_root / "plugins" / "mill" / "templates" / "vscode-settings.json"
+    if template_path.exists():
+        template_text = template_path.read_text(encoding="utf-8")
+    else:
+        # Fallback inline template
+        template_text = json.dumps({
+            "workbench.colorCustomizations": {
+                "titleBar.activeBackground": "<COLOR_HEX>",
+                "titleBar.activeForeground": "#ffffff",
+                "titleBar.inactiveBackground": "<COLOR_HEX>",
+                "titleBar.inactiveForeground": "#ffffffaa",
+            },
+            "window.title": "<SHORT_NAME>: <SLUG>",
+        }, indent=4) + "\n"
+
+    # Pick a color
+    worktrees_dir = project_path.parent
+    color = _pick_worktree_color(worktrees_dir)
+
+    # Substitute tokens
+    content = template_text
+    content = content.replace("<COLOR_HEX>", color)
+    content = content.replace("<SHORT_NAME>", short_name)
+    content = content.replace("<SLUG>", slug)
+
+    vscode_dir.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(content, encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

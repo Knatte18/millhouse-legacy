@@ -267,6 +267,75 @@ class TestScenario7ApprovingSliceWithPriorEntryDoesNotFireNonProgress:
 
 
 # ---------------------------------------------------------------------------
+# v3 PlanOverviewV3 — card-based slices
+# ---------------------------------------------------------------------------
+
+class TestV3NextRoundPlan:
+    def test_three_cards_produces_card_slices_plus_holistic(self):
+        from millpy.core.plan_review_loop import PlanOverviewV3
+        loop = PlanReviewLoop(PlanOverviewV3(card_numbers=[1, 2, 3]), max_rounds=3)
+        slices = loop.next_round_plan()
+        assert slices == ["card-1", "card-2", "card-3", "holistic"]
+        assert loop.current_round == 1
+
+    def test_single_card_produces_card_slice_plus_holistic(self):
+        from millpy.core.plan_review_loop import PlanOverviewV3
+        loop = PlanReviewLoop(PlanOverviewV3(card_numbers=[7]), max_rounds=3)
+        slices = loop.next_round_plan()
+        assert slices == ["card-7", "holistic"]
+
+    def test_v3_all_approve_returns_approved(self):
+        from millpy.core.plan_review_loop import PlanOverviewV3
+        loop = PlanReviewLoop(PlanOverviewV3(card_numbers=[1, 2]), max_rounds=3)
+        slices = loop.next_round_plan()
+        verdicts = {s: "APPROVE" for s in slices}
+        outcome = loop.record_round_result(verdicts, fixer_report_path=None)
+        assert outcome == "APPROVED"
+
+    def test_v3_mixed_verdicts_returns_continue(self, tmp_path: Path):
+        from millpy.core.plan_review_loop import PlanOverviewV3
+        loop = PlanReviewLoop(PlanOverviewV3(card_numbers=[1, 2]), max_rounds=3)
+        slices = loop.next_round_plan()
+        report = _make_report(tmp_path, "fix_r1.md", {
+            "card-1": ["- Finding 1: missing Reads"],
+            "card-2": [],
+            "holistic": [],
+        })
+        verdicts = {
+            "card-1": "REQUEST_CHANGES",
+            "card-2": "APPROVE",
+            "holistic": "APPROVE",
+        }
+        outcome = loop.record_round_result(verdicts, report)
+        assert outcome == "CONTINUE"
+
+    def test_v3_non_progress_detected(self, tmp_path: Path):
+        from millpy.core.plan_review_loop import PlanOverviewV3
+        loop = PlanReviewLoop(PlanOverviewV3(card_numbers=[1, 2]), max_rounds=3)
+        finding = "- Finding 1: design dispute"
+
+        loop.next_round_plan()
+        report1 = _make_report(tmp_path / "r1", "fix.md", {
+            "card-1": [finding],
+            "card-2": [],
+            "holistic": [],
+        })
+        verdicts_r1 = {"card-1": "REQUEST_CHANGES", "card-2": "APPROVE", "holistic": "APPROVE"}
+        outcome1 = loop.record_round_result(verdicts_r1, report1)
+        assert outcome1 == "CONTINUE"
+
+        loop.next_round_plan()
+        report2 = _make_report(tmp_path / "r2", "fix.md", {
+            "card-1": [finding],
+            "card-2": [],
+            "holistic": [],
+        })
+        verdicts_r2 = {"card-1": "REQUEST_CHANGES", "card-2": "APPROVE", "holistic": "APPROVE"}
+        outcome2 = loop.record_round_result(verdicts_r2, report2)
+        assert outcome2 == "BLOCKED_NON_PROGRESS"
+
+
+# ---------------------------------------------------------------------------
 # Edge case: missing fixer_report_path raises ValueError
 # ---------------------------------------------------------------------------
 

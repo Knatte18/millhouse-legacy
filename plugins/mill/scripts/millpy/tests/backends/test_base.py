@@ -59,12 +59,15 @@ class TestToolUseResult:
 # ---------------------------------------------------------------------------
 
 class TestBackendProtocol:
-    def test_stub_implementing_both_methods_passes_isinstance(self):
+    def test_stub_implementing_all_methods_passes_isinstance(self):
         class StubBackend:
             def dispatch_bulk(self, prompt, output_path, *, model, effort):
                 pass
 
             def dispatch_tool_use(self, prompt, *, model, effort, max_turns):
+                pass
+
+            def dispatch_tool_use_resume(self, session_id, prompt, *, model, effort, max_turns):
                 pass
 
         assert isinstance(StubBackend(), Backend)

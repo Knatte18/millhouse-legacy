@@ -113,6 +113,21 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Path to plan/ directory for v2 whole-plan plan review (tool-use only).",
     )
+    parser.add_argument(
+        "--slice-id",
+        default=None,
+        help="Slice identifier for parallel fan-out (included in auto-derived review filename to prevent collisions).",
+    )
+    parser.add_argument(
+        "--slice-type",
+        default=None,
+        choices=["holistic", "per-card"],
+        help=(
+            "Slice type for holistic/per-card reviewer resolution. "
+            "When set and --reviewer-name is absent, resolves via "
+            "pipeline.<phase>-review.<slice_type> before falling back to default."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -139,7 +154,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             root = project_root()
             cfg = load(root / "_millhouse" / "config.yaml")
-            reviewer_name = resolve_reviewer_name(cfg, args.phase, args.round)
+            reviewer_name = resolve_reviewer_name(
+                cfg, args.phase, args.round, slice_type=args.slice_type
+            )
         except (ConfigError, FileNotFoundError, ValueError) as exc:
             log("spawn_reviewer", f"could not resolve reviewer name: {exc} (see --list-reviewers for valid names)")
             print(json.dumps({
@@ -183,6 +200,7 @@ def main(argv: list[str] | None = None) -> int:
             plan_overview=plan_overview_path,
             plan_batch=plan_batch_path,
             plan_dir_path=plan_dir_path,
+            slice_id=args.slice_id,
         )
         print(json.dumps({
             "verdict": result.verdict,

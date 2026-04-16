@@ -26,7 +26,7 @@ The abstraction boundary: `spawn-reviewer.py` (and `millpy.entrypoints.spawn_rev
 | `max_turns` | `int` | `30` | Tool-use turn budget (ignored for bulk workers). |
 | `extras` | `Mapping[str, object]` | `{}` | Provider-specific extras, e.g. `{"think": True}` for Ollama qwen3. |
 
-Initial `WORKERS` entries (Haiku omitted — judged insufficient for reviews):
+`WORKERS` entries (Haiku omitted — insufficient for reviews):
 
 | Name | Provider | Model | Effort | Dispatch |
 |---|---|---|---|---|
@@ -34,14 +34,16 @@ Initial `WORKERS` entries (Haiku omitted — judged insufficient for reviews):
 | `sonnetmax` | claude | sonnet | max | tool-use |
 | `opus` | claude | opus | — | tool-use |
 | `opusmax` | claude | opus | max | tool-use |
-| `gemini3flash` | gemini | gemini-3-flash-preview | — | bulk |
-| `gemini3pro` | gemini | gemini-3-pro-preview | — | bulk |
+| `g3flash` | gemini | gemini-3-flash-preview | — | bulk |
+| `g3pro` | gemini | gemini-3-pro-preview | — | bulk |
 | `glmflash` | ollama | glm-4.7-flash:latest | — | tool-use |
 | `qwenthinker` | ollama | qwen3:30b-thinking | — | tool-use |
 
 ## REVIEWERS
 
 `REVIEWERS: dict[str, Ensemble]` holds ensemble compositions referencing workers by name.
+
+Naming convention: `<worker>-x<count>-<handler>` (e.g. `g3flash-x3-sonnetmax`).
 
 `Ensemble` dataclass fields:
 
@@ -52,13 +54,14 @@ Initial `WORKERS` entries (Haiku omitted — judged insufficient for reviews):
 | `handler` | `str` | required | WORKERS key identifying the handler that synthesizes worker output |
 | `handler_prep` | `bool` | `False` | When `True` and handler is tool-use, spawn a prep pass in parallel with workers (see `plugins/mill/doc/prompts/handler-prep.md`) |
 
-Initial `REVIEWERS` entries:
+`REVIEWERS` entries:
 
 | Name | Worker | Count | Handler |
 |---|---|---|---|
-| `ensemble-gemini3pro-x2-opus` | gemini3pro | 2 | opus |
-| `ensemble-gemini3flash-x3-sonnetmax` | gemini3flash | 3 | sonnetmax |
-| `ensemble-gemini3pro-x2-gemini3flash` | gemini3pro | 2 | gemini3flash |
+| `g3pro-x2-opus` | g3pro | 2 | opus |
+| `g3flash-x3-sonnetmax` | g3flash | 3 | sonnetmax |
+| `g3pro-x2-g3flash` | g3pro | 2 | g3flash |
+| `g3flash-x3-g3flash` | g3flash | 3 | g3flash |
 
 ## Engine resolution
 
@@ -87,42 +90,71 @@ These invariants are also accessible via `millpy.reviewers.validate_registries()
 
 ## Config integration
 
-`_millhouse/config.yaml` contains a `review-modules:` block that names reviewers by phase:
+`_millhouse/config.yaml` uses the `pipeline:` block to name reviewers by phase:
 
 ```yaml
-review-modules:
-  discussion:
-    default: sonnet
-  plan:
-    default: opus
-  code:
-    default: ensemble-gemini3pro-x2-opus
+pipeline:
+  discussion-review:
+    rounds: 2
+    default: sonnetmax
+  plan-review:
+    rounds: 3
+    default: g3flash-x3-sonnetmax
+    holistic: sonnetmax        # v3: holistic reviewer (tool-use, sees whole plan dir)
+    per-card: g3flash          # v3: per-card reviewer (bulk, sees one card + reads files)
+  code-review:
+    rounds: 3
+    default: g3flash-x3-sonnetmax
 ```
 
-Each value (`sonnet`, `opus`, `ensemble-gemini3pro-x2-opus`) is either a `WORKERS` key or a `REVIEWERS` key. The engine treats both syntactically identically — the registry lookup determines the actual dispatch shape.
+Each value (`sonnetmax`, `g3flash-x3-sonnetmax`) is either a `WORKERS` key or a `REVIEWERS` key. The engine treats both syntactically identically — the registry lookup determines the actual dispatch shape.
 
-Per-round overrides follow the key `<round-number>:` under the phase, e.g.:
+### Holistic and per-card keys (v3)
+
+Under `plan-review:`, two optional keys select reviewers for v3 card-based fan-out:
+
+| Key | Slice type | Reviewer type | Description |
+|---|---|---|---|
+| `holistic` | `"holistic"` | tool-use | Sees the whole plan directory; checks cross-card consistency |
+| `per-card` | `"per-card"` | bulk | Sees one card + inlined `reads:` files; checks atomicity and completeness |
+
+When absent, resolution falls back to `default`.
+
+### Per-round overrides
+
+Per-round overrides use the round number as key (v2 path; ignored when `slice_type` is set):
 
 ```yaml
-review-modules:
-  plan:
-    default: opus
+pipeline:
+  plan-review:
+    rounds: 3
+    default: g3flash-x3-sonnetmax
     2: opusmax
 ```
 
-`millpy.core.config.resolve_reviewer_name(cfg, phase, round)` implements the lookup: try `review-modules.<phase>.<round>` first, then `review-modules.<phase>.default`.
+### resolve_reviewer_name
 
-## Fallback to legacy config
+`millpy.core.config.resolve_reviewer_name(cfg, phase, round, slice_type=None)` implements all lookup paths:
 
-`resolve_reviewer_name` applies a two-level preference rule:
+- **`slice_type` provided** (e.g. `"holistic"`, `"per-card"`): try `pipeline.<phase>-review.<slice_type>` first, then `pipeline.<phase>-review.default`.
+- **`slice_type` is None** (backward-compatible): try `pipeline.<phase>-review.<round>` first, then `pipeline.<phase>-review.default`.
 
-1. `review-modules.<phase>.<N>|default` (new block — wins if present).
-2. `models.<phase>-review.<N>|default` (legacy block — used as fallback when the new block is absent or the key is missing).
+### v3 card-based fan-out worked example
 
-The legacy `models:` keys are preserved so `mill-setup`'s auto-seed does not fight the config file. They are not read by the millpy engine when the new block is present.
+For a v3 plan with cards `[1, 2, 3]` and config:
+```yaml
+pipeline:
+  plan-review:
+    holistic: sonnetmax
+    per-card: g3flash
+```
+
+The orchestrator:
+1. Calls `PlanReviewLoop(PlanOverviewV3(card_numbers=[1, 2, 3]), max_rounds=3).next_round_plan()` → `["card-1", "card-2", "card-3", "holistic"]`.
+2. For each `card-N` slice: spawns `spawn_reviewer --slice-type per-card` → resolves `g3flash` (bulk), inlines card file + reads files via `<FILES_PAYLOAD>`.
+3. For `holistic` slice: spawns `spawn_reviewer --slice-type holistic` → resolves `sonnetmax` (tool-use), passes `--plan-dir-path`.
+4. Collects all verdicts → calls `record_round_result()` → determines `APPROVED`, `CONTINUE`, `BLOCKED_NON_PROGRESS`, or `BLOCKED_MAX_ROUNDS`.
 
 ## Adding a new worker or ensemble
 
 To add a new atomic worker, add one entry to `WORKERS` in `millpy/reviewers/workers.py`. To add a new ensemble, add one entry to `REVIEWERS` in `millpy/reviewers/definitions.py`. Import-time validation will catch any reference errors at the next `import millpy.reviewers`.
-
-Do not add entries to the legacy `reviewers:` YAML block in `_millhouse/config.yaml` — that block is unused by the millpy engine and preserved only to avoid fighting `mill-setup`.

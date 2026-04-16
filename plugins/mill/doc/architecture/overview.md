@@ -128,54 +128,27 @@ YAML integer keys must be coerced to strings before lookup — keys are always c
 Worked example:
 
 ```yaml
-review-modules:
-  plan:
-    1: ensemble-gemini3-opus
-    2: single-sonnet
-    default: single-sonnet
-
-reviewers:
-  ensemble-gemini3-opus:
-    worker-model: gemini-3-pro
-    worker-count: 3
-    dispatch: bulk
-    handler-model: opus
-    prompt-template: plugins/mill/doc/prompts/code-review-bulk.md
-  single-sonnet:
-    worker-model: sonnet
-    worker-count: 1
-    dispatch: tool-use
+pipeline:
+  plan-review:
+    rounds: 3
+    default: g3flash-x3-sonnetmax
+    1: g3pro-x2-opus
+  discussion-review:
+    rounds: 2
+    default: sonnetmax
 ```
 
-- Round 1 → recipe `ensemble-gemini3-opus` (3 Gemini workers + Opus handler)
-- Round 2 → recipe `single-sonnet`
-- Round 3, 4, 5, ... → `single-sonnet` (falls through to `default`)
+- Plan round 1 → ensemble `g3pro-x2-opus` (2 Gemini Pro workers + Opus handler)
+- Plan round 2, 3 → `g3flash-x3-sonnetmax` (falls through to `default`)
+- Discussion all rounds → `sonnetmax` (single worker)
 
-If a phase has only `default`:
+See `plugins/mill/doc/architecture/reviewer-modules.md` for the full registry schema and dispatch mode guide.
 
-```yaml
-review-modules:
-  discussion:
-    default: single-opus
-```
+## Config Validation
 
-- All rounds → recipe `single-opus`
+### `#config-validation`
 
-See `plugins/mill/doc/architecture/reviewer-modules.md` for the full recipe schema and dispatch mode guide.
-
-## Config Migration
-
-### `#config-migration`
-
-Two layers protect existing installs from the schema change introduced in this task:
-
-1. **`mill-setup` auto-migration (Layer 1, automatic).** When `_millhouse/config.yaml` already exists, `mill-setup` Steps 4b–4c update it in place:
-   - **Step 4b** (models block): For required scalar keys (`session`, `implementer`, `explore`): if missing, append with the default value. Removes the old per-round model keys (`discussion-review`, `plan-review`, `code-review`) from the `models:` block if present — those slots moved to `review-modules:` + `reviewers:`.
-   - **Step 4c** (reviewer blocks): If `reviewers:` or `review-modules:` are absent, seeds them with the five default recipes (`single-opus`, `single-sonnet`, `single-haiku`, `sonnet-single-maxeffort`, `ensemble-gemini3-opus`) and default phase mappings. Backs up the existing config to `config.yaml.bak` before writing.
-   - Print a diff of what changed. Write the updated file. No git commit (`_millhouse/` is gitignored).
-   - Auto-migration runs every time `mill-setup` is invoked, so re-running it on a conformant config is a no-op.
-
-2. **Entry-time validation (Layer 2, fail-loud).** `mill-start` and `mill-go` validate the `reviewers:` and `review-modules:` blocks on entry per the rules in `validation.md` `## _millhouse/config.yaml`. On failure, both skills stop with the exact error message:
+**Entry-time validation (fail-loud).** `mill-start` and `mill-go` validate the `pipeline:` block on entry. On failure, both skills stop with the exact error message:
    ```
    Config schema out of date. Expected reviewers: and review-modules: blocks. Run 'mill-setup' to auto-migrate.
    ```

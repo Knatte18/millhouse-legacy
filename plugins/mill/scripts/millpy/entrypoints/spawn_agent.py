@@ -86,6 +86,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-turns", type=int, default=None)
     parser.add_argument("--work-dir", type=Path, default=None)
     parser.add_argument("--timeout", type=float, default=None)
+    parser.add_argument("--session-id", default=None,
+                        help="Resume a previous session via claude --resume <session-id>.")
     return parser
 
 
@@ -136,6 +138,10 @@ def main(argv: list[str] | None = None) -> int:
         _log("--bulk-output is required when --dispatch bulk")
         return 1
 
+    if args.session_id and args.dispatch == "bulk":
+        _log("--session-id is not supported with --dispatch bulk")
+        return 1
+
     if args.max_turns is not None and args.max_turns > 0:
         max_turns = args.max_turns
     else:
@@ -146,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     _log(
         f"role={args.role} provider={provider} dispatch={args.dispatch} "
         f"max-turns={max_turns} prompt-file={args.prompt_file}"
+        + (f" session-id={args.session_id}" if args.session_id else "")
     )
 
     if args.dispatch == "bulk":
@@ -154,6 +161,16 @@ def main(argv: list[str] | None = None) -> int:
             prompt_text=prompt_text,
             output_path=args.bulk_output,
             worker=worker,
+            role=args.role,
+        )
+
+    if args.session_id:
+        return _run_tool_use_resume(
+            backend=backend,
+            session_id=args.session_id,
+            prompt_text=prompt_text,
+            worker=worker,
+            max_turns=max_turns,
             role=args.role,
         )
 
@@ -180,6 +197,17 @@ def _run_tool_use(*, backend, prompt_text, worker, max_turns, role) -> int:
         return 1
 
     if result.parsed_json is None:
+        if role == "implementer":
+            # Implementer may return free text (batch implementers do).
+            # Output session_id and result summary — no JSON validation needed.
+            output = {
+                "phase": "complete",
+                "status_file": None,
+                "final_commit": None,
+                "session_id": result.session_id,
+            }
+            print(json.dumps(output, separators=(", ", ": ")))
+            return 0
         _log("backend produced no parseable JSON in result text")
         if result.raw_stderr:
             print(result.raw_stderr, file=sys.stderr)
@@ -191,7 +219,45 @@ def _run_tool_use(*, backend, prompt_text, worker, max_turns, role) -> int:
         _log(error)
         return 1
 
-    print(json.dumps(parsed, separators=(", ", ": ")))
+    output = dict(parsed)
+    if role == "implementer":
+        output["session_id"] = result.session_id
+
+    print(json.dumps(output, separators=(", ", ": ")))
+    return 0
+
+
+def _run_tool_use_resume(*, backend, session_id, prompt_text, worker, max_turns, role) -> int:
+    result = backend.dispatch_tool_use_resume(
+        session_id,
+        prompt_text,
+        model=worker.model,
+        effort=worker.effort,
+        max_turns=max_turns,
+    )
+    if result.exit_code != 0:
+        _log(f"backend exited non-zero on resume: {result.exit_code}")
+        if result.raw_stderr:
+            print(result.raw_stderr, file=sys.stderr)
+        return 1
+
+    if result.parsed_json is None:
+        _log("backend produced no parseable JSON in resume result text")
+        if result.raw_stderr:
+            print(result.raw_stderr, file=sys.stderr)
+        return 1
+
+    parsed = result.parsed_json
+    error = _validate_role_fields(role, parsed)
+    if error:
+        _log(error)
+        return 1
+
+    output = dict(parsed)
+    if role == "implementer":
+        output["session_id"] = getattr(result, "session_id", None)
+
+    print(json.dumps(output, separators=(", ", ": ")))
     return 0
 
 

@@ -234,8 +234,8 @@ Port the code-review ensemble pattern (Gemini Flash × N + Sonnet handler) to pl
 
 **Reviewer names.** The ensemble entries land in the REVIEWERS registry alongside the code-review ensembles:
 
-- `g3flash-x3-sonnetmax-plan` (plan review equivalent of `g3flash-x3-sonnetmax`)
-- A Flash-only variant for faster iteration during draft cycles.
+- `g3flash-x3-sonnetmax` (same ensemble used for both plan and code review)
+- `g3flash-x3-g3flash` (Flash-only variant for faster iteration during draft cycles)
 
 The exact set is picked during implementation based on cost/latency trade-offs.
 

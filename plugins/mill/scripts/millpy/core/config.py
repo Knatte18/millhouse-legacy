@@ -227,40 +227,23 @@ def load(path: Path) -> dict:
         raise ConfigError(f"Failed to parse config file {path}: {exc}") from exc
 
 
-# ---------------------------------------------------------------------------
-# Legacy ensemble-name aliases (pre-W1 names kept resolving to new short form
-# during the migration window — see proposal 01 / Step 7).
-# ---------------------------------------------------------------------------
-
-_LEGACY_ENSEMBLE_ALIASES: dict[str, str] = {
-    "ensemble-gemini3flash-x3-sonnetmax": "g3flash-x3-sonnetmax",
-    "ensemble-gemini3pro-x2-opus": "g3pro-x2-opus",
-    "ensemble-gemini3pro-x2-gemini3flash": "g3pro-x2-g3flash",
-}
-
-
-def _apply_legacy_alias(name: str) -> str:
-    """Return the modern reviewer name for a legacy ensemble name."""
-    return _LEGACY_ENSEMBLE_ALIASES.get(name, name)
-
-
-def resolve_reviewer_name(cfg: dict, phase: str, round_number: int) -> str:
+def resolve_reviewer_name(
+    cfg: dict,
+    phase: str,
+    round_number: int,
+    slice_type: str | None = None,
+) -> str:
     """Resolve the reviewer name for a given phase and round.
 
-    Canonical resolution order (first found wins):
-    1. cfg["pipeline"][f"{phase}-review"][str(round_number)]
-    2. cfg["pipeline"][f"{phase}-review"]["default"]
+    When ``slice_type`` is provided (e.g. ``"holistic"``, ``"per-card"``):
+      Resolution order (first found wins):
+      1. cfg["pipeline"][f"{phase}-review"][slice_type]
+      2. cfg["pipeline"][f"{phase}-review"]["default"]
 
-    Legacy fallback (pre-W1 schemas kept resolving during the migration
-    window):
-    3. cfg["review-modules"][phase][str(round_number)]
-    4. cfg["review-modules"][phase]["default"]
-    5. cfg["models"][f"{phase}-review"][str(round_number)]
-    6. cfg["models"][f"{phase}-review"]["default"]
-
-    Any resolved name is run through the legacy ensemble-name alias
-    table before returning, so pre-rename configs that still contain
-    ``ensemble-gemini3flash-x3-sonnetmax`` etc. keep working.
+    When ``slice_type`` is None (backward-compatible path):
+      Resolution order (first found wins):
+      1. cfg["pipeline"][f"{phase}-review"][str(round_number)]
+      2. cfg["pipeline"][f"{phase}-review"]["default"]
 
     Parameters
     ----------
@@ -269,20 +252,21 @@ def resolve_reviewer_name(cfg: dict, phase: str, round_number: int) -> str:
     phase:
         Review phase: "discussion", "plan", or "code".
     round_number:
-        1-based round index.
+        1-based round index (used only when slice_type is None).
+    slice_type:
+        Optional slice type key (e.g. ``"holistic"``, ``"per-card"``).
+        When provided, overrides round-based resolution.
 
     Returns
     -------
     str
-        The reviewer name string, with legacy aliases normalized to the
-        modern short form.
+        The reviewer name string.
 
     Raises
     ------
     ConfigError
-        If no reviewer name can be resolved from any path.
+        If no reviewer name can be resolved.
     """
-    round_str = str(round_number)
     tried: list[str] = []
     review_key = f"{phase}-review"
 
@@ -290,56 +274,40 @@ def resolve_reviewer_name(cfg: dict, phase: str, round_number: int) -> str:
     if isinstance(pipeline, dict):
         pipeline_block = pipeline.get(review_key, {})
         if isinstance(pipeline_block, dict):
-            if round_str in pipeline_block:
-                return _apply_legacy_alias(str(pipeline_block[round_str]))
-            tried.append(f"pipeline.{review_key}.{round_str}")
+            if slice_type is not None:
+                # slice_type resolution: look up slice_type key, fall back to default
+                if slice_type in pipeline_block:
+                    return str(pipeline_block[slice_type])
+                tried.append(f"pipeline.{review_key}.{slice_type}")
+            else:
+                # round-based resolution: look up round number, fall back to default
+                round_str = str(round_number)
+                if round_str in pipeline_block:
+                    return str(pipeline_block[round_str])
+                tried.append(f"pipeline.{review_key}.{round_str}")
+
             if "default" in pipeline_block:
-                return _apply_legacy_alias(str(pipeline_block["default"]))
+                return str(pipeline_block["default"])
             tried.append(f"pipeline.{review_key}.default")
         else:
-            tried.append(f"pipeline.{review_key}.{round_str}")
+            if slice_type is not None:
+                tried.append(f"pipeline.{review_key}.{slice_type}")
+            else:
+                tried.append(f"pipeline.{review_key}.{round_number}")
             tried.append(f"pipeline.{review_key}.default")
-
-    rm = cfg.get("review-modules", {})
-    if isinstance(rm, dict):
-        phase_block = rm.get(phase, {})
-        if isinstance(phase_block, dict):
-            if round_str in phase_block:
-                return _apply_legacy_alias(str(phase_block[round_str]))
-            tried.append(f"review-modules.{phase}.{round_str}")
-            if "default" in phase_block:
-                return _apply_legacy_alias(str(phase_block["default"]))
-            tried.append(f"review-modules.{phase}.default")
-        else:
-            tried.append(f"review-modules.{phase}.{round_str}")
-            tried.append(f"review-modules.{phase}.default")
-
-    models = cfg.get("models", {})
-    if isinstance(models, dict):
-        legacy_block = models.get(review_key, {})
-        if isinstance(legacy_block, dict):
-            if round_str in legacy_block:
-                return _apply_legacy_alias(str(legacy_block[round_str]))
-            tried.append(f"models.{review_key}.{round_str}")
-            if "default" in legacy_block:
-                return _apply_legacy_alias(str(legacy_block["default"]))
-            tried.append(f"models.{review_key}.default")
-        else:
-            tried.append(f"models.{review_key}.{round_str}")
-            tried.append(f"models.{review_key}.default")
 
     raise ConfigError(
-        f"Cannot resolve reviewer name for phase={phase!r} round={round_number}. "
-        f"Tried: {', '.join(tried)}"
+        f"Cannot resolve reviewer name for phase={phase!r} round={round_number}"
+        + (f" slice_type={slice_type!r}" if slice_type is not None else "")
+        + f". Tried: {', '.join(tried)}"
     )
 
 
 def resolve_max_rounds(cfg: dict, phase: str) -> int:
     """Return the maximum review round count for a phase.
 
-    Canonical path: cfg["pipeline"][f"{phase}-review"]["rounds"].
-    Legacy fallback: cfg["reviews"][phase].
-    Returns 3 if nothing is set.
+    Path: cfg["pipeline"][f"{phase}-review"]["rounds"].
+    Returns 3 if not set.
 
     Parameters
     ----------
@@ -359,15 +327,6 @@ def resolve_max_rounds(cfg: dict, phase: str) -> int:
         if isinstance(block, dict) and "rounds" in block:
             try:
                 return int(block["rounds"])
-            except (TypeError, ValueError):
-                pass
-
-    reviews = cfg.get("reviews", {})
-    if isinstance(reviews, dict):
-        value = reviews.get(phase)
-        if value is not None:
-            try:
-                return int(value)
             except (TypeError, ValueError):
                 pass
     return 3

@@ -63,7 +63,7 @@ class TestFixE:
         reviews_dir = tmp_path / "_millhouse" / "scratch" / "reviews"
         with patch("millpy.reviewers.engine.project_root", return_value=tmp_path):
             with pytest.raises(ConfigError, match="discussion"):
-                _run(tmp_path, "gemini3pro", "discussion", tmp_path / "out.md")
+                _run(tmp_path, "g3pro", "discussion", tmp_path / "out.md")
         assert not reviews_dir.exists()
 
 
@@ -140,7 +140,7 @@ class TestResolutionType:
             patch("millpy.reviewers.engine.project_root", return_value=tmp_path),
             patch("millpy.reviewers.engine.EnsembleReviewer", FakeER),
         ):
-            run_reviewer(reviewer_name="ensemble-gemini3pro-x2-opus", prompt_file=prompt_file,
+            run_reviewer(reviewer_name="g3pro-x2-opus", prompt_file=prompt_file,
                          phase="code", round=1, review_file_path=tmp_path / "out.md",
                          plan_start_hash=None, plan_path=None, files_from=None)
         assert created == ["ER"]

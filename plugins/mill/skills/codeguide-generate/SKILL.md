@@ -16,7 +16,7 @@ Generate `_codeguide/` documentation for source files that don't have correspond
 
 ## Steps
 
-1. **Find `_codeguide/`:** Run `python ${CLAUDE_PLUGIN_ROOT}/scripts/_resolve.py` to locate the nearest `_codeguide/` containing config.yaml. If it exits with an error, stop — run `/codeguide-setup` first.
+1. **Find `_codeguide/`:** Run `python ${CLAUDE_PLUGIN_ROOT}/scripts/millpy/codeguide/resolve.py` to locate the nearest `_codeguide/` containing config.yaml. If it exits with an error, stop — run `/codeguide-setup` first.
 
 2. **Read the Documentation Guide:** Read `_codeguide/modules/DocumentationGuide.md` in full. All docs must follow its structure.
 

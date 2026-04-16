@@ -36,7 +36,7 @@ FIXTURES_BIN = (
 # parents[0]=integration  parents[1]=tests  parents[2]=millpy
 # parents[3]=scripts  parents[4]=mill  parents[5]=plugins  parents[6]=repo root
 REPO_ROOT = Path(__file__).resolve().parents[6]
-SPAWN_AGENT_SCRIPT = REPO_ROOT / "plugins" / "mill" / "scripts" / "spawn_agent.py"
+SCRIPTS_DIR = REPO_ROOT / "plugins" / "mill" / "scripts"
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def fake_claude_path(monkeypatch):
 
 
 def _run_spawn_agent(prompt_file: Path, args: list[str], response: str, exit_code: str = "0") -> subprocess.CompletedProcess:
-    """Invoke spawn_agent.py as a subprocess with the fake-claude response set."""
+    """Invoke millpy.entrypoints.spawn_agent as a subprocess with the fake-claude response set."""
     env = dict(os.environ)
     env["MILL_FAKE_CLAUDE_RESPONSE"] = response
     env["MILL_FAKE_CLAUDE_EXIT_CODE"] = exit_code
@@ -63,7 +63,7 @@ def _run_spawn_agent(prompt_file: Path, args: list[str], response: str, exit_cod
     return subprocess.run(
         [
             sys.executable,
-            str(SPAWN_AGENT_SCRIPT),
+            "-m", "millpy.entrypoints.spawn_agent",
             "--prompt-file", str(prompt_file),
             *args,
         ],
@@ -73,6 +73,7 @@ def _run_spawn_agent(prompt_file: Path, args: list[str], response: str, exit_cod
         encoding="utf-8",
         errors="replace",
         timeout=30,
+        cwd=str(SCRIPTS_DIR),
     )
 
 

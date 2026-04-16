@@ -54,47 +54,13 @@ Ask the user: "Repo short-name for window titles (default: `<directory-name>`):"
 
 **4b: Create or migrate config.**
 
-If `_millhouse/config.yaml` does not exist, write it with the full `pipeline:`-schema template below.
+If `_millhouse/config.yaml` does not exist, write it with the full `pipeline:`-schema template.
 
 If `_millhouse/config.yaml` already exists, check for the presence of a top-level `pipeline:` block:
-- **Present:** the config is already in the new schema. Check `git.auto-merge`, `git.require-pr-to-base`, `repo:`, and `notifications:` sections exist; append any missing ones without overwriting. Preserve everything else verbatim. No further migration.
+- **Present:** the config is already in the new schema. Check `git.auto-merge`, `git.require-pr-to-base`, `repo:`, and `notifications:` sections exist; append any missing ones without overwriting. Also check for new v3 pipeline keys: `pipeline.plan-review.holistic`, `pipeline.plan-review.per-card`, `pipeline.code-review.holistic`, `pipeline.code-review.per-card`, and `runtime.pre-arm-timeout-seconds`; append any missing ones with default values without overwriting existing values. Preserve everything else verbatim. No further migration.
 - **Absent:** the config is pre-W1 legacy. Run the per-key migration below (Step 4c — legacy-to-pipeline migration).
 
-Full config template (used for new creation and as the migration target shape). Only block-style YAML — the hand-written parser at `plugins/mill/scripts/millpy/core/config.py` does not support inline flow mappings:
-
-```yaml
-git:
-  base-branch: main
-  parent-branch: main
-  auto-merge: false
-  require-pr-to-base: false
-
-repo:
-  short-name: "<SHORT_NAME>"
-  branch-prefix: ~
-
-pipeline:
-  implementer: sonnet
-  discussion-review:
-    rounds: 2
-    default: g3flash-x3-sonnetmax
-  plan-review:
-    rounds: 3
-    default: g3flash-x3-sonnetmax
-  code-review:
-    rounds: 3
-    default: g3flash-x3-sonnetmax
-
-notifications:
-  slack:
-    enabled: false
-    webhook: ""
-    channel: ""
-  toast:
-    enabled: true
-```
-
-Repo short-name comes from Step 4a. Everything else is a straight template copy.
+**Template (used for new creation and as the migration target shape):** Read `plugins/mill/templates/millhouse-config.yaml`, substitute `<SHORT_NAME>` with the value from Step 4a and `<IMPLEMENTER>` with `sonnet`, then write to `_millhouse/config.yaml`. Only block-style YAML — the hand-written parser at `plugins/mill/scripts/millpy/core/config.py` does not support inline flow mappings.
 
 **Step 4c — legacy-to-pipeline migration (runs only when the existing config has no `pipeline:` block).**
 
@@ -105,47 +71,37 @@ Migration is text-based line manipulation, not YAML-library round-trip. millpy h
 **Extraction pass.** Use the millpy config loader (`python -c "from millpy.core.config import load; ..."`) to read the legacy file into a dict. Pull these values with sensible fallbacks:
 - `pipeline.implementer` ← legacy `models.implementer` (fallback: `sonnet`)
 - `pipeline.discussion-review.default` ← legacy `review-modules.discussion.default` → `models.discussion-review.default` → fallback `g3flash-x3-sonnetmax`
-- `pipeline.plan-review.default` ← legacy `review-modules.plan.default` → `models.plan-review.default` (scalar form `models.plan-review: sonnet` is also accepted) → fallback `g3flash-x3-sonnetmax`
-- `pipeline.code-review.default` ← legacy `review-modules.code.default` → `models.code-review.default` (scalar form also accepted) → fallback `g3flash-x3-sonnetmax`
-- `pipeline.discussion-review.rounds` ← legacy `reviews.discussion` → fallback `2`
-- `pipeline.plan-review.rounds` ← legacy `reviews.plan` → fallback `3`
-- `pipeline.code-review.rounds` ← legacy `reviews.code` → fallback `3`
+- `pipeline.plan-review.default` → fallback `g3flash-x3-sonnetmax`
+- `pipeline.code-review.default` → fallback `g3flash-x3-sonnetmax`
+- `pipeline.discussion-review.default` → fallback `sonnetmax`
+- `pipeline.discussion-review.rounds` → fallback `2`
+- `pipeline.plan-review.rounds` → fallback `3`
+- `pipeline.code-review.rounds` → fallback `3`
 
-**Legacy ensemble rename.** Apply these renames to any extracted `default` value:
-- `ensemble-gemini3flash-x3-sonnetmax` → `g3flash-x3-sonnetmax`
-- `ensemble-gemini3pro-x2-opus` → `g3pro-x2-opus`
-- `ensemble-gemini3pro-x2-gemini3flash` → `g3pro-x2-g3flash`
-
-**Rewrite pass.** Read the full file as text. Delete these top-level blocks by indent tracking (a block ends when a line at the same or lesser indent is reached): `models:`, `review-modules:`, `reviews:`. Preserve all other sections (`git:`, `repo:`, `notifications:`, user-added `reviewers:`, comments, blank lines). Append a new `pipeline:` block built from the extracted values:
+If `pipeline:` block is missing, create it with the fallback values:
 
 ```yaml
 pipeline:
-  implementer: <extracted-implementer>
+  implementer: sonnet
   discussion-review:
-    rounds: <extracted-rounds>
-    default: <extracted-default>
+    rounds: 2
+    default: sonnetmax
   plan-review:
-    rounds: <extracted-rounds>
-    default: <extracted-default>
+    rounds: 3
+    default: g3flash-x3-sonnetmax
+    holistic: sonnetmax
+    per-card: g3flash
   code-review:
-    rounds: <extracted-rounds>
-    default: <extracted-default>
+    rounds: 3
+    default: g3flash-x3-sonnetmax
+    holistic: g3flash-x3-g3flash
+    per-card: g3flash
+
+runtime:
+  pre-arm-timeout-seconds: 14400
 ```
 
-**After writing:** print a summary of what was removed and what values were preserved, e.g.:
-
-```
-migrated _millhouse/config.yaml:
-  removed: models:, review-modules:, reviews:
-  preserved: pipeline.implementer=sonnet
-  preserved: pipeline.plan-review.default=g3flash-x3-sonnetmax (renamed from ensemble-gemini3flash-x3-sonnetmax)
-  preserved: pipeline.plan-review.rounds=3
-  (etc.)
-```
-
-**Validation note.** After migration, reload the file via `millpy.core.config.load` and call `millpy.core.config.resolve_reviewer_name(cfg, "plan", 1)` as a smoke test. A `ConfigError` from the resolver indicates an edge case the migration could not handle — stop with the error and tell the user to inspect `_millhouse/config.yaml` manually.
-
-**User-added `reviewers:` block is preserved verbatim.** If the legacy config has a `reviewers:` block (for ad-hoc reviewer experimentation with `test-bulk-*` / `test-tooluse-*` entries), the migration does not touch it. The block stays exactly as the user wrote it.
+**Validation note.** After writing, reload the file via `millpy.core.config.load` and call `millpy.core.config.resolve_reviewer_name(cfg, "plan", 1, slice_type="per-card")` as a smoke test. A `ConfigError` from the resolver indicates an edge case — stop with the error and tell the user to inspect `_millhouse/config.yaml` manually.
 
 ### Step 5: Create forwarding wrappers
 
@@ -205,21 +161,7 @@ Write `_millhouse/mill-vscode.cmd`:
 
 If `.vscode/settings.json` already exists, skip (preserves existing color settings on re-run).
 
-If it does not exist, create `.vscode/` directory and write `.vscode/settings.json`:
-
-```json
-{
-    "workbench.colorCustomizations": {
-        "titleBar.activeBackground": "#2d7d46",
-        "titleBar.activeForeground": "#ffffff",
-        "titleBar.inactiveBackground": "#2d7d46",
-        "titleBar.inactiveForeground": "#ffffffaa"
-    },
-    "window.title": "<SHORT_NAME> — ${activeEditorShort}"
-}
-```
-
-Where `<SHORT_NAME>` is the value from Step 4a.
+If it does not exist, create `.vscode/` directory. Read `plugins/mill/templates/vscode-settings.json`, substitute `<COLOR_HEX>` with `#2d7d46`, `<SHORT_NAME>` with the value from Step 4a, and `<SLUG>` with `${activeEditorShort}`, then write to `.vscode/settings.json`.
 
 ### Step 7: Update CLAUDE.md
 

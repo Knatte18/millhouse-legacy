@@ -1,9 +1,11 @@
 """
-core/plan_review_loop.py — State-machine helper for v2 parallel plan-review fan-out.
+core/plan_review_loop.py — State-machine helper for plan-review fan-out (v2 and v3).
 
-The v2 plan review loop fans out N+1 reviewers in parallel (one per batch slice
-plus one whole-plan reviewer). ``PlanReviewLoop`` tracks per-round state and
-determines the overall outcome after each round.
+v2: fans out N+1 reviewers in parallel — one per batch slice plus one whole-plan reviewer.
+v3: fans out N+1 reviewers in parallel — one per card plus one holistic reviewer.
+
+``PlanReviewLoop`` accepts both ``PlanOverview`` (v2) and ``PlanOverviewV3`` (v3)
+and determines the overall outcome after each round.
 
 Outcome literals:
   APPROVED            — all slices approved this round
@@ -20,13 +22,13 @@ from pathlib import Path
 from typing import Literal
 
 Verdict = Literal["APPROVE", "REQUEST_CHANGES"]
-SliceId = str  # "batch-<slug>" or "whole-plan"
+SliceId = str  # "batch-<slug>", "whole-plan", "card-<N>", or "holistic"
 RoundOutcome = Literal["APPROVED", "CONTINUE", "BLOCKED_NON_PROGRESS", "BLOCKED_MAX_ROUNDS"]
 
 
 @dataclass
 class PlanOverview:
-    """Minimal plan overview needed by PlanReviewLoop.
+    """Minimal plan overview for v2 batch-based plan format.
 
     Fields
     ------
@@ -37,22 +39,37 @@ class PlanOverview:
     batch_slugs: list[str]
 
 
-class PlanReviewLoop:
-    """Stateful loop helper for v2 parallel N+1 plan-review fan-out.
+@dataclass
+class PlanOverviewV3:
+    """Minimal plan overview for v3 card-based plan format.
 
-    The loop spawns N per-batch reviewers + 1 whole-plan reviewer every
-    round. After all results arrive, call ``record_round_result()`` to
+    Fields
+    ------
+    card_numbers:
+        Ordered list of card numbers from the Card Index
+        (e.g. ``[1, 2, 3, 4, 5]``).
+    """
+    card_numbers: list[int]
+
+
+class PlanReviewLoop:
+    """Stateful loop helper for parallel plan-review fan-out (v2 and v3).
+
+    v2 (``PlanOverview``): spawns N per-batch reviewers + 1 whole-plan reviewer.
+    v3 (``PlanOverviewV3``): spawns N per-card reviewers + 1 holistic reviewer.
+
+    After all results arrive each round, call ``record_round_result()`` to
     advance the state machine.
 
     Parameters
     ----------
     overview:
-        The plan overview (batch slugs only; other fields are not used).
+        The plan overview. Pass ``PlanOverview`` for v2, ``PlanOverviewV3`` for v3.
     max_rounds:
         Maximum number of rounds (configurable via ``-pr N`` or config).
     """
 
-    def __init__(self, overview: PlanOverview, max_rounds: int) -> None:
+    def __init__(self, overview: PlanOverview | PlanOverviewV3, max_rounds: int) -> None:
         self.overview = overview
         self.max_rounds = max_rounds
         self.current_round: int = 0
@@ -62,13 +79,15 @@ class PlanReviewLoop:
     def next_round_plan(self) -> list[SliceId]:
         """Return the list of reviewer slices for the next round.
 
-        Always returns all N+1 slices — all batches plus the whole-plan
-        reviewer. Stale approvals are never carried forward (all are
-        re-run every round).
+        v2: returns ``["batch-<slug>", ..., "whole-plan"]``.
+        v3: returns ``["card-<N>", ..., "holistic"]``.
 
+        Stale approvals are never carried forward — all slices re-run every round.
         Increments ``self.current_round`` by 1 on each call.
         """
         self.current_round += 1
+        if isinstance(self.overview, PlanOverviewV3):
+            return [f"card-{n}" for n in self.overview.card_numbers] + ["holistic"]
         return [f"batch-{slug}" for slug in self.overview.batch_slugs] + ["whole-plan"]
 
     def record_round_result(

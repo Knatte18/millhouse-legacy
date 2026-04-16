@@ -44,7 +44,7 @@ class TestGuardPlanWholeBulk:
         """Scenario 1: bulk SingleWorker + plan + plan_dir_path → ConfigError."""
         reviews_dir = tmp_path / "_millhouse" / "scratch" / "reviews"
         with pytest.raises(ConfigError, match="whole-plan"):
-            _run_with_plan_dir(tmp_path, "gemini3pro", tmp_path / "plan")
+            _run_with_plan_dir(tmp_path, "g3pro", tmp_path / "plan")
         # Guard fires before mkdir
         assert not reviews_dir.exists()
 
@@ -52,7 +52,7 @@ class TestGuardPlanWholeBulk:
         """Scenario 2: bulk EnsembleReviewer + plan + plan_dir_path → ConfigError."""
         reviews_dir = tmp_path / "_millhouse" / "scratch" / "reviews"
         with pytest.raises(ConfigError, match="whole-plan"):
-            _run_with_plan_dir(tmp_path, "g3flash-x3-sonnetmax-plan", tmp_path / "plan")
+            _run_with_plan_dir(tmp_path, "g3flash-x3-sonnetmax", tmp_path / "plan")
         assert not reviews_dir.exists()
 
     def test_tool_use_single_worker_passes_guard(self, tmp_path: Path):
@@ -109,7 +109,7 @@ class TestGuardPlanWholeBulk:
             prompt_file = tmp_path / "prompt.md"
             prompt_file.write_text("p\n", encoding="utf-8")
             result = run_reviewer(
-                reviewer_name="gemini3pro",
+                reviewer_name="g3pro",
                 prompt_file=prompt_file,
                 phase="plan",
                 round=1,

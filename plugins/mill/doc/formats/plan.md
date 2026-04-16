@@ -1,10 +1,232 @@
 # Plan File Format
 
+## v3 Flat-Card Layout (current format)
+
+For all new tasks, `mill-plan` writes a `_millhouse/task/plan/` directory with a flat-card layout:
+
+```
+_millhouse/task/
+├── plan/
+│   ├── 00-overview.md
+│   ├── card-01-add-dag-module.md
+│   ├── card-02-update-plan-io.md
+│   └── card-03-add-tests.md
+├── discussion.md
+└── status.md
+```
+
+Filename convention `card-NN-<slug>.md`: two-digit prefix for filesystem sort, hyphenated slug. `mill-go` reads the `card-number:` frontmatter field — renames are safe as long as the prefix is updated.
+
+### `00-overview.md` (v3) — shared backbone with Card Index
+
+```markdown
+---
+kind: plan-overview
+task: <task title>
+verify: <build/test command, or "N/A">
+dev-server: <dev-server command, or "N/A">
+approved: false
+started: <UTC YYYYMMDD-HHMMSS>
+root: <longest common path prefix, or empty string>
+---
+
+# <Task Title>
+
+## Card Index
+
+```yaml
+1:
+  slug: add-dag-module
+  creates: [core/dag.py]
+  modifies: []
+  reads: [core/plan_io.py]
+  depends-on: []
+2:
+  slug: update-plan-io
+  creates: []
+  modifies: [core/plan_io.py]
+  reads: [core/plan_io.py, core/config.py]
+  depends-on: [1]
+```
+
+## All Files Touched
+
+- core/dag.py
+- core/plan_io.py
+```
+
+### `00-overview.md` frontmatter fields (v3)
+
+| Field | Required | Description |
+|---|---|---|
+| `kind` | yes | Must be `plan-overview`. |
+| `task` | yes | Task title from `tasks.md`. |
+| `verify` | yes | Build/test command used by Builder. |
+| `dev-server` | yes | Dev-server command, or the literal `N/A`. |
+| `approved` | yes | Starts `false`; Plan Review sets it `true`. Builder refuses to spawn if `false`. |
+| `started` | yes | UTC timestamp generated via `date -u +"%Y%m%d-%H%M%S"`. |
+| `root` | yes | Longest common path prefix for cards (e.g. `plugins/mill/scripts/millpy`). May be empty string — all paths in the Card Index and card files are then full repo-relative paths. |
+
+### `## Card Index` — DAG metadata (v3)
+
+The Card Index is a fenced YAML block under the `## Card Index` heading. It provides DAG metadata that Builder reads without opening every card file.
+
+**Schema:**
+```yaml
+<card-number>:           # int, globally unique, sequential from 1
+  slug: <card-slug>      # matches card-slug frontmatter in the card file
+  creates: [<path>, ...] # root-relative paths this card creates (empty list ok)
+  modifies: [<path>, ...] # root-relative paths this card modifies (empty list ok)
+  reads: [<path>, ...]   # root-relative paths this card reads for context
+  depends-on: [<N>, ...] # card numbers this card depends on; [] for no deps
+```
+
+**Rules:**
+- `creates:` and `modifies:` must not **both** be empty for any card (`plan_validator` checks this).
+- `reads:` must exactly match the `Reads:` field in the corresponding card file.
+- `depends-on:` references must point to lower-numbered cards (no forward references).
+- All paths are **root-relative** (prefixed by `root:` to form full repo-relative paths).
+
+### `card-NN-<slug>.md` — one card file per step
+
+```markdown
+---
+kind: plan-card
+card-number: 1
+card-slug: add-dag-module
+---
+
+### Step 1: Create dag.py with topological sort
+
+- **Creates:** `core/dag.py`
+- **Modifies:** none
+- **Reads:** `core/plan_io.py`
+- **Requirements:**
+  - Requirement 1 (specific, testable)
+- **Explore:**
+  - `core/plan_io.py` — module structure to follow.
+- **depends-on:** []
+- **TDD:** RED -> GREEN -> REFACTOR
+- **Test approach:** unit
+- **Key test scenarios:**
+  - Happy: topological sort returns correct order.
+  - Error: cycle detected raises ValueError.
+- **Commit:** `feat(dag): add DAG builder with topological sort`
+```
+
+### Card file frontmatter fields (v3)
+
+| Field | Required | Description |
+|---|---|---|
+| `kind` | yes | Must be `plan-card`. |
+| `card-number` | yes | Integer matching the Card Index key. Globally unique, sequential. |
+| `card-slug` | yes | Hyphenated slug matching the Card Index `slug:` field. |
+
+### Card file body (v3)
+
+The body contains a **single step card** using the same step card schema as v2 (see "Step Card Schema" below). The `Reads:` field in the card body must exactly match the `reads:` list in the Card Index.
+
+### `root:` path resolution semantics
+
+When `root:` is non-empty (e.g. `root: plugins/mill/scripts/millpy`):
+- Paths in `creates:`, `modifies:`, and `reads:` in the Card Index are **root-relative**.
+- Paths in `Creates:`, `Modifies:`, and `Reads:` in card files are **root-relative**.
+- `plan_io.resolve_path(loc, relative)` prepends `root + "/"` to form a full repo-relative path.
+- `plan_io.read_files_touched(loc)` returns full repo-relative paths (root prefix applied).
+
+When `root:` is empty string:
+- All paths are already full repo-relative paths.
+- `resolve_path` returns the relative path unchanged.
+
+**Example:** `root: plugins/mill/scripts/millpy`, `reads: [core/plan_io.py]` → full path `plugins/mill/scripts/millpy/core/plan_io.py`.
+
+### Card numbering (v3)
+
+Card numbering is **global and sequential starting at 1** with no gaps. `plan_validator` enforces sequential numbering with no gaps. The Planner assigns numbers in dependency order (a card's direct dependencies always have lower numbers).
+
+### v3 Backward Compatibility
+
+v3 detection takes priority when a `plan/` directory contains `card-*.md` files:
+- `card-*.md` files in `plan/` → **v3**
+- `NN-<slug>.md` batch files in `plan/` (no `card-*.md`) → **v2**
+- `plan.md` file → **v1**
+
+`plan_io.resolve_plan_path` handles this detection. All callers go through `plan_io` — no inline v1-vs-v2-vs-v3 branching at call sites.
+
+### v3 Worked Example — two-card plan
+
+**`00-overview.md`:**
+```markdown
+---
+kind: plan-overview
+task: Add DAG module
+verify: python -m pytest plugins/mill/scripts/millpy/tests
+dev-server: N/A
+approved: false
+started: 20260416-120000
+root: plugins/mill/scripts/millpy
+---
+
+# Add DAG module
+
+## Card Index
+
+```yaml
+1:
+  slug: add-dag-module
+  creates: [core/dag.py, tests/core/test_dag.py]
+  modifies: []
+  reads: [core/plan_io.py]
+  depends-on: []
+2:
+  slug: update-plan-io
+  creates: []
+  modifies: [core/plan_io.py]
+  reads: [core/plan_io.py, core/dag.py]
+  depends-on: [1]
+```
+
+## All Files Touched
+
+- core/dag.py
+- tests/core/test_dag.py
+- core/plan_io.py
+```
+
+**`card-01-add-dag-module.md`:**
+```markdown
+---
+kind: plan-card
+card-number: 1
+card-slug: add-dag-module
+---
+
+### Step 1: Create dag.py with topological sort and test
+
+- **Creates:** `core/dag.py`, `tests/core/test_dag.py`
+- **Modifies:** none
+- **Reads:** `core/plan_io.py`
+- **Requirements:**
+  - `build_dag(card_index: dict[int, dict]) -> dict[int, list[int]]`: returns adjacency list.
+  - `topo_sort(dag) -> list[int]`: topological order, raises `ValueError` on cycle.
+- **Explore:**
+  - `core/plan_io.py` — module structure to follow.
+- **depends-on:** []
+- **TDD:** RED -> GREEN -> REFACTOR
+- **Test approach:** unit
+- **Key test scenarios:**
+  - Happy: linear chain → correct order.
+  - Error: cycle → ValueError.
+- **Commit:** `feat(dag): add DAG builder with topological sort`
+```
+
+---
+
 The plan is the autonomous-execution contract written by `mill-go` Phase: Plan and consumed by Thread B (the implementer-orchestrator) per `implementer-brief.md`. It captures every decision and step needed to implement the task without further human interpretation.
 
 **The plan is the authoritative scope for Thread B.** Thread B reads this file and the codebase; it has no access to the discussion conversation or to Thread A's reasoning beyond what is written here. Each step card must be self-contained at the card level (see "Atomicity Invariant" below).
 
-## v2 Directory Layout (current format)
+## v2 Directory Layout
 
 For all new tasks, `mill-go` Phase: Plan writes a `_millhouse/task/plan/` directory:
 
@@ -233,12 +455,13 @@ When a step's natural scope is large, split it into smaller steps. Each split st
 
 ## Backwards Compatibility
 
-- If `_millhouse/task/plan/` (directory) exists → **v2**.
+- If `_millhouse/task/plan/` (directory) exists **and** contains `card-*.md` files → **v3**.
+- If `_millhouse/task/plan/` (directory) exists **without** `card-*.md` files → **v2**.
 - Else if `_millhouse/task/plan.md` (file) exists → **v1**.
-- Both present → **v2 wins**; an INFO-level warning is logged. Never halts.
+- Both `plan/` and `plan.md` present → **v2 or v3 wins**; an INFO-level warning is logged. Never halts.
 - Neither → `plan_io.resolve_plan_path` returns `None`.
 
-`plan_io.py` (the reader shim) handles this resolution. All callers go through `plan_io` — no inline v1-vs-v2 branching at call sites.
+`plan_io.py` (the reader shim) handles this resolution. All callers go through `plan_io` — no inline v1-vs-v2-vs-v3 branching at call sites.
 
 ## v2 Worked Examples
 
@@ -357,10 +580,10 @@ approved: false
 
 ## Relationship to Other Documents
 
-- `plan_io.py` — the reader shim that resolves v1 vs v2 paths. All callers use this module; no inline path logic.
-- `plan_validator.py` — the structural checker. Called at plan-write time (by Phase: Plan) and at pre-dispatch time (by `spawn_reviewer.py`).
-- `plan-review.md` — the reviewer protocol. Reviewer prompts are materialized per-mode (v1 / v2 per-batch / v2 whole-plan) using sentinel `N/A` tokens.
-- `implementer-brief.md` — Thread B's consumer. Thread B receives `<PLAN_PATH>` which may be a file (v1) or directory (v2) and uses `plan_io` to read it.
+- `plan_io.py` — the reader shim that resolves v1 vs v2 vs v3 paths. All callers use this module; no inline path logic.
+- `plan_validator.py` — the structural checker. Called at plan-write time (by `mill-plan`) and at pre-dispatch time (by `spawn_reviewer.py`).
+- `plan-review.md` — the reviewer protocol. Reviewer prompts are materialized per-mode (v1 / v2 per-batch / v2 whole-plan / v3 per-card) using sentinel `N/A` tokens.
+- `implementer-brief.md` — Builder's consumer. Builder receives `<PLAN_PATH>` which may be a file (v1) or directory (v2/v3) and uses `plan_io` to read it.
 
 ---
 

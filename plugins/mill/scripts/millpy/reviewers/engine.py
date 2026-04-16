@@ -3,7 +3,7 @@ reviewers/engine.py — Reviewer dispatch engine.
 
 Entry point: run_reviewer(*, reviewer_name, prompt_file, phase, round,
     review_file_path, plan_start_hash, plan_path, files_from,
-    plan_overview, plan_batch, plan_dir_path)
+    plan_overview, plan_batch, plan_dir_path, slice_id)
 
 Execution order (load-bearing for Fix E):
   1. Resolve reviewer name → ConfigError on unknown.
@@ -42,6 +42,7 @@ def run_reviewer(
     plan_overview: Path | None = None,
     plan_batch: Path | None = None,
     plan_dir_path: Path | None = None,
+    slice_id: str | None = None,
 ) -> ReviewerResult:
     """Resolve reviewer, guard, derive path, mkdir, then dispatch.
 
@@ -97,7 +98,10 @@ def run_reviewer(
 
     if review_file_path is None:
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
-        review_file_path = reviews_dir / f"{ts}-{reviewer_name}-r{round}.md"
+        if slice_id:
+            review_file_path = reviews_dir / f"{ts}-{reviewer_name}-{slice_id}-r{round}.md"
+        else:
+            review_file_path = reviews_dir / f"{ts}-{reviewer_name}-r{round}.md"
 
     # Step 5: Create the reviews directory (after validation succeeded).
     reviews_dir.mkdir(parents=True, exist_ok=True)

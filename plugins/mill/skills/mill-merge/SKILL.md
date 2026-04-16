@@ -168,7 +168,7 @@ Write the event to the YAML code block in `_millhouse/task/status.md`. For block
 ### Step 2: Send notification
 
 ```bash
-bash "$(git rev-parse --show-toplevel)/plugins/mill/scripts/notify.sh" \
+(cd plugins/mill/scripts && python -m millpy.entrypoints.notify) \
   --event "<EVENT>" \
   --branch "$(git branch --show-current)" \
   --detail "<detail>" \

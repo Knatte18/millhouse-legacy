@@ -12,11 +12,14 @@ from millpy.core.plan_io import (
     PlanLocation,
     parse_frontmatter,
     read_approved,
+    read_card_index,
     read_dev_server,
     read_files_touched,
     read_plan_content,
+    read_root,
     read_started,
     read_verify,
+    resolve_path,
     resolve_plan_path,
     write_approved,
 )
@@ -108,6 +111,94 @@ def make_v2_overview(tmp_path: Path, content: str | None = None) -> Path:
 
         - plugins/mill/foo.py
         - plugins/mill/bar.py
+    """)
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def make_v3_overview(tmp_path: Path, content: str | None = None) -> Path:
+    """Write a minimal v3 00-overview.md and return its path."""
+    d = tmp_path / "plan"
+    d.mkdir(exist_ok=True)
+    p = d / "00-overview.md"
+    text = content or textwrap.dedent("""\
+        ---
+        kind: plan-overview
+        task: Test Task v3
+        verify: python -m pytest tests
+        dev-server: N/A
+        approved: false
+        started: 20260415-120000
+        root: plugins/mill/scripts/millpy
+        ---
+
+        # Test Task v3
+
+        ## Context
+
+        A simple task.
+
+        ## Shared Constraints
+
+        - Use log_util.
+
+        ## Shared Decisions
+
+        (None.)
+
+        ## Card Index
+
+        ```yaml
+        1:
+          slug: add-foo
+          creates: [core/foo.py]
+          modifies: []
+          reads: [core/bar.py]
+          depends-on: []
+        2:
+          slug: update-bar
+          creates: []
+          modifies: [core/bar.py]
+          reads: [core/foo.py]
+          depends-on: [1]
+        ```
+
+        ## All Files Touched
+
+        - core/foo.py
+        - core/bar.py
+    """)
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def make_v3_card(
+    tmp_path: Path,
+    filename: str = "card-01-add-foo.md",
+    content: str | None = None,
+) -> Path:
+    """Write a v3 card file and return its path."""
+    d = tmp_path / "plan"
+    d.mkdir(exist_ok=True)
+    p = d / filename
+    text = content or textwrap.dedent("""\
+        ---
+        kind: plan-card
+        card-number: 1
+        card-slug: add-foo
+        ---
+
+        ### Step 1: Add foo.py
+
+        - **Creates:** `core/foo.py`
+        - **Modifies:** none
+        - **Reads:** `core/bar.py`
+        - **Requirements:**
+          - Requirement 1.
+        - **Explore:**
+          - `core/bar.py` — pattern to follow.
+        - **depends-on:** []
+        - **Commit:** `feat: add foo`
     """)
     p.write_text(text, encoding="utf-8")
     return p
@@ -448,6 +539,264 @@ class TestReadScalars:
         assert read_verify(loc) == "python -m pytest tests"
         assert read_started(loc) == "20260415-120000"
         assert read_dev_server(loc) is None
+
+
+# ---------------------------------------------------------------------------
+# parse_frontmatter — public wrapper
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# v3 resolve_plan_path
+# ---------------------------------------------------------------------------
+
+class TestResolvePlanPathV3:
+    def test_v3_detected_by_card_files(self, tmp_path):
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        make_v3_card(tmp_path, "card-02-update-bar.md")
+        loc = resolve_plan_path(tmp_path)
+        assert loc is not None
+        assert loc.kind == "v3"
+        assert loc.path == tmp_path / "plan"
+        assert loc.overview == tmp_path / "plan" / "00-overview.md"
+        assert [c.name for c in loc.cards] == ["card-01-add-foo.md", "card-02-update-bar.md"]
+
+    def test_v3_cards_sorted_by_filename(self, tmp_path):
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-02-update-bar.md")
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        assert [c.name for c in loc.cards] == ["card-01-add-foo.md", "card-02-update-bar.md"]
+
+    def test_v3_batches_empty(self, tmp_path):
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        assert loc.batches == []
+
+    def test_v3_wins_over_v2_batch_files(self, tmp_path):
+        """v3 (card-*.md) takes priority over v2 (NN-slug.md) when both present."""
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        # Also add a v2-style batch file
+        d = tmp_path / "plan"
+        (d / "01-core.md").write_text("# batch", encoding="utf-8")
+        loc = resolve_plan_path(tmp_path)
+        assert loc.kind == "v3"
+
+    def test_v3_root_field_populated(self, tmp_path):
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        assert loc.root == "plugins/mill/scripts/millpy"
+
+    def test_v3_root_empty_when_absent(self, tmp_path):
+        make_v3_overview(tmp_path, textwrap.dedent("""\
+            ---
+            kind: plan-overview
+            task: No Root Task
+            verify: noop
+            dev-server: N/A
+            approved: false
+            started: 20260415-120000
+            root:
+            ---
+            ## Card Index
+            ```yaml
+            ```
+            ## All Files Touched
+        """))
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        assert loc.root == ""
+
+    def test_v3_no_card_files_falls_back_to_v2(self, tmp_path):
+        """plan/ with only NN-slug.md files → v2."""
+        make_v2_overview(tmp_path)
+        make_v2_batch(tmp_path, "01-core.md")
+        loc = resolve_plan_path(tmp_path)
+        assert loc.kind == "v2"
+
+
+# ---------------------------------------------------------------------------
+# read_card_index
+# ---------------------------------------------------------------------------
+
+class TestReadCardIndex:
+    def test_happy_parses_two_cards(self, tmp_path):
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        index = read_card_index(loc)
+        assert 1 in index
+        assert 2 in index
+        assert index[1]["slug"] == "add-foo"
+        assert index[1]["creates"] == ["core/foo.py"]
+        assert index[1]["modifies"] == []
+        assert index[1]["reads"] == ["core/bar.py"]
+        assert index[1]["depends-on"] == []
+        assert index[2]["depends-on"] == ["1"]
+
+    def test_empty_card_index_returns_empty_dict(self, tmp_path):
+        make_v3_overview(tmp_path, textwrap.dedent("""\
+            ---
+            kind: plan-overview
+            task: Empty Index
+            verify: noop
+            dev-server: N/A
+            approved: false
+            started: 20260415-120000
+            root: ""
+            ---
+            ## Card Index
+            ```yaml
+            ```
+            ## All Files Touched
+        """))
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        index = read_card_index(loc)
+        assert index == {}
+
+    def test_no_card_index_section_returns_empty_dict(self, tmp_path):
+        """v2 overview (no Card Index) → empty dict."""
+        make_v2_overview(tmp_path)
+        loc = resolve_plan_path(tmp_path)
+        index = read_card_index(loc)
+        assert index == {}
+
+    def test_multi_item_list_parsed(self, tmp_path):
+        make_v3_overview(tmp_path, textwrap.dedent("""\
+            ---
+            kind: plan-overview
+            task: Multi
+            verify: noop
+            dev-server: N/A
+            approved: false
+            started: 20260415-120000
+            root: plugins/mill
+            ---
+            ## Card Index
+            ```yaml
+            1:
+              slug: multi-reads
+              creates: []
+              modifies: [core/a.py]
+              reads: [core/b.py, core/c.py, core/d.py]
+              depends-on: []
+            ```
+            ## All Files Touched
+        """))
+        make_v3_card(tmp_path, "card-01-multi-reads.md")
+        loc = resolve_plan_path(tmp_path)
+        index = read_card_index(loc)
+        assert index[1]["reads"] == ["core/b.py", "core/c.py", "core/d.py"]
+        assert index[1]["modifies"] == ["core/a.py"]
+
+    def test_v1_returns_empty_dict(self, tmp_path):
+        make_v1_plan(tmp_path)
+        loc = resolve_plan_path(tmp_path)
+        index = read_card_index(loc)
+        assert index == {}
+
+
+# ---------------------------------------------------------------------------
+# read_root / resolve_path
+# ---------------------------------------------------------------------------
+
+class TestReadRootAndResolvePath:
+    def test_read_root_v3(self, tmp_path):
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        assert read_root(loc) == "plugins/mill/scripts/millpy"
+
+    def test_read_root_v1_empty(self, tmp_path):
+        make_v1_plan(tmp_path)
+        loc = resolve_plan_path(tmp_path)
+        assert read_root(loc) == ""
+
+    def test_resolve_path_with_root(self, tmp_path):
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        result = resolve_path(loc, "core/dag.py")
+        assert result == "plugins/mill/scripts/millpy/core/dag.py"
+
+    def test_resolve_path_no_root(self, tmp_path):
+        make_v1_plan(tmp_path)
+        loc = resolve_plan_path(tmp_path)
+        result = resolve_path(loc, "plugins/mill/core/dag.py")
+        assert result == "plugins/mill/core/dag.py"
+
+
+# ---------------------------------------------------------------------------
+# v3 read_files_touched (with root prefix)
+# ---------------------------------------------------------------------------
+
+class TestReadFilesTouchedV3:
+    def test_v3_prepends_root(self, tmp_path):
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        files = read_files_touched(loc)
+        assert files == [
+            "plugins/mill/scripts/millpy/core/foo.py",
+            "plugins/mill/scripts/millpy/core/bar.py",
+        ]
+
+    def test_v3_no_root_no_prefix(self, tmp_path):
+        make_v3_overview(tmp_path, textwrap.dedent("""\
+            ---
+            kind: plan-overview
+            task: No Root Task
+            verify: noop
+            dev-server: N/A
+            approved: false
+            started: 20260415-120000
+            root:
+            ---
+            ## Card Index
+            ```yaml
+            1:
+              slug: foo
+              creates: [plugins/mill/core/foo.py]
+              modifies: []
+              reads: []
+              depends-on: []
+            ```
+            ## All Files Touched
+
+            - plugins/mill/core/foo.py
+        """))
+        make_v3_card(tmp_path, "card-01-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        files = read_files_touched(loc)
+        assert files == ["plugins/mill/core/foo.py"]
+
+
+# ---------------------------------------------------------------------------
+# v3 read_plan_content
+# ---------------------------------------------------------------------------
+
+class TestReadPlanContentV3:
+    def test_v3_includes_overview_and_cards(self, tmp_path):
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        make_v3_card(tmp_path, "card-02-update-bar.md")
+        loc = resolve_plan_path(tmp_path)
+        content = read_plan_content(loc)
+        assert content.startswith("=== plan/00-overview.md ===\n\n")
+        assert "\n\n---\n\n=== plan/card-01-add-foo.md ===" in content
+        assert "\n\n---\n\n=== plan/card-02-update-bar.md ===" in content
+        assert not content.endswith("---\n\n")
+
+    def test_v3_overview_only_no_trailing_separator(self, tmp_path):
+        make_v3_overview(tmp_path)
+        make_v3_card(tmp_path, "card-01-add-foo.md")
+        loc = resolve_plan_path(tmp_path)
+        content = read_plan_content(loc)
+        assert not content.rstrip().endswith("---")
 
 
 # ---------------------------------------------------------------------------

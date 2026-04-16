@@ -34,6 +34,7 @@ class _FakeToolUseResult:
     exit_code: int
     raw_stdout: str
     raw_stderr: str = ""
+    session_id: str | None = None
 
 
 @dataclass
@@ -55,9 +56,20 @@ class _FakeClaudeBackend:
             raw_stdout='{"result": "{\\"verdict\\": \\"APPROVE\\", \\"review_file\\": \\"/tmp/x.md\\"}"}',
         )
         self.dispatch_calls: list[dict] = []
+        self.resume_calls: list[dict] = []
 
     def dispatch_tool_use(self, prompt, *, model, effort, max_turns):
         self.dispatch_calls.append({
+            "prompt": prompt,
+            "model": model,
+            "effort": effort,
+            "max_turns": max_turns,
+        })
+        return self.canned
+
+    def dispatch_tool_use_resume(self, session_id, prompt, *, model, effort, max_turns):
+        self.resume_calls.append({
+            "session_id": session_id,
             "prompt": prompt,
             "model": model,
             "effort": effort,
@@ -315,3 +327,90 @@ def test_unicode_prompt_round_trips(fake_backend, tmp_path):
     assert "æøå" in dispatched_prompt
     assert "✨" in dispatched_prompt
     assert "日本語" in dispatched_prompt
+
+
+# ---------------------------------------------------------------------------
+# --session-id tests (Step 15)
+# ---------------------------------------------------------------------------
+
+def test_implementer_output_includes_session_id(fake_backend, prompt_file, capsys):
+    """First spawn without --session-id → implementer output includes session_id."""
+    fake_backend.canned = _FakeToolUseResult(
+        result_text='{"phase": "complete", "status_file": "s.md", "final_commit": "abc"}',
+        parsed_json={"phase": "complete", "status_file": "s.md", "final_commit": "abc"},
+        exit_code=0,
+        raw_stdout="",
+        session_id="captured-session-111",
+    )
+    exit_code = spawn_agent.main([
+        "--role", "implementer",
+        "--prompt-file", str(prompt_file),
+        "--provider", "sonnet",
+    ])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out.strip())
+    assert parsed["session_id"] == "captured-session-111"
+
+
+def test_resume_uses_dispatch_tool_use_resume(fake_backend, prompt_file, capsys):
+    """--session-id flag → uses dispatch_tool_use_resume instead of dispatch_tool_use."""
+    fake_backend.canned = _FakeToolUseResult(
+        result_text='{"phase": "complete", "status_file": "s.md", "final_commit": "def"}',
+        parsed_json={"phase": "complete", "status_file": "s.md", "final_commit": "def"},
+        exit_code=0,
+        raw_stdout="",
+        session_id="resumed-session-222",
+    )
+    exit_code = spawn_agent.main([
+        "--role", "implementer",
+        "--prompt-file", str(prompt_file),
+        "--provider", "sonnet",
+        "--session-id", "prev-session-111",
+    ])
+    assert exit_code == 0
+    # dispatch_tool_use should NOT have been called
+    assert len(fake_backend.dispatch_calls) == 0
+    # dispatch_tool_use_resume should have been called with the session_id
+    assert len(fake_backend.resume_calls) == 1
+    assert fake_backend.resume_calls[0]["session_id"] == "prev-session-111"
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out.strip())
+    assert parsed["session_id"] == "resumed-session-222"
+
+
+def test_session_id_with_bulk_dispatch_exits_1(fake_backend, prompt_file, tmp_path, capsys):
+    """--session-id with --dispatch bulk → error, exit 1."""
+    bulk_out = tmp_path / "out.md"
+    exit_code = spawn_agent.main([
+        "--role", "reviewer",
+        "--prompt-file", str(prompt_file),
+        "--provider", "sonnet",
+        "--dispatch", "bulk",
+        "--bulk-output", str(bulk_out),
+        "--session-id", "some-session",
+    ])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "bulk" in captured.err.lower() or "session" in captured.err.lower()
+
+
+def test_implementer_session_id_none_when_absent(fake_backend, prompt_file, capsys):
+    """session_id field is None in output when backend returns no session_id."""
+    fake_backend.canned = _FakeToolUseResult(
+        result_text='{"phase": "complete", "status_file": "s.md", "final_commit": "xyz"}',
+        parsed_json={"phase": "complete", "status_file": "s.md", "final_commit": "xyz"},
+        exit_code=0,
+        raw_stdout="",
+        session_id=None,
+    )
+    exit_code = spawn_agent.main([
+        "--role", "implementer",
+        "--prompt-file", str(prompt_file),
+        "--provider", "sonnet",
+    ])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out.strip())
+    assert "session_id" in parsed
+    assert parsed["session_id"] is None

@@ -1,11 +1,12 @@
 """
-plan_io.py — Plan path resolution and content reading for v1/v2 plans.
+plan_io.py — Plan path resolution and content reading for v1/v2/v3 plans.
 
-All callers go through this module — no inline v1-vs-v2 branching at call
-sites. This is the single source of truth for reading plan files.
+All callers go through this module — no inline v1-vs-v2-vs-v3 branching at
+call sites. This is the single source of truth for reading plan files.
 
 v1: _millhouse/task/plan.md (flat file)
 v2: _millhouse/task/plan/ (directory with 00-overview.md + batch files)
+v3: _millhouse/task/plan/ (directory with 00-overview.md + card-*.md files)
 """
 from __future__ import annotations
 
@@ -28,20 +29,29 @@ class PlanLocation:
     Attributes
     ----------
     kind:
-        "v1" for a single plan.md file, "v2" for a plan/ directory.
+        "v1" for a single plan.md file, "v2" for a plan/ directory with
+        batch files, "v3" for a plan/ directory with flat card files.
     path:
         For v1: the plan.md file path.
-        For v2: the plan/ directory path.
+        For v2/v3: the plan/ directory path.
     overview:
-        None for v1; absolute path to 00-overview.md for v2.
+        None for v1; absolute path to 00-overview.md for v2/v3.
     batches:
-        Empty list for v1; ordered list of batch file paths for v2
+        Empty list for v1/v3; ordered list of batch file paths for v2
         (filename order, 00-overview.md excluded).
+    cards:
+        Empty list for v1/v2; ordered list of card-*.md file paths for v3
+        (filename order).
+    root:
+        Empty string for v1/v2; value of ``root:`` frontmatter field in the
+        v3 overview (may also be empty string if field is absent/blank).
     """
-    kind: Literal["v1", "v2"]
+    kind: Literal["v1", "v2", "v3"]
     path: Path
     overview: Path | None
     batches: list[Path] = field(default_factory=list)
+    cards: list[Path] = field(default_factory=list)
+    root: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -229,10 +239,17 @@ def resolve_plan_path(task_dir: Path) -> PlanLocation | None:
         log("plan_io", "both v1 plan.md and v2 plan/ directory present; v2 takes precedence")
 
     if has_dir:
+        # v3 if any card-*.md files present; otherwise v2
+        card_files = [
+            p for p in plan_dir.iterdir()
+            if p.suffix == ".md" and p.name.startswith("card-")
+        ]
+        if card_files:
+            return _build_v3_location(plan_dir)
         return _build_v2_location(plan_dir)
 
     if has_file:
-        return PlanLocation(kind="v1", path=plan_file, overview=None, batches=[])
+        return PlanLocation(kind="v1", path=plan_file, overview=None)
 
     return None
 
@@ -264,6 +281,161 @@ def _build_v2_location(plan_dir: Path) -> PlanLocation:
     )
 
 
+def _build_v3_location(plan_dir: Path) -> PlanLocation:
+    """Construct a PlanLocation for an existing v3 plan directory.
+
+    Raises
+    ------
+    FileNotFoundError
+        If 00-overview.md is missing from the directory.
+    """
+    overview = plan_dir / "00-overview.md"
+    if not overview.exists():
+        raise FileNotFoundError(
+            f"v3 plan directory {plan_dir} is missing 00-overview.md"
+        )
+
+    # Collect card files: card-*.md sorted by filename
+    cards = sorted(
+        [p for p in plan_dir.iterdir() if p.suffix == ".md" and p.name.startswith("card-")]
+    )
+
+    # Read root from overview frontmatter
+    fm = _parse_frontmatter(overview.read_text(encoding="utf-8"))
+    root_val = fm.get("root")
+    root = str(root_val) if root_val is not None and root_val != "" else ""
+
+    return PlanLocation(
+        kind="v3",
+        path=plan_dir,
+        overview=overview,
+        cards=cards,
+        root=root,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Public API — Card Index (v3)
+# ---------------------------------------------------------------------------
+
+def read_card_index(loc: PlanLocation) -> dict[int, dict]:
+    """Parse the Card Index fenced YAML block from a v3 overview.
+
+    Returns
+    -------
+    dict[int, dict]
+        Keyed by card number (int). Each value has ``slug`` (str),
+        ``creates``, ``modifies``, ``reads``, ``depends-on`` (all lists
+        of strings). Returns an empty dict for v1 plans, plans with no
+        ``## Card Index`` section, or empty Card Index blocks.
+    """
+    if loc.overview is None:
+        return {}
+    text = loc.overview.read_text(encoding="utf-8")
+    return _parse_card_index(text)
+
+
+def _parse_card_index(overview_text: str) -> dict[int, dict]:
+    """Extract and parse the Card Index fenced YAML block from overview text."""
+    lines = overview_text.splitlines()
+    section_start: int | None = None
+    section_end = len(lines)
+
+    for i, line in enumerate(lines):
+        if line.strip() == "## Card Index":
+            section_start = i + 1
+        elif section_start is not None and line.startswith("## "):
+            section_end = i
+            break
+
+    if section_start is None:
+        return {}
+
+    section_text = "\n".join(lines[section_start:section_end])
+
+    # Find the first fenced YAML block within the section
+    fence_match = re.search(r"```ya?ml\n(.*?)```", section_text, re.DOTALL)
+    if not fence_match:
+        return {}
+
+    yaml_text = fence_match.group(1)
+    return _parse_card_index_yaml(yaml_text)
+
+
+def _parse_card_index_yaml(text: str) -> dict[int, dict]:
+    """Parse the inner text of a Card Index YAML fence into a dict.
+
+    Handles top-level integer keys and indented field lines with scalar
+    values or inline lists ``[item1, item2]``.
+    """
+    result: dict[int, dict] = {}
+    current_num: int | None = None
+    current_entry: dict = {}
+
+    # Top-level int key at column 0: e.g. "1:"
+    top_key_re = re.compile(r"^(\d+):\s*$")
+    # Indented field: leading whitespace, key (letters/digits/hyphens), colon, value
+    field_re = re.compile(r"^\s+([\w-]+):\s*(.*)")
+
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+
+        m = top_key_re.match(line)
+        if m:
+            if current_num is not None:
+                result[current_num] = current_entry
+            current_num = int(m.group(1))
+            current_entry = {}
+            continue
+
+        if current_num is not None:
+            m = field_re.match(line)
+            if m:
+                key = m.group(1).strip()
+                raw_value = m.group(2).strip()
+
+                # Inline list: [item1, item2] or []
+                if raw_value.startswith("[") and raw_value.endswith("]"):
+                    inner = raw_value[1:-1].strip()
+                    if not inner:
+                        current_entry[key] = []
+                    else:
+                        current_entry[key] = [item.strip() for item in inner.split(",")]
+                else:
+                    current_entry[key] = raw_value
+
+    if current_num is not None:
+        result[current_num] = current_entry
+
+    return result
+
+
+def read_root(loc: PlanLocation) -> str:
+    """Return the ``root:`` value from the PlanLocation, or empty string."""
+    return loc.root
+
+
+def resolve_path(loc: PlanLocation, relative: str) -> str:
+    """Prepend ``root`` to a relative path if root is non-empty.
+
+    Parameters
+    ----------
+    loc:
+        Plan location (``loc.root`` is used for the prefix).
+    relative:
+        A root-relative path such as ``core/dag.py``.
+
+    Returns
+    -------
+    str
+        ``root/relative`` if root is non-empty, else ``relative`` unchanged.
+    """
+    if loc.root:
+        return loc.root + "/" + relative
+    return relative
+
+
 # ---------------------------------------------------------------------------
 # Public API — content reading
 # ---------------------------------------------------------------------------
@@ -279,8 +451,13 @@ def read_plan_content(loc: PlanLocation) -> str:
     if loc.kind == "v1":
         return loc.path.read_text(encoding="utf-8")
 
-    # v2 — build concatenation
-    files = [loc.overview] + list(loc.batches)
+    # v2/v3 — build concatenation
+    if loc.kind == "v3":
+        tail_files: list[Path] = list(loc.cards)
+    else:
+        tail_files = list(loc.batches)
+
+    files = [loc.overview] + tail_files  # type: ignore[list-item]
     parts = []
     for f in files:
         rel = f.relative_to(loc.path.parent).as_posix()
@@ -299,7 +476,13 @@ def read_files_touched(loc: PlanLocation) -> list[str]:
     if loc.kind == "v1":
         text = loc.path.read_text(encoding="utf-8")
         return _parse_bullet_section(text, "## Files")
-    else:
+    elif loc.kind == "v3":
+        text = loc.overview.read_text(encoding="utf-8")  # type: ignore[union-attr]
+        paths = _parse_bullet_section(text, "## All Files Touched")
+        if loc.root:
+            return [loc.root + "/" + p for p in paths]
+        return paths
+    else:  # v2
         text = loc.overview.read_text(encoding="utf-8")  # type: ignore[union-attr]
         return _parse_bullet_section(text, "## All Files Touched")
 

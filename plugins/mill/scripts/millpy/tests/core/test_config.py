@@ -141,63 +141,6 @@ class TestLoad:
 # ---------------------------------------------------------------------------
 
 class TestResolveReviewerName:
-    def test_legacy_path_default(self, tmp_path):
-        """No review-modules block → falls back to models.<phase>-review.default."""
-        text = """\
-            models:
-              plan-review:
-                default: sonnet
-        """
-        cfg = load(write_yaml(tmp_path, text))
-        assert resolve_reviewer_name(cfg, "plan", 1) == "sonnet"
-
-    def test_new_block_wins_over_legacy(self, tmp_path):
-        text = """\
-            review-modules:
-              plan:
-                default: opus
-            models:
-              plan-review:
-                default: sonnet
-        """
-        cfg = load(write_yaml(tmp_path, text))
-        assert resolve_reviewer_name(cfg, "plan", 1) == "opus"
-
-    def test_per_round_override(self, tmp_path):
-        """Legacy ensemble name in per-round override is aliased to the modern short form."""
-        text = """\
-            review-modules:
-              code:
-                default: sonnet
-                1: ensemble-gemini3pro-x2-opus
-        """
-        cfg = load(write_yaml(tmp_path, text))
-        assert resolve_reviewer_name(cfg, "code", 1) == "g3pro-x2-opus"
-        assert resolve_reviewer_name(cfg, "code", 2) == "sonnet"
-
-    def test_raises_config_error_when_absent(self, tmp_path):
-        p = write_yaml(tmp_path, "name: foo\n")
-        cfg = load(p)
-        with pytest.raises(ConfigError):
-            resolve_reviewer_name(cfg, "plan", 1)
-
-    def test_config_error_is_value_error(self, tmp_path):
-        p = write_yaml(tmp_path, "name: foo\n")
-        cfg = load(p)
-        with pytest.raises(ValueError):
-            resolve_reviewer_name(cfg, "plan", 1)
-
-    def test_integer_and_string_key_equivalent(self, tmp_path):
-        """Integer key 1 and string key '1' both work."""
-        text = """\
-            review-modules:
-              plan:
-                default: sonnet
-                1: opus
-        """
-        cfg = load(write_yaml(tmp_path, text))
-        assert resolve_reviewer_name(cfg, "plan", 1) == "opus"
-
     def test_pipeline_schema_default(self, tmp_path):
         text = """\
             pipeline:
@@ -221,26 +164,93 @@ class TestResolveReviewerName:
         assert resolve_reviewer_name(cfg, "code", 1) == "g3pro-x2-opus"
         assert resolve_reviewer_name(cfg, "code", 2) == "sonnet"
 
-    def test_pipeline_wins_over_legacy_review_modules(self, tmp_path):
+    def test_raises_config_error_when_absent(self, tmp_path):
+        p = write_yaml(tmp_path, "name: foo\n")
+        cfg = load(p)
+        with pytest.raises(ConfigError):
+            resolve_reviewer_name(cfg, "plan", 1)
+
+    def test_config_error_is_value_error(self, tmp_path):
+        p = write_yaml(tmp_path, "name: foo\n")
+        cfg = load(p)
+        with pytest.raises(ValueError):
+            resolve_reviewer_name(cfg, "plan", 1)
+
+    def test_integer_and_string_key_equivalent(self, tmp_path):
+        """Integer key 1 and string key '1' both work."""
         text = """\
             pipeline:
               plan-review:
-                default: opus
-            review-modules:
-              plan:
                 default: sonnet
+                1: opus
         """
         cfg = load(write_yaml(tmp_path, text))
         assert resolve_reviewer_name(cfg, "plan", 1) == "opus"
 
-    def test_legacy_ensemble_name_aliased_to_new_short_form(self, tmp_path):
+
+# ---------------------------------------------------------------------------
+# resolve_reviewer_name() — slice_type parameter
+# ---------------------------------------------------------------------------
+
+class TestResolveReviewerNameSliceType:
+    def test_slice_type_holistic_resolves_from_holistic_key(self, tmp_path):
         text = """\
             pipeline:
               plan-review:
-                default: ensemble-gemini3flash-x3-sonnetmax
+                rounds: 3
+                default: g3flash-x3-sonnetmax
+                holistic: sonnetmax
+                per-card: g3flash
+        """
+        cfg = load(write_yaml(tmp_path, text))
+        assert resolve_reviewer_name(cfg, "plan", 1, slice_type="holistic") == "sonnetmax"
+
+    def test_slice_type_per_card_resolves_from_per_card_key(self, tmp_path):
+        text = """\
+            pipeline:
+              plan-review:
+                rounds: 3
+                default: g3flash-x3-sonnetmax
+                holistic: sonnetmax
+                per-card: g3flash
+        """
+        cfg = load(write_yaml(tmp_path, text))
+        assert resolve_reviewer_name(cfg, "plan", 1, slice_type="per-card") == "g3flash"
+
+    def test_no_slice_type_returns_default_backward_compat(self, tmp_path):
+        text = """\
+            pipeline:
+              plan-review:
+                rounds: 3
+                default: g3flash-x3-sonnetmax
+                holistic: sonnetmax
+                per-card: g3flash
         """
         cfg = load(write_yaml(tmp_path, text))
         assert resolve_reviewer_name(cfg, "plan", 1) == "g3flash-x3-sonnetmax"
+
+    def test_slice_type_falls_back_to_default_when_key_absent(self, tmp_path):
+        text = """\
+            pipeline:
+              plan-review:
+                rounds: 3
+                default: g3flash-x3-sonnetmax
+                holistic: sonnetmax
+        """
+        cfg = load(write_yaml(tmp_path, text))
+        # per-card key is absent → falls back to default
+        assert resolve_reviewer_name(cfg, "plan", 1, slice_type="per-card") == "g3flash-x3-sonnetmax"
+
+    def test_slice_type_raises_when_no_default_and_key_absent(self, tmp_path):
+        text = """\
+            pipeline:
+              plan-review:
+                rounds: 3
+                holistic: sonnetmax
+        """
+        cfg = load(write_yaml(tmp_path, text))
+        with pytest.raises(ConfigError):
+            resolve_reviewer_name(cfg, "plan", 1, slice_type="per-card")
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +260,10 @@ class TestResolveReviewerName:
 class TestResolveMaxRounds:
     def test_returns_value_when_present(self, tmp_path):
         text = """\
-            reviews:
-              plan: 5
+            pipeline:
+              plan-review:
+                rounds: 5
+                default: sonnet
         """
         cfg = load(write_yaml(tmp_path, text))
         assert resolve_max_rounds(cfg, "plan") == 5
@@ -263,25 +275,15 @@ class TestResolveMaxRounds:
 
     def test_returns_default_when_phase_absent(self, tmp_path):
         text = """\
-            reviews:
-              code: 2
+            pipeline:
+              code-review:
+                rounds: 2
+                default: sonnet
         """
         cfg = load(write_yaml(tmp_path, text))
         assert resolve_max_rounds(cfg, "plan") == 3
 
-    def test_pipeline_rounds_wins_over_legacy_reviews(self, tmp_path):
-        text = """\
-            pipeline:
-              plan-review:
-                rounds: 4
-                default: sonnet
-            reviews:
-              plan: 2
-        """
-        cfg = load(write_yaml(tmp_path, text))
-        assert resolve_max_rounds(cfg, "plan") == 4
-
-    def test_pipeline_rounds_only(self, tmp_path):
+    def test_pipeline_rounds(self, tmp_path):
         text = """\
             pipeline:
               code-review:

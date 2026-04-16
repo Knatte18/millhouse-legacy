@@ -1,0 +1,36 @@
+git:
+  base-branch: main
+  parent-branch: main
+  auto-merge: false
+  require-pr-to-base: false
+
+repo:
+  short-name: "<SHORT_NAME>"
+  branch-prefix: ~
+
+pipeline:
+  implementer: <IMPLEMENTER>
+  discussion-review:
+    rounds: 2
+    default: g3flash-x3-sonnetmax
+  plan-review:
+    rounds: 3
+    default: g3flash-x3-sonnetmax
+    holistic: sonnetmax
+    per-card: g3flash
+  code-review:
+    rounds: 3
+    default: g3flash-x3-sonnetmax
+    holistic: g3flash-x3-g3flash
+    per-card: g3flash
+
+runtime:
+  pre-arm-timeout-seconds: 14400
+
+notifications:
+  slack:
+    enabled: false
+    webhook: ""
+    channel: ""
+  toast:
+    enabled: true

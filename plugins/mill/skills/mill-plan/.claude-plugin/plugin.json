@@ -1,0 +1,5 @@
+{
+  "name": "mill-plan",
+  "description": "Autonomous plan writing phase — writes v3 flat-card plan from discussion file and reviews it.",
+  "argument-hint": "[-pr N]"
+}

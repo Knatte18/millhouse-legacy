@@ -17,7 +17,7 @@ Update `_codeguide/` docs for source files that changed recently. Designed to be
 
 ## Steps
 
-1. **Find `_codeguide/`:** Run `python ${CLAUDE_PLUGIN_ROOT}/scripts/_resolve.py` to locate the nearest `_codeguide/` containing config.yaml. If not found, stop — codeguide is not initialized.
+1. **Find `_codeguide/`:** Run `python ${CLAUDE_PLUGIN_ROOT}/scripts/millpy/codeguide/resolve.py` to locate the nearest `_codeguide/` containing config.yaml. If not found, stop — codeguide is not initialized.
 
 2. **Read config:** Load source extensions from `_codeguide/config.yaml`. Filter scope to recognized source files only.
 

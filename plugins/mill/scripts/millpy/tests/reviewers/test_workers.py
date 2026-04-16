@@ -1,6 +1,8 @@
 """Tests for millpy.reviewers.workers and definitions registries."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from millpy.reviewers.definitions import REVIEWERS
 from millpy.reviewers.workers import WORKERS
 
@@ -13,7 +15,7 @@ def test_workers_count_and_no_haiku():
 def test_workers_dispatch_modes():
     for name in ("sonnet", "sonnetmax", "opus", "opusmax", "glmflash", "qwenthinker"):
         assert WORKERS[name].dispatch_mode == "tool-use", name
-    for name in ("gemini3pro", "gemini3flash"):
+    for name in ("g3pro", "g3flash"):
         assert WORKERS[name].dispatch_mode == "bulk", name
 
 
@@ -26,19 +28,22 @@ def test_workers_effort_and_extras():
 
 def test_reviewers_count_and_keys():
     assert len(REVIEWERS) == 4
-    assert "ensemble-gemini3pro-x2-opus" in REVIEWERS
-    assert REVIEWERS["ensemble-gemini3pro-x2-opus"].worker_count == 2
-    assert REVIEWERS["ensemble-gemini3pro-x2-opus"].handler == "opus"
-    assert "g3flash-x3-sonnetmax-plan" in REVIEWERS
-    assert REVIEWERS["g3flash-x3-sonnetmax-plan"].worker == "gemini3flash"
-    assert REVIEWERS["g3flash-x3-sonnetmax-plan"].worker_count == 3
-    assert REVIEWERS["g3flash-x3-sonnetmax-plan"].handler == "sonnetmax"
+    assert "g3pro-x2-opus" in REVIEWERS
+    assert REVIEWERS["g3pro-x2-opus"].worker_count == 2
+    assert REVIEWERS["g3pro-x2-opus"].handler == "opus"
+    assert "g3flash-x3-sonnetmax" in REVIEWERS
+    assert REVIEWERS["g3flash-x3-sonnetmax"].worker == "g3flash"
+    assert REVIEWERS["g3flash-x3-sonnetmax"].worker_count == 3
+    assert REVIEWERS["g3flash-x3-sonnetmax"].handler == "sonnetmax"
 
 
 def test_no_cross_import():
-    for mod, bad in [
-        ("plugins/mill/scripts/millpy/reviewers/workers.py", "definitions"),
-        ("plugins/mill/scripts/millpy/reviewers/definitions.py", "workers"),
+    import millpy.reviewers.workers as w_mod
+    import millpy.reviewers.definitions as d_mod
+    for mod_obj, bad in [
+        (w_mod, "definitions"),
+        (d_mod, "workers"),
     ]:
-        lines = [l for l in open(mod, encoding="utf-8") if l.strip().startswith(("import ", "from "))]
-        assert not any(bad in l for l in lines), f"{mod} must not import {bad}"
+        mod_path = Path(mod_obj.__file__)
+        lines = [l for l in mod_path.read_text(encoding="utf-8").splitlines() if l.strip().startswith(("import ", "from "))]
+        assert not any(bad in l for l in lines), f"{mod_path.name} must not import {bad}"

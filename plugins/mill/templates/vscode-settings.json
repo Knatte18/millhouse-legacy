@@ -1,0 +1,9 @@
+{
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground": "<COLOR_HEX>",
+        "titleBar.activeForeground": "#ffffff",
+        "titleBar.inactiveBackground": "<COLOR_HEX>",
+        "titleBar.inactiveForeground": "#ffffffaa"
+    },
+    "window.title": "<SHORT_NAME>: <SLUG>"
+}

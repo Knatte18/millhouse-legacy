@@ -34,11 +34,11 @@ WORKERS: dict[str, Worker] = {
         model="opus",
         effort="max",
     ),
-    "gemini3flash": Worker(
+    "g3flash": Worker(
         provider="gemini",
         model="gemini-3-flash-preview",
     ),
-    "gemini3pro": Worker(
+    "g3pro": Worker(
         provider="gemini",
         model="gemini-3-pro-preview",
     ),
