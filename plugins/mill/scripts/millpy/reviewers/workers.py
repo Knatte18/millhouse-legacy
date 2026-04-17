@@ -9,6 +9,12 @@ Model names are passed verbatim to the Gemini CLI via `gemini --model <name>`:
   - gemini-3 variants use the `-preview` suffix (gemini-3-pro-preview, gemini-3-flash-preview)
   - gemini-2.5 variants are GA and use the plain name (gemini-2.5-pro, gemini-2.5-flash)
 
+Claude workers use max_turns=500 (not the Worker default of 30). Holistic tool-use
+reviews on multi-file artifacts legitimately need 50-150 turns, and the Claude CLI
+has a known subprocess-hang bug that kicks in after ~15-20 min regardless of
+max_turns — so the cap is set well above realistic need and the real reliability
+ceiling is documented separately. See plugins/mill/doc/providers/claude-cli-limits.md.
+
 No cross-import with definitions.py. Registry validation lives in __init__.py.
 """
 from __future__ import annotations
