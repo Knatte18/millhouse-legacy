@@ -74,13 +74,19 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
 2. **Select task.** Read `tasks.md` in the project root (the working directory where `_millhouse/` lives).
 
-   a. Find all `## ` headings. Unmarked headings (no `[phase]` marker) are available tasks. Headings with a `[phase]` marker are already claimed — skip them.
+   a. Find all `## ` headings. Filter as follows:
+      - **Skip** any heading whose phase marker is `[active]`, `[done]`, or `[abandoned]` (these are claimed elsewhere or terminal — never pickable).
+      - **Fast-path candidates:** headings with phase marker `[s]`.
+      - **Numbered-list candidates:** unmarked headings (no `[phase]` marker).
 
-   b. If zero available tasks: report "No unclaimed tasks in tasks.md. Run mill-add to create one, or describe what you want to work on." If the user provides a description, create the task directly (add to tasks.md, commit and push, then claim it).
+   b. **Fast-path:** if any `[s]` candidates exist, auto-select the FIRST `[s]` task. Print "Auto-picking the next ready task: `<title>`" and proceed to claim it. Do NOT show a numbered list. Do NOT ask about other tasks.
 
-   c. If one available task: select it. Show the title and ask user to confirm.
+   c. **Numbered-list path:** if no `[s]` candidates exist, look at the unmarked candidates:
+      - Zero unmarked: report "No pickable tasks in tasks.md (all are `[active]`, `[done]`, or `[abandoned]`). Run `mill-add` to create one, or describe what you want to work on." If the user provides a description, create the task directly (add to tasks.md, commit and push, then claim it).
+      - One unmarked: select it. Show the title and ask the user to confirm.
+      - Two or more unmarked: print a numbered list (per `mill:conversation` skill rules — no `AskUserQuestion`). User types the number.
 
-   d. If 2+ available tasks: print numbered list (follow mill:conversation rules). User types the number.
+   d. **Never prompt the user about `[active]`, `[done]`, or `[abandoned]` tasks** — these are filtered out at step a. (An `[active]` task is in progress in another worktree and is not a valid pickup target; `[done]` / `[abandoned]` are terminal states awaiting cleanup.)
 
 3. **Move to Active.** Add `[active]` marker to the selected task's heading in `tasks.md`. E.g., `## Task Title` becomes `## [active] Task Title`. Stage, commit, and push `tasks.md` immediately. The `[active]` marker stays in place through the entire discuss/plan/implement/test/review window until merge or abandon.
 

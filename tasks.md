@@ -10,7 +10,7 @@ I can then manually pull down the issues, have Opus analyse them as an ensamble,
 - Do not hardcode templates in a skill: INGEN av skillene som oppretter filer skal ha hardkodet template. Jeg ser at f.eks step *Step 4c i mill-setup har en hardkodet "config". Vi har laget "millhouse-config.yaml" som en template som skal bruke i stedet. INGEN slik hardkodet template skal inn i noen skill. Det skal brukes en template-fil i stedet. Dette gjør det mye enklere å ender templaten. Sjekk også om det er noen andre skill som gjør dette. 
 
 
-## Self-reinforcement loop: auto-reporting + auto-revise-tasks + simpler task picking
+## [done] Self-reinforcement loop: auto-reporting + auto-revise-tasks + simpler task picking
 
 Close the full loop between orchestrators, GitHub issues, and `tasks.md`. Three related pieces, one task:
 

@@ -37,14 +37,14 @@ def _init_repo_with_commit(path: Path) -> None:
 
 
 def _write_millhouse_project(project_root_dir: Path) -> None:
-    """Create a minimal _millhouse/config.yaml and a tasks.md with one [>] task."""
+    """Create a minimal _millhouse/config.yaml and a tasks.md with one [s] task."""
     (project_root_dir / "_millhouse").mkdir(parents=True, exist_ok=True)
     (project_root_dir / "_millhouse" / "config.yaml").write_text(
         "repo:\n  short-name: \"t\"\n  branch-prefix: ~\n",
         encoding="utf-8",
     )
     (project_root_dir / "tasks.md").write_text(
-        "# Tasks\n\n## [>] Ready Task\nA short description.\n",
+        "# Tasks\n\n## [s] Ready Task\nA short description.\n",
         encoding="utf-8",
     )
 

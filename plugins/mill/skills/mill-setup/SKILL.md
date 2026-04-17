@@ -57,7 +57,7 @@ Ask the user: "Repo short-name for window titles (default: `<directory-name>`):"
 If `_millhouse/config.yaml` does not exist, write it with the full `pipeline:`-schema template.
 
 If `_millhouse/config.yaml` already exists, check for the presence of a top-level `pipeline:` block:
-- **Present:** the config is already in the new schema. Check `git.auto-merge`, `git.require-pr-to-base`, `repo:`, and `notifications:` sections exist; append any missing ones without overwriting. Also check for new v3 pipeline keys: `pipeline.plan-review.holistic`, `pipeline.plan-review.per-card`, `pipeline.code-review.holistic`, `pipeline.code-review.per-card`, and `runtime.pre-arm-timeout-seconds`; append any missing ones with default values without overwriting existing values. Preserve everything else verbatim. No further migration.
+- **Present:** the config is already in the new schema. Check `git.auto-merge`, `git.require-pr-to-base`, `repo:`, and `notifications:` sections exist; append any missing ones without overwriting. Also check for new v3 pipeline keys: `pipeline.plan-review.holistic`, `pipeline.plan-review.per-card`, `pipeline.code-review.holistic`, `pipeline.code-review.per-card`, and `runtime.pre-arm-timeout-seconds`; append any missing ones with default values without overwriting existing values. Also check for the self-reinforcement-loop keys: `notifications.auto-report.enabled` (default `false`), `revise.brevity-threshold-lines` (default `5`), and `revise.brevity-threshold-chars` (default `500`). Append any missing ones with their default values. **Insertion strategy for nested keys** (text-based — no YAML library): for `notifications.auto-report.enabled`, locate the `notifications:` block by line-prefix match (`^notifications:`) and insert an `auto-report:` sub-block (with `enabled: false` indented 4 spaces under `auto-report:`, which is itself indented 2 spaces under `notifications:`) immediately after the `notifications:` line if absent; preserve the existing `slack:` and `toast:` siblings verbatim. For `revise.*`, append the entire `revise:` top-level block at the end of the file if absent. Preserve everything else verbatim. No further migration.
 - **Absent:** the config is pre-W1 legacy. Run the per-key migration below (Step 4c — legacy-to-pipeline migration).
 
 **Template (used for new creation and as the migration target shape):** Read `plugins/mill/templates/millhouse-config.yaml`, substitute `<SHORT_NAME>` with the value from Step 4a and `<IMPLEMENTER>` with `sonnet`, then write to `_millhouse/config.yaml`. Only block-style YAML — the hand-written parser at `plugins/mill/scripts/millpy/core/config.py` does not support inline flow mappings.
@@ -80,6 +80,12 @@ Migration is text-based line manipulation, not YAML-library round-trip. millpy h
 If `pipeline:` block is missing, read `plugins/mill/templates/millhouse-config.yaml`, substitute `<IMPLEMENTER>` with the resolved implementer name (from the extraction pass above, fallback `sonnet`), substitute `<SHORT_NAME>` with the value from Step 4a, and write the result to `_millhouse/config.yaml` as the source of truth for the pipeline schema. The template already contains `g25flash`-based reviewer names; do NOT hardcode reviewer names in this SKILL file.
 
 **Validation note.** After writing, reload the file via `millpy.core.config.load` and call `millpy.core.config.resolve_reviewer_name(cfg, "plan", 1, slice_type="per-card")` as a smoke test. A `ConfigError` from the resolver indicates an edge case — stop with the error and tell the user to inspect `_millhouse/config.yaml` manually.
+
+**Step 4d — tasks.md marker migration.**
+
+Read the project-root `tasks.md`. Scan for any `## [>] Title` headings. For each match, rewrite to `## [s] Title`. If any matches were found and rewritten, commit with message `chore: migrate [>] markers to [s]` and push. If no matches, no write occurs (idempotent).
+
+Rationale: older millhouse installations may have live `[>]` markers in their `tasks.md`. After the `[s]` vocabulary change landed, `[>]` markers are invalid (rejected by `tasks_md.validate()`) and invisible to the new picker. This migration step keeps upgrades non-destructive across installations.
 
 ### Step 5: Create forwarding wrappers
 

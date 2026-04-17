@@ -1,12 +1,15 @@
 """
 entrypoints/spawn_task.py — Task spawner for millpy (live).
 
-Reads tasks.md, claims the first [>] task (changes to [active]),
-creates the worktree, writes status.md, discussion placeholder, and
-updates the parent's tasks.md.
+Reads tasks.md, picks the next task via the unified picker
+(``pick_task``), claims it (changes to [active]), creates the
+worktree, writes status.md, and updates the parent's tasks.md.
 
-Live after W1 Step 10 skill-text flip: called directly by the mill-spawn
-skill via `_millhouse/mill-spawn.py` or direct plugin-source resolution.
+Picker rules: filter out [active], [done], [abandoned] from the
+candidate pool. Fast-path: if any [s] task exists, pick the first one
+without prompting. Numbered-fallback: otherwise present a numbered list
+of unmarked tasks and prompt the user to choose. Empty mode: no [s] and
+no unmarked tasks → print a hint and exit 0.
 
 Prose-paragraph parser fix (Proposal 02 Fix C): tasks_md.parse handles both
 bullet-list and prose-paragraph task bodies.
@@ -23,8 +26,34 @@ import sys
 from pathlib import Path, PurePosixPath
 
 
+def pick_task(tasks):
+    """Pick the next task from a list.
+
+    Returns a tuple ``(mode, picked, candidates)``:
+
+    - ``mode == "fast-path"``: ``picked`` is the first ``[s]`` task in file
+      order; ``candidates`` is empty.
+    - ``mode == "numbered"``: ``picked`` is ``None``; ``candidates`` is the
+      list of unmarked tasks (phase is ``None``), in file order, that the
+      caller should present to the user for numeric selection.
+    - ``mode == "empty"``: ``picked`` is ``None``; ``candidates`` is empty
+      (no pickable tasks exist).
+
+    ``[active]``, ``[done]``, and ``[abandoned]`` phases are filtered out of
+    both the fast-path and the numbered candidate pool — they are managed
+    elsewhere (mill-start, mill-merge, mill-abandon, mill-cleanup).
+    """
+    fast = next((t for t in tasks if t.phase == "s"), None)
+    if fast is not None:
+        return ("fast-path", fast, [])
+    candidates = [t for t in tasks if t.phase is None]
+    if not candidates:
+        return ("empty", None, [])
+    return ("numbered", None, candidates)
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Spawn a worktree for the next [>] task in tasks.md.
+    """Spawn a worktree for the next pickable task in tasks.md.
 
     Parameters
     ----------
@@ -45,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(
         prog="spawn_task",
-        description="Spawn a worktree for the first [>] task in tasks.md.",
+        description="Spawn a worktree for the next pickable task in tasks.md.",
     )
     parser.add_argument(
         "--dry-run",
@@ -94,10 +123,36 @@ def main(argv: list[str] | None = None) -> int:
 
     # Parse tasks.md — exercises prose-paragraph parser (Fix C)
     tasks = tasks_md.parse(tasks_path)
-    spawn_task = next((t for t in tasks if t.phase == ">"), None)
-    if spawn_task is None:
-        print("[spawn_task] No [>] tasks in tasks.md.", file=sys.stderr)
+    mode, spawn_task, candidates = pick_task(tasks)
+    if mode == "empty":
+        print(
+            "[spawn_task] No pickable tasks (all tasks are [active], [done], "
+            "or [abandoned], and no [s] task or unmarked task exists). "
+            "Run mill-add to add a task.",
+            file=sys.stderr,
+        )
         return 0
+    if mode == "numbered":
+        print("Pick a task:")
+        for i, t in enumerate(candidates, start=1):
+            print(f"  {i}) {t.title}")
+        try:
+            raw = input("Pick a task number: ")
+        except EOFError:
+            print("[spawn_task] No input available for numbered picker.", file=sys.stderr)
+            return 1
+        try:
+            choice = int(raw.strip())
+        except ValueError:
+            print(f"[spawn_task] Not a number: {raw!r}", file=sys.stderr)
+            return 1
+        if choice < 1 or choice > len(candidates):
+            print(
+                f"[spawn_task] Choice {choice} out of range (1..{len(candidates)}).",
+                file=sys.stderr,
+            )
+            return 1
+        spawn_task = candidates[choice - 1]
 
     task_title = spawn_task.title
     task_body = spawn_task.body
@@ -124,13 +179,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dry_run:
         print(f"[DryRun] Would write handoff to _millhouse/handoff.md")
-        print(f"[DryRun] Would change [>] to [active] for task '{task_title}' in tasks.md.")
+        print(f"[DryRun] Would claim (set to [active]) task '{task_title}' in tasks.md.")
         print(f"[DryRun] Would create worktree (branch: {branch_name})")
         print(f"[DryRun] Would copy _millhouse/ (excluding task/, scratch/, children/) to new worktree")
         print(f"[DryRun] Would write status.md in new worktree")
         return 0
 
-    # Change [>] to [active] in tasks.md
+    # Claim the picked task (set phase to 'active') in tasks.md
     updated_tasks = tasks_md.render(
         [t if t is not spawn_task else _claim_task(t) for t in tasks]
     )

@@ -252,6 +252,12 @@ mill-plan proceeds through named phases. Each phase updates the YAML code block 
 
    Insert `planned  <timestamp>` before the closing ` ``` ` of the timeline text block. Generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`.
 
+3.5. **Auto-fire `mill-self-report` (if enabled).**
+
+   Read `notifications.auto-report.enabled` from `_millhouse/config.yaml`. If `false` or missing, skip this step.
+
+   If `true`: invoke the `mill-self-report` skill via the Skill tool with no argument. The skill reflects on the plan-writing session's context (any plan-review anomalies, reviewer UNKNOWN verdicts, fix-loop friction), presents candidates to the user, and files selected ones. Wait for the skill to return before reporting completion to the user.
+
 4. Report:
    > Plan written and approved. Run `mill-go` to start the Builder.
 

@@ -274,6 +274,8 @@ For v1 and v2 plans, materialize the implementer brief using the full plan (not 
 
 ### Phase: Completion
 
+On non-blocked outcomes (`complete` or `pr-pending`), the Builder also runs an optional self-reflection pass (`mill-self-report`) before releasing the lock — see sub-step 12.b.i.
+
 12. After the final code-review approves:
 
     a. Read `_millhouse/task/status.md` `phase:`. Expected: `complete`, `blocked`, `pr-pending`.
@@ -283,12 +285,20 @@ For v1 and v2 plans, materialize the implementer brief using the full plan (not 
 
        Release `_millhouse/builder.lock`. Notification was already sent by the final implementer session or mill-merge.
 
+    b.i. **Auto-fire `mill-self-report` (if enabled).**
+
+       Read `notifications.auto-report.enabled` from `_millhouse/config.yaml`. If `false` or missing, skip this sub-step.
+
+       If `true`: invoke the `mill-self-report` skill via the Skill tool with no argument. The skill reflects on the run's session context, presents a numbered bug-candidate list to the user (or exits silently if none), and files selected candidates via `millhouse-issue`. Wait for the skill to return before proceeding to lock release.
+
+       Apply this sub-step on BOTH `phase: complete` (12.b) and `phase: pr-pending` (12.d). Do NOT apply on `phase: blocked` (12.c) — the existing blocked-notification already carries the diagnosis.
+
     c. **`blocked`:** report `blocked_reason` from status.md, release lock, exit.
 
     d. **`pr-pending`:** report:
        > Task complete; PR pending. Run `gh pr view` for details.
 
-       Release lock. Notification was already sent by mill-merge.
+       Release lock. Notification was already sent by mill-merge. Run sub-step 12.b.i (auto-fire `mill-self-report`) before releasing the lock, using the same toggle.
 
     e. The Builder's responsibilities end here. **Do not invoke `mill-merge` directly** — the implementer does that.
 

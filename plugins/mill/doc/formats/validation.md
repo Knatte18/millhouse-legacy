@@ -14,7 +14,7 @@ After writing tasks.md, verify all of the following:
 
 1. **Single project heading.** Exactly one `# ` heading, at line 1 (e.g., `# Tasks`).
 2. **Tasks use `## ` headings.** All task entries are `## ` headings (not `###` or deeper).
-3. **Valid phase markers.** If a `## ` heading contains a `[phase]` marker, the phase must be one of: `>`, `active`, `done`, `abandoned`. Format: `## [phase] Title`. Note: the regex `\[(\w+)\]` does not match `[>]` — use `\[([>\w]+)\]` when validating programmatically.
+3. **Valid phase markers.** If a `## ` heading contains a `[phase]` marker, the phase must be one of: `s`, `active`, `done`, `abandoned`. Format: `## [phase] Title`. Note: the regex keeps the `[>\w]+` character class so any historical `[>]` markers in old git history still parse; `s` is `\w`-compatible so no regex change was needed for the new marker.
 4. **No orphaned content.** No non-blank lines before the first `## ` heading (except the `# ` project heading).
 
 ## status.md (`_millhouse/task/status.md`)

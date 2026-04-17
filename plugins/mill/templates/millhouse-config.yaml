@@ -28,9 +28,15 @@ runtime:
   pre-arm-timeout-seconds: 14400
 
 notifications:
+  auto-report:
+    enabled: false
   slack:
     enabled: false
     webhook: ""
     channel: ""
   toast:
     enabled: true
+
+revise:
+  brevity-threshold-lines: 5
+  brevity-threshold-chars: 500

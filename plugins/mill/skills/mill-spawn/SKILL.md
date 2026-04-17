@@ -5,7 +5,7 @@ description: Add a task to tasks.md and create a worktree for it in one command.
 
 # mill-spawn
 
-One-shot. Add a task with `[spawn]` marker to `tasks.md`, commit, then call `spawn_task.py` to claim it and create a worktree.
+One-shot. Add a task with `[s]` marker to `tasks.md`, commit, then call `spawn_task.py` to claim it and create a worktree.
 
 For tasks.md file format details, see `plugins/mill/doc/formats/tasksmd.md`.
 
@@ -37,18 +37,18 @@ Split the argument on the first `:` character.
 
 ### Step 3: Add task with spawn marker
 
-Read `tasks.md`. Append a new task block at the end of the file with the `[spawn]` marker:
+Read `tasks.md`. Append a new task block at the end of the file with the `[s]` marker:
 
 If no description:
 
 ```markdown
-## [spawn] <Title>
+## [s] <Title>
 ```
 
 If description provided:
 
 ```markdown
-## [spawn] <Title>
+## [s] <Title>
 - <Description>
 ```
 
@@ -78,7 +78,7 @@ Run via bash:
 python "<resolved-path>"
 ```
 
-The script reads the first `## [>] ` task from `tasks.md`, claims it (removes the task block, commits), creates the worktree via the Python `worktree.py` entrypoint (passing `WorktreeName` and `BranchName`), writes `_millhouse/task/status.md` in the new worktree, and writes a child registry entry to the parent's `_millhouse/children/` directory and a junction at `_millhouse/children/<slug>/` pointing to the new worktree's `_millhouse/task/`. The `task/`, `children/`, and `scratch/` folders are excluded from copy-on-spawn. Like all of `_millhouse/`, these folders are gitignored — registry entries and task state are local to each clone/worktree.
+The script picks the next task using the unified picker logic: it filters out `[active]`, `[done]`, and `[abandoned]` tasks (these are claimed elsewhere), then either auto-picks the first `[s]` task if any exists, or presents a numbered list of unmarked tasks for the user to choose from. The chosen task is claimed (phase set to `[active]`, commit + push), then the script creates the worktree via the Python `worktree.py` entrypoint (passing `WorktreeName` and `BranchName`), writes `_millhouse/task/status.md` in the new worktree, and writes a child registry entry to the parent's `_millhouse/children/` directory and a junction at `_millhouse/children/<slug>/` pointing to the new worktree's `_millhouse/task/`. The `task/`, `children/`, and `scratch/` folders are excluded from copy-on-spawn. Like all of `_millhouse/`, these folders are gitignored — registry entries and task state are local to each clone/worktree.
 
 ### Step 7: Report
 

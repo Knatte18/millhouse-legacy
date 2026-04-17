@@ -40,13 +40,20 @@ TWO_H1 = """\
     ## Task One
 """
 
-WITH_GT_MARKER = """\
+WITH_S_MARKER = """\
     # Tasks
 
-    ## [>] Ready Task
+    ## [s] Ready Task
     Description here.
 
     ## [done] Done Task
+"""
+
+WITH_LEGACY_GT_MARKER = """\
+    # Tasks
+
+    ## [>] Legacy Ready Task
+    Description here.
 """
 
 PROSE_BODY = """\
@@ -87,14 +94,14 @@ class TestParse:
         tasks = parse(p)
         assert tasks[0].phase is None
 
-    def test_gt_marker_phase(self, tmp_path):
-        p = write_tasks(tmp_path, WITH_GT_MARKER)
+    def test_s_marker_phase(self, tmp_path):
+        p = write_tasks(tmp_path, WITH_S_MARKER)
         tasks = parse(p)
-        assert tasks[0].phase == ">"
+        assert tasks[0].phase == "s"
         assert tasks[0].title == "Ready Task"
 
     def test_done_marker_phase(self, tmp_path):
-        p = write_tasks(tmp_path, WITH_GT_MARKER)
+        p = write_tasks(tmp_path, WITH_S_MARKER)
         tasks = parse(p)
         assert tasks[1].phase == "done"
 
@@ -160,11 +167,11 @@ class TestRender:
         assert [t.title for t in tasks2] == [t.title for t in tasks]
         assert [t.phase for t in tasks2] == [t.phase for t in tasks]
 
-    def test_gt_marker_preserved(self, tmp_path):
-        p = write_tasks(tmp_path, WITH_GT_MARKER)
+    def test_s_marker_preserved(self, tmp_path):
+        p = write_tasks(tmp_path, WITH_S_MARKER)
         tasks = parse(p)
         rendered = render(tasks)
-        assert "## [>] Ready Task" in rendered
+        assert "## [s] Ready Task" in rendered
 
 
 # ---------------------------------------------------------------------------
@@ -189,10 +196,16 @@ class TestValidate:
         errors = validate(p)
         assert len(errors) > 0
 
-    def test_gt_marker_is_valid(self, tmp_path):
-        p = write_tasks(tmp_path, WITH_GT_MARKER)
+    def test_s_marker_is_valid(self, tmp_path):
+        p = write_tasks(tmp_path, WITH_S_MARKER)
         errors = validate(p)
         assert errors == []
+
+    def test_legacy_gt_marker_rejected(self, tmp_path):
+        """The `[>]` marker is no longer a valid phase — `validate()` must flag it."""
+        p = write_tasks(tmp_path, WITH_LEGACY_GT_MARKER)
+        errors = validate(p)
+        assert len(errors) > 0
 
 
 # ---------------------------------------------------------------------------

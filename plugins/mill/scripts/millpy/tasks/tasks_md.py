@@ -4,8 +4,10 @@ tasks_md.py — Parser and renderer for tasks.md.
 Handles both bulleted-list and prose-paragraph task bodies (Proposal 02 Fix C).
 The PS1 predecessor was bullets-only; this parser captures body text verbatim.
 
-Phase marker regex uses \\[([>\\w]+)\\] (not \\[(\\w+)\\]) so [>] matches — this
-is a documented gotcha: \\w+ excludes the > character.
+Phase marker regex is `[>\\w]+` — the `>` character is preserved so any
+historical `[>]` markers in old git history still parse cleanly. The current
+"ready to claim" marker is `[s]` (mnemonic for mill-spawn); `s` is `\\w`-compatible
+so `[>\\w]+` already covers it without a regex change.
 """
 from __future__ import annotations
 
@@ -37,7 +39,7 @@ class Task:
 _HEADING_RE = re.compile(r"^##\s+(?:\[([>\w]+)\]\s+)?(.+)$")
 
 # Valid phase values for tasks.md (not status.md vocabulary)
-_VALID_PHASES = {">", "active", "done", "abandoned"}
+_VALID_PHASES = {"s", "active", "done", "abandoned"}
 
 
 # ---------------------------------------------------------------------------
