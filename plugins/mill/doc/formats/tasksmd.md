@@ -1,10 +1,10 @@
 # tasks.md Format Reference
 
-Reference for the `tasks.md` file at the repository root. This is the git-tracked task list that Mill skills read and write.
+Reference for the `tasks.md` file on the orphan `tasks` branch. This is the git-tracked task list that Mill skills read and write.
 
 ## File Location
 
-`tasks.md` in the project root (the working directory where `_millhouse/` lives). Git-tracked — changes require commit and push.
+`tasks.md` lives on the orphan branch `tasks`, checked out as a persistent git worktree at the path configured in `_millhouse/config.yaml` → `tasks.worktree-path` (typically `<parent-of-repo>/<reponame>.worktrees/tasks`). The branch never merges into `main`.
 
 Created by `mill-setup`. Must have a `# Tasks` heading on line 1.
 
@@ -43,15 +43,17 @@ Format: `## [phase] Task Title`
 ```markdown
 ## [s] Add OAuth Support
 ## [active] Add OAuth Support
+## [completed] Add OAuth Support
 ## [done] Add OAuth Support
 ## [abandoned] Add OAuth Support
 ```
 
-Valid phase values in `tasks.md`: `s`, `active`, `done`, `abandoned`.
+Valid phase values in `tasks.md`: `s`, `active`, `completed`, `done`, `abandoned`.
 
 - No marker = unclaimed / available for pickup
 - `[s]` = ready to be claimed by `mill-spawn` or `mill-start` (mnemonic: `s` for spawn)
 - `[active]` = claimed and in progress — written by `mill-start` or `mill-spawn.ps1` at claim time; stays in place through the entire discuss/plan/implement/test/review window until merge or abandon
+- `[completed]` = task work complete, not yet merged — written by `mill-go` at Phase: Completion (sub-steps 12.b and 12.d)
 - `[done]` = merged but not yet cleaned up — written by `mill-merge`, removed by `mill-cleanup` skill
 - `[abandoned]` = task abandoned, awaiting cleanup — written by `mill-abandon`, removed by `mill-cleanup` skill
 
@@ -69,13 +71,12 @@ A task block starts at `## Title` (with or without `[phase]`) and ends immediate
 
 | Operation | What Mill does |
 |-----------|---------------|
-| **Create task** (mill-add) | Append `## Title` at end of file, commit + push |
-| **Import issues** (mill-inbox) | Append `## Title` blocks at end of file, commit + push |
-| **Claim task** (mill-start) | Add `[active]` marker to heading, commit + push |
+| **Create task** (mill-add) | Append `## Title` at end of file on the tasks branch, commit + push |
+| **Claim task** (mill-start) | Add `[active]` marker to heading on the tasks branch, commit + push |
 | **Spawn task** (mill-spawn) | Add `## [s] Title`, commit + push; script claims it (changes to `[active]`) |
-| **Update phase** (mill-go) | mill-go does not update the `[phase]` marker in tasks.md; the `[active]` marker written at claim time remains until merge or abandon |
-| **Complete task** (mill-cleanup) | Remove `## ` block entirely via `mill-cleanup` skill, commit + push on parent |
-| **Abandon task** (mill-abandon) | Replace `[phase]` marker with `[abandoned]` marker, commit + push on parent (via merge-lock) |
+| **Update phase** (mill-go) | Writes `[completed]` at Phase: Completion (sub-steps 12.b and 12.d) via `write_commit_push` |
+| **Complete task** (mill-cleanup) | Remove `## ` block entirely via `write_commit_push` against the tasks worktree |
+| **Abandon task** (mill-abandon) | Replace `[phase]` marker with `[abandoned]` marker via `write_commit_push` against the tasks worktree |
 | **Dashboard** (mill-status) | Read tasks.md for task counts and phase overview |
 
 ## Write Rules
@@ -84,8 +85,7 @@ A task block starts at `## Title` (with or without `[phase]`) and ends immediate
 - Use `## ` headings for tasks (not `###`).
 - Descriptions use bullet points (not fenced code blocks).
 - Phase markers are optional — adding a task by hand requires only `## Title`.
-- Skills that run from child worktrees modify the parent's `tasks.md` (resolve parent path via `git worktree list --porcelain`).
-- Skills that run from the main worktree modify `tasks.md` directly in the project root.
+- All skills (whether run from the main or a child worktree) read and write `tasks.md` exclusively via `millpy.tasks.tasks_md.resolve_path` and `millpy.tasks.tasks_md.write_commit_push` against the dedicated tasks worktree. Never via `git` commands in the current worktree.
 
 ## Example File
 

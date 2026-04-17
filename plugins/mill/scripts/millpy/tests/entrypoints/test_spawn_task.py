@@ -36,15 +36,33 @@ def _init_repo_with_commit(path: Path) -> None:
     )
 
 
+def _init_fake_tasks_worktree(wt_path: Path, initial_content: str) -> None:
+    """Create a minimal git repo at wt_path with a committed tasks.md."""
+    wt_path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", str(wt_path)], check=True)
+    subprocess.run(["git", "-C", str(wt_path), "config", "user.name", "t"], check=True)
+    subprocess.run(["git", "-C", str(wt_path), "config", "user.email", "t@t"], check=True)
+    (wt_path / "tasks.md").write_text(initial_content, encoding="utf-8")
+    subprocess.run(["git", "-C", str(wt_path), "add", "tasks.md"], check=True)
+    subprocess.run(
+        ["git", "-C", str(wt_path), "commit", "-q", "-m", "init tasks"],
+        check=True,
+        env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+    )
+
+
 def _write_millhouse_project(project_root_dir: Path) -> None:
-    """Create a minimal _millhouse/config.yaml and a tasks.md with one [s] task."""
+    """Create a minimal _millhouse/config.yaml and a fake tasks worktree with one [s] task."""
+    fake_wt = project_root_dir.parent / (project_root_dir.name + ".tasks-wt")
+    _init_fake_tasks_worktree(
+        fake_wt,
+        "# Tasks\n\n## [s] Ready Task\nA short description.\n",
+    )
     (project_root_dir / "_millhouse").mkdir(parents=True, exist_ok=True)
     (project_root_dir / "_millhouse" / "config.yaml").write_text(
-        "repo:\n  short-name: \"t\"\n  branch-prefix: ~\n",
-        encoding="utf-8",
-    )
-    (project_root_dir / "tasks.md").write_text(
-        "# Tasks\n\n## [s] Ready Task\nA short description.\n",
+        f"repo:\n  short-name: \"t\"\n  branch-prefix: ~\n"
+        f"tasks:\n  worktree-path: \"{fake_wt.as_posix()}\"\n",
         encoding="utf-8",
     )
 

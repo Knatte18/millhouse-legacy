@@ -15,9 +15,7 @@ This skill replaces the older `mill-inbox` import flow with a status-checking + 
 
    > `gh` is not authenticated. Run `gh auth login` and re-invoke `/mill-revise-tasks`.
 
-2. Verify `tasks.md` exists in the project root. If not, stop and tell the user to run `mill-setup` first.
-
-3. Read `_millhouse/config.yaml` and extract:
+2. Load `_millhouse/config.yaml`. Resolve tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)`. If resolution raises, stop and tell the user to run `mill-setup` first. Extract from config:
    - `revise.brevity-threshold-lines` (default `5`)
    - `revise.brevity-threshold-chars` (default `500`)
 
@@ -48,7 +46,7 @@ For each issue in the fetched list:
 
 ## Step 3 — Read existing tasks.md
 
-Parse tasks.md via `python -c "from millpy.tasks.tasks_md import parse; ..."`. For each task:
+Parse tasks.md via `tasks_md.parse(tasks_md.resolve_path(cfg))` (config loaded in Entry check 2). For each task:
 
 - Note the marker (none / `[s]` / `[active]` / `[done]` / `[abandoned]`).
 - Detect protected status: scan body for the literal HTML comment `<!-- protected -->`. Protected tasks are EXCLUDED from any merge/consolidation; their bodies are also EXCLUDED from brevity-cleanup proposals.
@@ -153,16 +151,12 @@ Await `approve` or `reject`:
 
 ## Step 10 — Apply changes (on approval)
 
-1. For each new task: append `## <Title>` + body to `tasks.md`.
-2. For each folded task: update the existing task body in `tasks.md` to include the consolidating reference.
-3. For each brevity-cleanup-approved task: rewrite the existing task body to short form.
-4. For each bg-doc creation: write `plugins/mill/doc/proposals/NN-<slug>.md` with the extracted content. The doc body MUST start with a `# <Title>` h1 matching the task title; subsequent sections may follow the existing `proposals/*` pattern (Context, Decisions, etc.) — but a minimal one-section doc is acceptable when the source content is short.
-5. Validate the updated `tasks.md` per `plugins/mill/doc/formats/validation.md`. If validation fails, ROLL BACK all changes (revert the file writes, delete any newly-created bg-docs) and report the error to the user.
-6. Stage and commit: `git add tasks.md plugins/mill/doc/proposals/`. Commit message:
-   ```
-   chore: revise tasks.md — <X> new, <Y> folded, <Z> shortened, <W> issues closed
-   ```
-   Push.
+1. For each new task: append `## <Title>` + body to the in-memory task list.
+2. For each folded task: update the existing task body in the in-memory task list.
+3. For each brevity-cleanup-approved task: rewrite the existing task body to short form in the in-memory task list.
+4. Validate the rendered content via `tasks_md.validate(...)`. If validation fails, ROLL BACK (no writes, no helper calls; exit with error and report to user).
+5. **First commit — tasks branch (via helper).** Render the final tasks.md content. Call `millpy.tasks.tasks_md.write_commit_push(cfg, rendered, f"chore: revise tasks.md — {new} new, {folded} folded, {shortened} shortened, {closed} issues closed")`. The helper commits to the tasks branch. If this call fails, do NOT proceed to the feature-branch commit.
+6. **Second commit — feature branch (proposal docs only).** For each bg-doc creation: write `plugins/mill/doc/proposals/NN-<slug>.md` with the extracted content. The doc body MUST start with a `# <Title>` h1 matching the task title; subsequent sections may follow the existing `proposals/*` pattern (Context, Decisions, etc.) — but a minimal one-section doc is acceptable when the source content is short. Run `git add plugins/mill/doc/proposals/`. If at least one doc was written, commit with `git commit -m "docs(proposals): add <background-doc-list>"`. Push to the feature branch.
 7. For each issue in the "To Close on GH" table: run `gh issue close <N> --repo <repo> --comment "<comment>"`. Track each close result; if any fail, log the failure but continue with the rest.
 
 ## Step 11 — Report
@@ -174,6 +168,6 @@ Print to chat:
 ## Rules
 
 - Never silently rewrite `tasks.md` without the proposal/approval gate.
+- Tasks-branch commit always lands before the feature-branch commit. If the tasks-branch commit fails, the feature-branch commit does not run — the content model stays canonical.
 - Protected tasks (`<!-- protected -->` in body) are NEVER merged with other tasks and NEVER subject to brevity-cleanup.
 - If two issues have nearly-identical content, propose folding them BOTH into one new or existing task — dedup happens here, not at report time.
-- Do not modify or delete `mill-inbox` in this skill — that removal lives in a later card.

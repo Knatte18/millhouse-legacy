@@ -29,7 +29,7 @@ Config schema out of date. Expected pipeline.<slot>. Run 'mill-setup' to auto-mi
 
 Legacy slots (`models.session`, `models.explore`, `models.<phase>-review`, `review-modules:`, `reviews:`) are not accepted. The `pipeline:` block is the only config schema.
 
-Read `tasks.md` in the project root (the working directory where `_millhouse/` lives). If it does not exist, stop and tell the user to run `mill-setup` first or create `tasks.md` manually.
+Resolve tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)` after loading `_millhouse/config.yaml`. If resolution raises `ConfigError` or `FileNotFoundError`, stop and tell the user to run `mill-setup` first.
 
 ---
 
@@ -72,23 +72,23 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
 1. **Guard: active task check.** This guard applies only to paths 2/3/4 below — path 0 (handoff brief) short-circuits to Explore and skips the guard. Before claiming a task, read the YAML code block in `_millhouse/task/status.md` if it exists. If the `phase:` field is set and is not `complete`, report "An active task is already in progress (phase: `<phase>`). Run mill-go or mill-abandon first." and stop.
 
-2. **Select task.** Read `tasks.md` in the project root (the working directory where `_millhouse/` lives).
+2. **Select task.** Read tasks.md via the helper-resolved path (`tasks_md.parse(tasks_md.resolve_path(cfg))`).
 
    a. Find all `## ` headings. Filter as follows:
-      - **Skip** any heading whose phase marker is `[active]`, `[done]`, or `[abandoned]` (these are claimed elsewhere or terminal — never pickable).
+      - **Skip** any heading whose phase marker is `[active]`, `[completed]`, `[done]`, or `[abandoned]` (these are claimed elsewhere or terminal — never pickable).
       - **Fast-path candidates:** headings with phase marker `[s]`.
       - **Numbered-list candidates:** unmarked headings (no `[phase]` marker).
 
    b. **Fast-path:** if any `[s]` candidates exist, auto-select the FIRST `[s]` task. Print "Auto-picking the next ready task: `<title>`" and proceed to claim it. Do NOT show a numbered list. Do NOT ask about other tasks.
 
    c. **Numbered-list path:** if no `[s]` candidates exist, look at the unmarked candidates:
-      - Zero unmarked: report "No pickable tasks in tasks.md (all are `[active]`, `[done]`, or `[abandoned]`). Run `mill-add` to create one, or describe what you want to work on." If the user provides a description, create the task directly (add to tasks.md, commit and push, then claim it).
+      - Zero unmarked: report "No pickable tasks in tasks.md (all are `[active]`, `[completed]`, `[done]`, or `[abandoned]`). Run `mill-add` to create one, or describe what you want to work on." If the user provides a description, compose the final tasks.md content (new task appended + `[active]` marker on it) in one render, then call `write_commit_push` once with commit message `task: add and claim {title}`.
       - One unmarked: select it. Show the title and ask the user to confirm.
       - Two or more unmarked: print a numbered list (per `mill:conversation` skill rules — no `AskUserQuestion`). User types the number.
 
-   d. **Never prompt the user about `[active]`, `[done]`, or `[abandoned]` tasks** — these are filtered out at step a. (An `[active]` task is in progress in another worktree and is not a valid pickup target; `[done]` / `[abandoned]` are terminal states awaiting cleanup.)
+   d. **Never prompt the user about `[active]`, `[completed]`, `[done]`, or `[abandoned]` tasks** — these are filtered out at step a.
 
-3. **Move to Active.** Add `[active]` marker to the selected task's heading in `tasks.md`. E.g., `## Task Title` becomes `## [active] Task Title`. Stage, commit, and push `tasks.md` immediately. The `[active]` marker stays in place through the entire discuss/plan/implement/test/review window until merge or abandon.
+3. **Move to Active.** Render the updated task list with the `[active]` marker applied to the selected task. Call `millpy.tasks.tasks_md.write_commit_push(cfg, rendered, f"task: claim {task_title}")` to write, commit, and push atomically to the tasks branch. The `[active]` marker stays in place through the entire discuss/plan/implement/test/review window until merge or abandon.
 
    Validate tasks.md per `plugins/mill/doc/formats/validation.md` (tasks.md structural rules).
 
@@ -232,9 +232,9 @@ If you use TodoWrite to track your own progress, only include mill-start phases:
 
 ## Board Updates
 
-tasks.md changes require commit and push (tasks.md is git-tracked).
+tasks.md changes go through `millpy.tasks.tasks_md.write_commit_push` against the tasks worktree (resolved via `tasks.worktree-path` in `_millhouse/config.yaml`). No direct `git` invocations against the current worktree for tasks.md writes.
 
 Phase transitions are tracked via `phase:` in the YAML code block of `_millhouse/task/status.md` and the `## Timeline` section (entries inserted before the closing ` ``` ` of the text fence).
 
-- Task claimed from tasks.md -> add `[active]` marker (commit + push), write fenced `_millhouse/task/status.md` with `phase: discussing` + `task_description:` in YAML code block
+- Task claimed from tasks.md -> `[active]` marker written via `write_commit_push`, write fenced `_millhouse/task/status.md` with `phase: discussing` + `task_description:` in YAML code block
 - Discussion complete -> update `phase: discussed` in YAML code block, insert timeline entry before closing fence

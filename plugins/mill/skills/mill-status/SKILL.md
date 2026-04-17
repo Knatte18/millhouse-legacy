@@ -15,11 +15,15 @@ Shows task overview, current status, and worktree overview. Read-only — if sta
 
 ### Step 1: Read tasks.md and status
 
-Check that `tasks.md` exists in the project root (the working directory where `_millhouse/` lives). If it does not exist, stop and tell the user to run `mill-setup` first.
+Load `_millhouse/config.yaml`. Resolve tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)`. If resolution raises (config missing or tasks worktree not found), note the error, print a one-line warning, and show `Tasks source: not configured` in the dashboard; continue rendering worktree state so the dashboard still has value.
 
-Read `tasks.md`. For each `## ` heading, categorize:
-- Headings without a `[phase]` marker -> unclaimed tasks
-- Headings with a `[phase]` marker -> active tasks (extract the phase name)
+Read tasks.md via `tasks_md.parse(resolve_path(cfg))`. For each `## ` heading, categorize into the following buckets:
+- No `[phase]` marker → **Unclaimed**
+- `[s]` → **Ready**
+- `[active]` → **Active**
+- `[completed]` → **Completed**
+- `[done]` → **Done**
+- `[abandoned]` → **Abandoned**
 
 Read the YAML code block in `_millhouse/task/status.md` if it exists. Extract `phase:`, `task:`, `plan:`, and the timeline entries from the ` ```text ``` ` fence in the `## Timeline` section.
 
@@ -33,6 +37,8 @@ Read the YAML code block in `_millhouse/task/status.md` if it exists. Extract:
 If a plan file path is present and the file exists, read the plan to count total steps (lines matching `### Step`) and completed steps (based on git log matching `Commit:` messages from the plan).
 
 ### Step 3: Build worktree tree
+
+Read `tasks.worktree-path` from `_millhouse/config.yaml`. When iterating `git worktree list --porcelain`, filter out any worktree whose path (normalized to forward slashes) matches the configured tasks-worktree-path — it is not a feature worktree and must not appear in the tree render.
 
 1. Run `git worktree list --porcelain` to get all worktrees with their branches and paths.
 2. For each worktree, read `_millhouse/children/` folder if it exists. Collect ALL `.md` files (active, merged, and abandoned entries). Parse YAML frontmatter for `branch:` and `status:` fields.
@@ -55,7 +61,7 @@ Scan for any of the following. If any are found, remember to emit a cleanup sugg
 - Children entries in `_millhouse/children/*.md` with `status: merged`, `status: abandoned`, or `status: complete`.
 - Worktrees (from `git worktree list --porcelain`) whose `_millhouse/task/status.md` YAML code block has `phase: complete`.
 - Orphan directories in `<parent-of-repo-root>/<reponame>.worktrees/` (non-hub layout): subdirs not in `git worktree list` output. Skip this check if hub layout is detected (a `.bare` directory exists at `<parent-of-repo-root>/.bare`) — hub-layout orphan detection is handled by `mill-cleanup` itself.
-- `[done]` or `[abandoned]` task markers in `tasks.md`.
+- `[done]` or `[abandoned]` task markers in `tasks.md`. Do NOT flag `[completed]` — it is a normal in-progress state ("work done, not yet merged").
 
 This is a read-only detection. No state is modified; this skill does not run cleanup actions.
 
@@ -64,17 +70,20 @@ This is a read-only detection. No state is modified; this skill does not run cle
 Print the dashboard. Use this exact format:
 
 ```
+Tasks source: <absolute path to tasks worktree>
 Tasks (tasks.md):
   Unclaimed:     N tasks
   In-progress:   N tasks
 ```
 
-If there are in-progress tasks, list them:
+When Y (`[completed]`) > 0, the In-progress line gains an inline breakdown: `In-progress:   N tasks     (X active, Y completed)`. If Y = 0, render without the breakdown (matches current output).
+
+If there are in-progress tasks, list them (both `[active]` and `[completed]` entries):
 
 ```
 Active tasks:
-  [active]   Task A
-  [active]   Task B
+  [active]     Task A
+  [completed]  Task B
 ```
 
 Source of truth for phase: `phase:` field in the YAML code block of `_millhouse/task/status.md`.
@@ -135,12 +144,14 @@ Stale state detected. Run `mill-cleanup` from the main worktree to clean up.
 ### Example output
 
 ```
+Tasks source: /home/user/code/myrepo.worktrees/tasks
 Tasks (tasks.md):
   Unclaimed:     2 tasks
-  In-progress:   1 task
+  In-progress:   2 tasks     (1 active, 1 completed)
 
 Active tasks:
-  [active]   Implement mill-status skill
+  [active]     Implement mill-status skill
+  [completed]  Add OAuth Support
 
 Timeline (_millhouse/task/status.md):
   discussing              2026-04-08T10:23:15Z

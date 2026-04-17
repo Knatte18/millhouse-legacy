@@ -1,11 +1,12 @@
 """
 entrypoints/spawn_task.py — Task spawner for millpy (live).
 
-Reads tasks.md, picks the next task via the unified picker
-(``pick_task``), claims it (changes to [active]), creates the
-worktree, writes status.md, and updates the parent's tasks.md.
+Reads tasks.md via ``tasks_md.resolve_path``, picks the next task via the
+unified picker (``pick_task``), claims it (changes to [active]) via
+``tasks_md.write_commit_push`` against the orphan tasks worktree, creates
+the feature worktree, writes status.md.
 
-Picker rules: filter out [active], [done], [abandoned] from the
+Picker rules: filter out [active], [completed], [done], [abandoned] from the
 candidate pool. Fast-path: if any [s] task exists, pick the first one
 without prompting. Numbered-fallback: otherwise present a numbered list
 of unmarked tasks and prompt the user to choose. Empty mode: no [s] and
@@ -39,9 +40,10 @@ def pick_task(tasks):
     - ``mode == "empty"``: ``picked`` is ``None``; ``candidates`` is empty
       (no pickable tasks exist).
 
-    ``[active]``, ``[done]``, and ``[abandoned]`` phases are filtered out of
-    both the fast-path and the numbered candidate pool — they are managed
-    elsewhere (mill-start, mill-merge, mill-abandon, mill-cleanup).
+    ``[active]``, ``[completed]``, ``[done]``, and ``[abandoned]`` phases are
+    filtered out of both the fast-path and the numbered candidate pool — they
+    are managed elsewhere (mill-start, mill-go, mill-merge, mill-abandon,
+    mill-cleanup).
     """
     fast = next((t for t in tasks if t.phase == "s"), None)
     if fast is not None:
@@ -113,12 +115,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    tasks_path = root / "tasks.md"
-    if not tasks_path.exists():
-        print(
-            f"[spawn_task] tasks.md not found at {tasks_path}. Run mill-setup first.",
-            file=sys.stderr,
-        )
+    cfg = load(config_path)
+
+    try:
+        tasks_path = tasks_md.resolve_path(cfg)
+    except (ConfigError, FileNotFoundError) as exc:
+        print(f"[spawn_task] {exc}", file=sys.stderr)
         return 1
 
     # Parse tasks.md — exercises prose-paragraph parser (Fix C)
@@ -216,16 +218,11 @@ def main(argv: list[str] | None = None) -> int:
     handoff_path = root / "_millhouse" / "handoff.md"
     _write_handoff(handoff_path, task_title, task_description, parent_branch, root, config_path)
 
-    # Write updated tasks.md and commit
-    tasks_path.write_text(updated_tasks, encoding="utf-8", newline="\n")
-
-    tasks_rel = str(tasks_path.relative_to(root)).replace("\\", "/")
+    # Write updated tasks.md to the orphan tasks worktree, commit, and push
     try:
-        git(["add", tasks_rel], cwd=root)
-        git(["commit", "-m", f"task: claim {task_title}"], cwd=root)
-        git(["push"], cwd=root)
-    except Exception as exc:
-        log("spawn_task", f"Git commit/push failed: {exc}")
+        tasks_md.write_commit_push(cfg, updated_tasks, f"task: claim {task_title}")
+    except (tasks_md.GitPushError, tasks_md.TasksLockError) as exc:
+        log("spawn_task", f"tasks.md write/push failed: {exc}")
 
     # Create worktree via git worktree add. worktrees_dir is the sibling of
     # the git toplevel (not the mill project root) — `git worktree add` only

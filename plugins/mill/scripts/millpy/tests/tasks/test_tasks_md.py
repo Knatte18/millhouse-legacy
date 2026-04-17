@@ -3,12 +3,26 @@ test_tasks_md.py — Tests for millpy.tasks.tasks_md (TDD: RED → GREEN → REF
 """
 from __future__ import annotations
 
+import os
+import subprocess
 import textwrap
+import types
 from pathlib import Path
 
 import pytest
 
-from millpy.tasks.tasks_md import Task, find, parse, render, validate
+from millpy.core.config import ConfigError
+from millpy.tasks.tasks_md import (
+    GitPushError,
+    Task,
+    TasksLockError,
+    find,
+    parse,
+    render,
+    resolve_path,
+    validate,
+    write_commit_push,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -287,3 +301,162 @@ class TestParseBodyNormalization:
         p.write_text(content, encoding="utf-8")
         tasks = parse(p)
         assert "para one.\n\npara two.\n" in tasks[0].body
+
+
+# ---------------------------------------------------------------------------
+# [completed] phase marker
+# ---------------------------------------------------------------------------
+
+WITH_COMPLETED_MARKER = """\
+    # Tasks
+
+    ## [completed] Completed Task
+    Task work done, not yet merged.
+"""
+
+
+class TestCompletedMarker:
+    def test_completed_marker_is_valid(self, tmp_path):
+        p = write_tasks(tmp_path, WITH_COMPLETED_MARKER)
+        errors = validate(p)
+        assert errors == []
+
+    def test_completed_marker_parse_render_roundtrip(self, tmp_path):
+        p = write_tasks(tmp_path, WITH_COMPLETED_MARKER)
+        tasks = parse(p)
+        rendered = render(tasks)
+        p2 = tmp_path / "rt.md"
+        p2.write_text(rendered, encoding="utf-8")
+        tasks2 = parse(p2)
+        assert tasks2[0].phase == "completed"
+        assert "## [completed] Completed Task" in rendered
+
+
+# ---------------------------------------------------------------------------
+# resolve_path
+# ---------------------------------------------------------------------------
+
+class TestResolvePath:
+    def test_resolve_path_returns_absolute_tasks_md_path(self, tmp_path):
+        fake_wt = tmp_path / "fake-tasks-wt"
+        fake_wt.mkdir()
+        cfg = {"tasks": {"worktree-path": str(fake_wt)}}
+        assert resolve_path(cfg) == fake_wt / "tasks.md"
+
+    def test_resolve_path_raises_configerror_when_key_missing(self):
+        for cfg in [{}, {"tasks": {}}, {"tasks": {"worktree-path": None}}]:
+            with pytest.raises(ConfigError, match="Missing tasks.worktree-path"):
+                resolve_path(cfg)
+
+    def test_resolve_path_raises_filenotfound_when_worktree_missing(self, tmp_path):
+        cfg = {"tasks": {"worktree-path": str(tmp_path / "does-not-exist")}}
+        with pytest.raises(FileNotFoundError, match="Tasks worktree not found"):
+            resolve_path(cfg)
+
+    def test_resolve_path_raises_configerror_for_relative_path(self):
+        cfg = {"tasks": {"worktree-path": "relative/path"}}
+        with pytest.raises(ConfigError, match="must be absolute"):
+            resolve_path(cfg)
+
+
+# ---------------------------------------------------------------------------
+# write_commit_push
+# ---------------------------------------------------------------------------
+
+def _make_git_wt(tmp_path: Path) -> tuple[Path, dict]:
+    """Create a real git worktree with a bare remote and an initial tasks.md commit."""
+    wt = tmp_path / "tasks-wt"
+    wt.mkdir()
+    bare = tmp_path / "tasks-wt-remote.git"
+    subprocess.run(["git", "init", str(wt)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(wt), "config", "user.email", "test@test.com"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(wt), "config", "user.name", "Test"], check=True, capture_output=True)
+    (wt / "tasks.md").write_text("# Tasks\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(wt), "add", "tasks.md"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(wt), "commit", "-m", "init"], check=True, capture_output=True)
+    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(wt), "remote", "add", "origin", str(bare)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(wt), "push", "-u", "origin", "HEAD"], check=True, capture_output=True)
+    cfg = {"tasks": {"worktree-path": str(wt)}}
+    return wt, cfg
+
+
+class TestWriteCommitPush:
+    def test_write_commit_push_writes_and_commits(self, tmp_path):
+        wt, cfg = _make_git_wt(tmp_path)
+        write_commit_push(cfg, "# Tasks\n\n## NEW\n", "test: add NEW")
+        assert "## NEW" in (wt / "tasks.md").read_text(encoding="utf-8")
+        result = subprocess.run(
+            ["git", "-C", str(wt), "log", "--oneline", "-1"],
+            capture_output=True, text=True, check=True,
+        )
+        assert "test: add NEW" in result.stdout
+
+    def test_write_commit_push_releases_lock_on_success(self, tmp_path):
+        wt, cfg = _make_git_wt(tmp_path)
+        write_commit_push(cfg, "# Tasks\n\n## X\n", "test: X")
+        assert not (wt / ".mill-tasks.lock").exists()
+
+    def test_write_commit_push_releases_lock_on_failure(self, tmp_path, monkeypatch):
+        wt, cfg = _make_git_wt(tmp_path)
+        fail = types.SimpleNamespace(returncode=1, stdout="", stderr="git add error")
+        monkeypatch.setattr("millpy.core.subprocess_util.run", lambda *a, **kw: fail)
+        with pytest.raises(GitPushError):
+            write_commit_push(cfg, "# Tasks\n", "test")
+        assert not (wt / ".mill-tasks.lock").exists()
+
+    def test_write_commit_push_raises_when_lock_held_by_live_pid(self, tmp_path):
+        wt, cfg = _make_git_wt(tmp_path)
+        lock = wt / ".mill-tasks.lock"
+        lock.write_text(f"pid: {os.getpid()}\ntimestamp: 2026-01-01T00:00:00Z\n", encoding="utf-8")
+        with pytest.raises(TasksLockError, match="Could not acquire"):
+            write_commit_push(cfg, "# Tasks\n", "test", _acquire_timeout=1.0)
+
+    def test_write_commit_push_clears_stale_lock(self, tmp_path, monkeypatch):
+        wt, cfg = _make_git_wt(tmp_path)
+        lock = wt / ".mill-tasks.lock"
+        lock.write_text("pid: 999999\ntimestamp: 2026-01-01T00:00:00Z\n", encoding="utf-8")
+        monkeypatch.setattr("millpy.tasks.tasks_md._pid_is_alive", lambda pid: False)
+        write_commit_push(cfg, "# Tasks\n\n## STALE\n", "test: stale")
+        assert "## STALE" in (wt / "tasks.md").read_text(encoding="utf-8")
+
+    def test_write_commit_push_retries_on_non_ff(self, tmp_path, monkeypatch):
+        wt, cfg = _make_git_wt(tmp_path)
+        calls = []
+        push_count = [0]
+        def fake_run(argv, **kw):
+            calls.append(list(argv))
+            cmd = argv[3] if len(argv) > 3 else ""
+            if cmd == "push":
+                push_count[0] += 1
+                if push_count[0] == 1:
+                    return types.SimpleNamespace(returncode=1, stdout="", stderr="rejected non-fast-forward")
+                return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+            if cmd == "pull":
+                return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+            return types.SimpleNamespace(returncode=0, stdout="1 file changed", stderr="")
+        monkeypatch.setattr("millpy.core.subprocess_util.run", fake_run)
+        write_commit_push(cfg, "# Tasks\n", "test")
+        assert push_count[0] >= 2
+
+    def test_write_commit_push_aborts_on_rebase_conflict(self, tmp_path, monkeypatch):
+        wt, cfg = _make_git_wt(tmp_path)
+        calls = []
+        def fake_run(argv, **kw):
+            calls.append(list(argv))
+            cmd = argv[3] if len(argv) > 3 else ""
+            if cmd == "add":
+                return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+            if cmd == "commit":
+                return types.SimpleNamespace(returncode=0, stdout="1 file changed", stderr="")
+            if cmd == "push":
+                return types.SimpleNamespace(returncode=1, stdout="", stderr="rejected non-fast-forward")
+            if cmd == "pull":
+                return types.SimpleNamespace(returncode=1, stdout="", stderr="CONFLICT (content)")
+            if cmd == "rebase":
+                return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+            return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+        monkeypatch.setattr("millpy.core.subprocess_util.run", fake_run)
+        with pytest.raises(GitPushError, match="Rebase conflict"):
+            write_commit_push(cfg, "# Tasks\n", "test")
+        assert any(c[3:5] == ["rebase", "--abort"] for c in calls if len(c) >= 5)

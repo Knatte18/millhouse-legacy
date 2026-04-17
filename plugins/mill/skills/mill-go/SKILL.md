@@ -283,6 +283,8 @@ On non-blocked outcomes (`complete` or `pr-pending`), the Builder also runs an o
     b. **`complete`:** report:
        > Task complete. Final commit: `<final_commit>`. Phase: complete.
 
+       **Write `[completed]` to tasks.md.** Load `_millhouse/config.yaml` via `millpy.core.config.load`. Parse tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)` + `tasks_md.parse`, find the task by title (from the `task:` field in `_millhouse/task/status.md`), replace its phase marker with `completed`, render, and call `millpy.tasks.tasks_md.write_commit_push(cfg, rendered, f"task: mark {task_title} [completed]")`. If the helper raises: report the failure to the user, do NOT block the lock release — surface the error loudly so the user knows the `[completed]` state is not on the tasks branch.
+
        Release `_millhouse/builder.lock`. Notification was already sent by the final implementer session or mill-merge.
 
     b.i. **Auto-fire `mill-self-report` (if enabled).**
@@ -297,6 +299,8 @@ On non-blocked outcomes (`complete` or `pr-pending`), the Builder also runs an o
 
     d. **`pr-pending`:** report:
        > Task complete; PR pending. Run `gh pr view` for details.
+
+       **Write `[completed]` to tasks.md.** Fires on both `complete` (12.b) and `pr-pending` (12.d) — in both states mill-go is done; only the hand-off mechanism differs. Load `_millhouse/config.yaml` via `millpy.core.config.load`. Parse tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)` + `tasks_md.parse`, find the task by title (from the `task:` field in `_millhouse/task/status.md`), replace its phase marker with `completed`, render, and call `millpy.tasks.tasks_md.write_commit_push(cfg, rendered, f"task: mark {task_title} [completed]")`. If the helper raises: report the failure loudly; proceed to lock release.
 
        Release lock. Notification was already sent by mill-merge. Run sub-step 12.b.i (auto-fire `mill-self-report`) before releasing the lock, using the same toggle.
 
@@ -324,11 +328,11 @@ mill-go (Builder) stops in any of these situations:
 
 ## Board Updates
 
-tasks.md changes require commit and push (tasks.md is git-tracked). When running from a child worktree, resolve the parent's project root by computing the project subdirectory offset and applying it to the parent worktree path from `git worktree list --porcelain`.
+tasks.md writes go through `millpy.tasks.tasks_md.write_commit_push` against the tasks worktree (resolved from `tasks.worktree-path` in `_millhouse/config.yaml`). mill-go writes `[completed]` at Phase: Completion sub-steps 12.b (`phase: complete`) and 12.d (`phase: pr-pending`). No direct `git` invocations against the parent or current worktree for tasks.md writes.
 
 Phase transitions are tracked via `phase:` in the YAML code block of `_millhouse/task/status.md` and the `## Timeline` section. See `plugins/mill/doc/formats/discussion.md` for the status.md schema.
 
-mill-go (Builder) does not write to the parent's `tasks.md`. The `[active]` marker written at claim time by `mill-start` / `mill-spawn` (via `spawn_task.py`) remains in place. `mill-merge` writes `[done]` on successful merge; `mill-abandon` writes `[abandoned]` on abandonment.
+mill-go writes `[completed]` to `tasks.md` at Phase: Completion (sub-steps 12.b and 12.d) via the helper. The `[active]` marker written at claim time by `mill-start` / `mill-spawn` is replaced with `[completed]` by mill-go, then with `[done]` by `mill-merge` on successful direct-merge. `mill-abandon` overwrites any prior marker with `[abandoned]`.
 
 **Plan stale:** mill-go updates `_millhouse/task/status.md` with `blocked: true` but does NOT remove the `[active]` marker.
 

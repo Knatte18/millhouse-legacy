@@ -78,7 +78,9 @@ Skip entries with `status: active` or `status: pr-pending`.
 Run `git worktree list --porcelain`. For each worktree other than the main one: read its `_millhouse/task/status.md`. If the YAML code block has `phase: complete` AND no matching child registry entry was found in Scan 1 (no entry for this branch), add to the cleanup set as a "complete" candidate.
 
 #### Scan 3: tasks.md markers
-Read `tasks.md` in the project root. Collect all `## [done] <Title>` and `## [abandoned] <Title>` headings.
+Load `_millhouse/config.yaml` via `millpy.core.config.load`. Resolve tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)`. Read via `tasks_md.parse(resolve_path(cfg))`. Collect all `## [done] <Title>` and `## [abandoned] <Title>` headings.
+
+Do NOT collect `[completed]` headings — `[completed]` means "work done, not yet merged" and is preserved. mill-merge will rewrite `[completed]` → `[done]` on the next merge; mill-abandon will rewrite `[completed]` → `[abandoned]` on abandon. mill-cleanup does not touch `[completed]`.
 
 For each `[done]` heading: add to the cleanup set as a "done task" with title. Match against Scan 1 entries by title — if both exist, treat as one entry (dedup).
 
@@ -162,6 +164,8 @@ Do this after the corresponding worktree/branch actions so the registry reflects
 For each dangling junction identified in Scan 8: remove it via `(Get-Item $path).Delete()` and log the removal. This reaps junctions whose child worktree was deleted outside mill-cleanup.
 
 #### Action 8: Update tasks.md
+The file being mutated is the tasks-worktree tasks.md (resolved via `resolve_path(cfg)` in Scan 3) — not the project-root tasks.md. Apply all mutations to the in-memory task list, then render the final tasks.md content to pass to Action 10's single `write_commit_push` call.
+
 For each `[done]` task in the cleanup set: remove the entire block (the `## [done] <Title>` heading and all body lines until the next `## ` heading or EOF).
 
 For each `[abandoned]` task in the cleanup set: replace the `## [abandoned] <Title>` heading with `## <Title>` (unmark to unclaimed). If an abandon protocol was captured in Scan 1, append a blockquote to the task body with this exact format:
@@ -178,12 +182,7 @@ If a previous `> **Previously abandoned...` blockquote already exists anywhere i
 Run `git worktree prune` to clean up any stale worktree metadata in `.git/worktrees/` left behind by orphan removal.
 
 #### Action 10: Commit tasks.md changes
-If `tasks.md` was modified in Action 8:
-- `git add tasks.md`
-- `git commit -m "task: cleanup <N> task(s)"` where `<N>` is the count of tasks processed (done + abandoned).
-- `git push`
-
-If no tasks were modified, skip.
+If tasks were mutated in Action 8, call `millpy.tasks.tasks_md.write_commit_push(cfg, rendered, f"task: cleanup {N} task(s)")` with the final rendered content from Action 8, where `N` is the count of tasks mutated (done + abandoned). The helper handles add/commit/push/retries. If no tasks were mutated, skip this call entirely (no-op).
 
 ### Phase 3: Report
 
@@ -210,7 +209,7 @@ If nothing was found to clean up, print: "No cleanup needed. Repository is in a 
 
 ## Board Updates
 
-- Merged child → `mill-merge` marks registry entry `merged`; `mill-cleanup` removes worktree, branch, registry entry. `[done]` task block removed from tasks.md and committed.
-- Abandoned child → `mill-abandon` marks registry entry `abandoned`, writes protocol to child's `status.md`, marks tasks.md heading `[abandoned]`; `mill-cleanup` removes worktree, branch, registry entry, unmarks tasks.md heading (preserving protocol as blockquote).
+- Merged child → `mill-merge` marks registry entry `merged`; `mill-cleanup` removes worktree, branch, registry entry. `[done]` task block removed from the tasks branch via `millpy.tasks.tasks_md.write_commit_push`.
+- Abandoned child → `mill-abandon` marks registry entry `abandoned`, writes protocol to child's `status.md`, marks tasks.md heading `[abandoned]`; `mill-cleanup` removes worktree, branch, registry entry, unmarks tasks.md heading (preserving protocol as blockquote) via the helper.
 - PR-pending child → both `mill-merge` and `mill-cleanup` leave it alone until the PR is merged externally, then normal merged-child cleanup applies on next run.
 - Orphan directory or stale checkpoint → `mill-cleanup` removes it with no coordination (no registry entry exists).

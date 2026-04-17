@@ -5,7 +5,7 @@ description: Initialize Mill for a repository. Creates tasks.md, config, directo
 
 # mill-setup
 
-One-time initialization per project. Creates `tasks.md` in the project root (the working directory where `_millhouse/` is being created), the `_millhouse/` directory structure with config, scratch space, forwarding wrapper scripts, and VS Code color settings. Idempotent — safe to re-run (skips existing files).
+One-time initialization per project. Bootstraps the orphan `tasks` branch and persistent tasks worktree, creates `_millhouse/` directory structure with config, scratch space, forwarding wrapper scripts, and VS Code color settings. Idempotent — safe to re-run (skips existing files).
 
 For tasks.md file format details, see `plugins/mill/doc/formats/tasksmd.md`.
 
@@ -26,25 +26,36 @@ mkdir -p _millhouse/task/reviews
 
 Check the repo's root `.gitignore` for an entry matching `**/_millhouse/`. If not present, append it. If already present, skip.
 
-### Step 3: Create tasks.md
+### Step 3: Preserve pre-migration tasks.md (if present)
 
-If `tasks.md` already exists in the project root, skip creation (preserves existing task data on re-run).
+If `tasks.md` exists at the project root (pre-migration repo), leave it in place — Step 3b will use it as the orphan seed and a subsequent commit on the parent branch will remove it.
 
-If it does not exist, create it:
+If `tasks.md` does not exist at the project root, do nothing here. Step 3b will seed the orphan branch with `# Tasks\n`.
 
-```markdown
-# Tasks
-```
+### Step 3b: Bootstrap tasks branch and worktree
 
-After creating, stage, commit, and push:
+This step ensures the `tasks` orphan branch and its worktree both exist. Idempotent.
 
-```bash
-git add tasks.md
-git commit -m "chore: initialize tasks.md"
-git push
-```
+Resolve: let `<repo-toplevel>` = `git rev-parse --show-toplevel`; let `<reponame>` = the basename of `<repo-toplevel>`; let `<tasks-wt>` = `<parent of repo-toplevel>/<reponame>.worktrees/tasks` (forward slashes).
 
-Validate per `plugins/mill/doc/formats/validation.md` (tasks.md structural rules). If validation fails, report the issue to the user and stop.
+1. **Check remote branch existence:** run `git ls-remote --heads origin tasks`. If it prints a matching ref, the branch exists on remote — run `git fetch origin tasks` to create the local tracking ref, then skip to step 4.
+2. **Check local branch existence:** run `git branch --list tasks`. If present, the branch exists locally — skip to step 3 (push if needed).
+3. **Create orphan locally:** in a scratch detached worktree at `<parent-of-repo>/<reponame>.worktrees/orphan-bootstrap` (`git worktree add --detach <scratch-path>`), run:
+   - `git checkout --orphan tasks`
+   - `git rm -rf . --quiet`
+   - Write `tasks.md` — seed with the content of `<repo-toplevel>/tasks.md` if it exists, else `# Tasks\n`. Use forward-slash paths.
+   - Write `.gitignore` with exactly:
+     ```
+     .mill-tasks.lock
+     .vscode/
+     ```
+   - `git add tasks.md .gitignore`
+   - `git commit -m "init tasks branch: tasks.md + .gitignore"`
+   - `git push -u origin tasks`
+   - `git worktree remove <scratch-path>` (cleanup)
+   - **Push-race handling:** if `git push -u origin tasks` fails with `rejected` / `non-fast-forward` (another machine won the race), run `git fetch origin tasks`, then proceed from step 4.
+4. **Check worktree existence:** run `git worktree list --porcelain` and look for a line `worktree <tasks-wt>`. If present, skip step 5.
+5. **Create the persistent tasks worktree:** `git worktree add <tasks-wt> tasks`.
 
 ### Step 4: Write config
 
@@ -60,7 +71,14 @@ If `_millhouse/config.yaml` already exists, check for the presence of a top-leve
 - **Present:** the config is already in the new schema. Check `git.auto-merge`, `git.require-pr-to-base`, `repo:`, and `notifications:` sections exist; append any missing ones without overwriting. Also check for new v3 pipeline keys: `pipeline.plan-review.holistic`, `pipeline.plan-review.per-card`, `pipeline.code-review.holistic`, `pipeline.code-review.per-card`, and `runtime.pre-arm-timeout-seconds`; append any missing ones with default values without overwriting existing values. Also check for the self-reinforcement-loop keys: `notifications.auto-report.enabled` (default `false`), `revise.brevity-threshold-lines` (default `5`), and `revise.brevity-threshold-chars` (default `500`). Append any missing ones with their default values. **Insertion strategy for nested keys** (text-based — no YAML library): for `notifications.auto-report.enabled`, locate the `notifications:` block by line-prefix match (`^notifications:`) and insert an `auto-report:` sub-block (with `enabled: false` indented 4 spaces under `auto-report:`, which is itself indented 2 spaces under `notifications:`) immediately after the `notifications:` line if absent; preserve the existing `slack:` and `toast:` siblings verbatim. For `revise.*`, append the entire `revise:` top-level block at the end of the file if absent. Preserve everything else verbatim. No further migration.
 - **Absent:** the config is pre-W1 legacy. Run the per-key migration below (Step 4c — legacy-to-pipeline migration).
 
-**Template (used for new creation and as the migration target shape):** Read `plugins/mill/templates/millhouse-config.yaml`, substitute `<SHORT_NAME>` with the value from Step 4a and `<IMPLEMENTER>` with `sonnet`, then write to `_millhouse/config.yaml`. Only block-style YAML — the hand-written parser at `plugins/mill/scripts/millpy/core/config.py` does not support inline flow mappings.
+**Template (used for new creation and as the migration target shape):** Read `plugins/mill/templates/millhouse-config.yaml`, substitute `<SHORT_NAME>` with the value from Step 4a, `<IMPLEMENTER>` with `sonnet`, and `<TASKS_WORKTREE_PATH>` with the absolute path `<parent-of-repo-root>/<reponame>.worktrees/tasks` (using forward slashes / `as_posix()`). Example: `C:/Code/millhouse.worktrees/tasks`. Then write to `_millhouse/config.yaml`. Only block-style YAML — the hand-written parser at `plugins/mill/scripts/millpy/core/config.py` does not support inline flow mappings.
+
+When **appending missing keys** to an existing config, also append a `tasks.worktree-path:` key if absent. Locate the line immediately after the `repo:` block end (first blank line after the repo block, or the first top-level key after `repo:`) and insert:
+```yaml
+tasks:
+  worktree-path: <tasks-wt>
+```
+If any part of the `tasks:` block is already present, skip without modifying it. This preserves existing user edits.
 
 **Step 4c — legacy-to-pipeline migration (runs only when the existing config has no `pipeline:` block).**
 
@@ -83,7 +101,7 @@ If `pipeline:` block is missing, read `plugins/mill/templates/millhouse-config.y
 
 **Step 4d — tasks.md marker migration.**
 
-Read the project-root `tasks.md`. Scan for any `## [>] Title` headings. For each match, rewrite to `## [s] Title`. If any matches were found and rewritten, commit with message `chore: migrate [>] markers to [s]` and push. If no matches, no write occurs (idempotent).
+Resolve `tasks.md` via `millpy.tasks.tasks_md.resolve_path(cfg)` (where `cfg` is the freshly written config). If resolution fails (tasks worktree not yet bootstrapped or config missing `tasks.worktree-path`), skip Step 4d silently. Otherwise, scan the resolved `tasks.md` for any `## [>] Title` headings. For each match, rewrite to `## [s] Title`. If any matches were found and rewritten, use `millpy.tasks.tasks_md.write_commit_push(cfg, new_content, "chore: migrate [>] markers to [s]")` to commit and push. If no matches, no write occurs (idempotent).
 
 Rationale: older millhouse installations may have live `[>]` markers in their `tasks.md`. After the `[s]` vocabulary change landed, `[>]` markers are invalid (rejected by `tasks_md.validate()`) and invisible to the new picker. This migration step keeps upgrades non-destructive across installations.
 
@@ -132,12 +150,12 @@ If `CLAUDE.md` does not exist, create it with these rules.
 
 ```
 Mill initialized:
-  Tasks: tasks.md (git-tracked, ## headings for tasks)
+  Tasks: tasks.md on orphan branch 'tasks' (worktree at <tasks-wt>)
   Status: _millhouse/task/status.md (phase tracking + timeline)
   Config: _millhouse/config.yaml
   Git: _millhouse/ is gitignored — local to each clone/worktree
 
-Edit tasks.md to add tasks, or run mill-add.
+Open the tasks worktree in VS Code to edit tasks.md, or run mill-add.
 Run mill-start to pick a task and begin.
 ```
 

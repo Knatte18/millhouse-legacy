@@ -8,6 +8,9 @@ repo:
   short-name: "<SHORT_NAME>"
   branch-prefix: ~
 
+tasks:
+  worktree-path: "<TASKS_WORKTREE_PATH>"
+
 pipeline:
   implementer: <IMPLEMENTER>
   discussion-review:

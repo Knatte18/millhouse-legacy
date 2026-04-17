@@ -104,39 +104,9 @@ Use the Edit tool to insert the substituted section after the closing ``` of the
 
 **Update the phase in the YAML code block** of `_millhouse/task/status.md` from its current value to `abandoned`. Insert a timeline entry `abandoned  <UTC ISO 8601 timestamp>` before the closing ``` of the `## Timeline` text block using the Edit tool.
 
-### 7. Update parent's tasks.md (with merge-lock)
+### 7. Update tasks.md with `[abandoned]` marker
 
-**Acquire merge-lock on the parent** — same pattern as mill-merge Step 1:
-
-Write `<parent-path>/_millhouse/scratch/merge.lock` with content:
-```
-pid: <current process PID>
-timestamp: <UTC ISO 8601>
-branch: <current branch name>
-```
-
-Create `_millhouse/scratch/` in the parent if it doesn't exist.
-
-If the lock file already exists:
-- Read the PID from the lock.
-- Check if the process is alive (`kill -0 <PID> 2>/dev/null`).
-- If stale (process dead): remove and acquire.
-- If active: report "Another merge/abandon is in progress (<branch>). Waiting..." Retry every 10 seconds, max 5 minutes. If timeout: stop and tell the user.
-
-**Perform the tasks.md update** (under the lock):
-
-Resolve the parent's project root by computing the project subdirectory offset (working directory minus git root) and applying it to the parent worktree path. Read `<parent-project-root>/tasks.md`. Find the task's `## ` heading (match by task title captured in Step 4). Replace the `[phase]` marker with `[abandoned]`. E.g., `## [active] Fix login` becomes `## [abandoned] Fix login`.
-
-Stage, commit, and push from the parent worktree **without changing cwd** (worktree isolation rule — see `conversation/SKILL.md`):
-```bash
-git -C <parent-path> add tasks.md
-git -C <parent-path> commit -m "task: mark <task-title> [abandoned]"
-git -C <parent-path> push
-```
-
-**Release the merge-lock** — delete `<parent-path>/_millhouse/scratch/merge.lock`.
-
-This step (lock acquire → tasks.md update → commit/push → lock release) must release the lock in ALL exit paths including errors. Use a trap/finally pattern so any failure between acquire and release still removes the lock.
+Load `_millhouse/config.yaml` via `millpy.core.config.load` in the child worktree (the child's own config.yaml, which contains the same `tasks.worktree-path` because mill-spawn copies config from parent). Resolve `tasks_md_path` via `millpy.tasks.tasks_md.resolve_path(cfg)`. Parse with `tasks_md.parse`, find the task by title (captured in Step 4). Replace its phase marker with `abandoned` — `[abandoned]` overwrites any prior marker including `[active]`, `[completed]`, or a missing marker; the abandon decision wins regardless of the work's prior state. Render the updated task list. Call `millpy.tasks.tasks_md.write_commit_push(cfg, rendered, f"task: mark {task_title} [abandoned]")`. The helper handles lock + commit + push + retries.
 
 ### 8. Report
 
@@ -146,6 +116,6 @@ This step (lock acquire → tasks.md update → commit/push → lock release) mu
 
 ## Board Updates
 
-- Abandon → task's `[phase]` marker is replaced with `[abandoned]` in parent's `tasks.md` under a merge-lock (commit + push from parent worktree).
+- Abandon → task's `[phase]` marker is replaced with `[abandoned]` on the tasks branch via `millpy.tasks.tasks_md.write_commit_push`. No parent-worktree merge-lock is used for this write. `[abandoned]` overwrites any prior marker including `[completed]`.
 - Worktree, branch, and children registry entry removal are deferred to `mill-cleanup`, which runs from the parent worktree in a separate invocation.
 - The child's `_millhouse/task/status.md` gets a new `## Abandon` section capturing reason and context for carry-forward into the next claim of this task.
