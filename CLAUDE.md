@@ -52,5 +52,4 @@ When you need to find a skill for a task, read `SKILLS.md` (repo root) first —
 - Phase tracking (per-task internal state): `_millhouse/task/status.md` — `phase:` field is the authoritative source. `## Timeline` section records chronological phase history.
 - `_millhouse/` is gitignored (scoped to each worktree). On child-worktree spawn, it is copied (excluding `task/`, `scratch/`, and `children/`) from parent to new worktree.
 - Run `mill-setup` to initialize after a fresh clone (safe to re-run; creates the tasks branch + worktree if missing).
-- Format: keep `tasks.md` entries short (tags, 1–2 lines, background link). Detailed scope and design questions go in per-task `.md` files on the same `tasks` branch, linked as `[Background](slug.md)`.
 - Format reference: `plugins/mill/doc/formats/tasksmd.md`.
