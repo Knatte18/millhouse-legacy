@@ -1,6 +1,6 @@
 # Tasks
 
-## Move tasks.md to orphan branch `tasks` (stop main-branch commit churn)
+## [active] Move tasks.md to orphan branch `tasks` (stop main-branch commit churn)
 
 `tasks.md` lives on main today, so every task reshuffle pollutes main's history. Move it to an orphan branch `tasks` that never merges into main. Git-synced across machines, viewable on GitHub via `github.com/Knatte18/millhouse/blob/tasks/tasks.md`, editable locally via a dedicated worktree.
 
