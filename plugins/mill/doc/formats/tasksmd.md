@@ -87,14 +87,27 @@ A task block starts at `## Title` (with or without `[phase]`) and ends immediate
 - Phase markers are optional — adding a task by hand requires only `## Title`.
 - All skills (whether run from the main or a child worktree) read and write `tasks.md` exclusively via `millpy.tasks.tasks_md.resolve_path` and `millpy.tasks.tasks_md.write_commit_push` against the dedicated tasks worktree. Never via `git` commands in the current worktree.
 
+## Background Files
+
+Each task may have a companion background file on the `tasks` branch. Background files hold detailed scope, design questions, open decisions, and context that would bloat the task index.
+
+Convention:
+- File name: slug derived from task title (e.g. `add-oauth-support.md`).
+- Linked from the task block: `- [Background](add-oauth-support.md)`.
+- Content: full prose — no format constraints beyond a `# Title` heading matching the task.
+- Skills do not read or write background files. They are for humans and discussion threads.
+
+Keep `tasks.md` entries short: tags, 1–2 description lines, and a background link. Detailed scope, design questions, and option analysis go in the background file.
+
 ## Example File
 
 ```markdown
 # Tasks
 
 ## Add OAuth Support
-- Google OAuth first. Must support token refresh.
 - tags: [auth, backend]
+- Google OAuth first. Must support token refresh.
+- [Background](add-oauth-support.md)
 
 ## [active] Fix login validation
 - Input sanitization is missing on the login form.
