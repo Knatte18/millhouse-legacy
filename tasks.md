@@ -1,53 +1,18 @@
 # Tasks
 
+## Move tasks.md to orphan branch `tasks` (stop main-branch commit churn)
 
 `tasks.md` lives on main today, so every task reshuffle pollutes main's history. Move it to an orphan branch `tasks` that never merges into main. Git-synced across machines, viewable on GitHub via `github.com/Knatte18/millhouse/blob/tasks/tasks.md`, editable locally via a dedicated worktree.
 
-- Self-reinforcement: The two orchestrators (and potentailly also some of the other subthreads): IF a clear bug is detected by the thread, it can ITSELF invoke the "millhouse-issue" skill and report the bug. 
-Perhaps wait to do this until the thread's task is fully done. Then an accumulated reports can be destilled to create an accurate bug-issue for the millhous eto be set. 
-I can then manually pull down the issues, have Opus analyse them as an ensamble, and fix in one-go.
+**Scope:**
 
-- Do not hardcode templates in a skill: INGEN av skillene som oppretter filer skal ha hardkodet template. Jeg ser at f.eks step *Step 4c i mill-setup har en hardkodet "config". Vi har laget "millhouse-config.yaml" som en template som skal bruke i stedet. INGEN slik hardkodet template skal inn i noen skill. Det skal brukes en template-fil i stedet. Dette gjør det mye enklere å ender templaten. Sjekk også om det er noen andre skill som gjør dette. 
+1. Create orphan branch `tasks` with only `tasks.md` at root. Remove `tasks.md` from main.
+2. Add a `tasks.worktree-path` pointer to `_millhouse/config.yaml` (default: `../<repo>-tasks`).
+3. Update `mill-setup` to run `git worktree add <tasks-worktree-path> tasks` if the worktree does not already exist. Idempotent.
+4. Rework every skill/script that currently reads or mutates `tasks.md` so it resolves the path via config, not via cwd. Affected: `mill-spawn` (claim-and-remove), `mill-start` (claim path 2/3/4), `mill-merge` (write `[done]`), `mill-add` (append), `mill-abandon` (write `[abandoned]`), `mill-inbox` (append imported issues), and `spawn_task.py` / any `millpy` helpers that touch tasks.md. All writes must go through `git -C <tasks-worktree-path> add/commit/push`.
+5. Document the new workflow in `CLAUDE.md` and the relevant skill docs (open a dedicated VS Code window on the tasks worktree to read/edit tasks).
 
-
-## [done] Self-reinforcement loop: auto-reporting + auto-revise-tasks + simpler task picking
-
-Close the full loop between orchestrators, GitHub issues, and `tasks.md`. Three related pieces, one task:
-
-**1. Self-reinforcement — orchestrators auto-report bugs**
-
-The two orchestrators (and potentially other subthreads): IF a clear bug is detected by the thread, it can ITSELF invoke the `millhouse-issue` skill to report it. Wait until the thread's task is fully done, then distill accumulated observations into an accurate bug-issue.
-
-Design questions:
-
-- When does the thread fire (after `complete`? after review? after merge?)
-- Where does it accumulate observations during the run (scratch file?)
-- Dedup against existing open issues before filing
-- Which threads/skills are allowed to report (just mill-go / Thread B? reviewers too?)
-- Togglable via a config entry (on/off)
-
-**2. Revise-tasks skill — automated inbox-driven task consolidation**
-
-A new skill (e.g. `mill:revise-tasks` or extend `mill-inbox`) that performs the full revision flow, not just 1:1 import:
-
-1. Fetch issues via `fetch-issues.py`.
-2. For each issue, status-check against the current repo:
-   - Already fixed in main → close the issue with a "fixed in main" comment; do not land in tasks.md.
-   - Moot (references removed subsystems, obsolete flows) → drop with a written reason; close the issue.
-   - Still open → carry forward to the consolidation step.
-3. Read the existing `tasks.md` and respect **protected tasks** (marker in config, or a `<!-- protected -->` comment in the task body, or a config-listed set of protected titles).
-4. Consolidate: fold issues into existing tasks where they fit; create new tasks where needed; merge related tasks that are not protected.
-5. Create **background docs** in `plugins/mill/doc/proposals/` when a new or consolidated task is architecture-level and needs a design grounding.
-6. **Present the proposal** to the user before writing (table mapping each issue to its landing place, dropped-with-reason list, new background docs). Wait for green light.
-7. On approval: write `tasks.md`, create background docs, commit and push, close GitHub issues with comments pointing to the consolidating task.
-
-This skill is the codification of the manual process used during the 2026-04-17 tasks revision.
-
-**3. Simpler task-selection than `[>]` marker**
-
-The `## [>] <title>` marker that `mill-spawn` reads from `tasks.md` is awkward to type. Preferred approach: make `mill-spawn.py` list all tasks in `tasks.md` numbered (title only), prompt for a number, and claim that one — no manual file editing. Same treatment for `mill-start` if it uses the same marker.
-
-**Why bundled:** (1) fills the issue queue automatically, (2) drains it automatically into tasks via revision, (3) makes picking the next task trivial. Together they are the closed loop; separately they are awkward partial moves.
+**Why phase-1-only:** this task stops the main-branch commit churn and keeps GitHub-sync. The longer-term move to "GH issues as source of truth with tasks.md as a generated view" is part of the Self-reinforcement loop task below. Land this first so the Self-reinforcement task only has to change the content model, not the storage location.
 
 ## Track task state across machines (W4 — needs design)
 
@@ -55,39 +20,38 @@ Invert the `_millhouse/` gitignore so task state (discussion, plan, status, revi
 
 **Design doc:** [plugins/mill/doc/proposals/04-track-task-state.md](plugins/mill/doc/proposals/04-track-task-state.md)
 
-
 ## Plan format + review architecture rewrite
 
 - tags: [enhancement, mill-plan, reviewer]
-- Consolidates issue #38 (drives), #35 (superseded by #38, folded), #36 (extended by #38, folded), and #34 (folded as threshold gate).
-- Introduces a cleaner plan-format contract: `depends-on` = logical deps only; write-safety auto-inferred from `modifies`/`creates`; reviewers stop flagging shared-modifies; `reads` no longer duplicates `modifies` (`Explore ⊆ (Reads ∪ Modifies)`); per-card review gated by a `per-card-threshold` default 20.
+- Consolidates issue #38 (drives), #35 (superseded by #38, folded), #36 (extended by #38, folded), and #34 (folded into the per-card-review question below).
+- Introduces a cleaner plan-format contract: `depends-on` = logical deps only; write-safety auto-inferred from `modifies`/`creates`; reviewers stop flagging shared-modifies; `reads` no longer duplicates `modifies` (`Explore ⊆ (Reads ∪ Modifies)`).
 - New module `plugins/mill/scripts/millpy/core/plan_dag.py` with `build_enriched_dag(card_index)`.
 - Updates: `plan_validator.py` Explore subset rule; `doc/prompts/plan-review.md` holistic prompt; `doc/formats/plan.md` contract section; `mill-go` executor to consume enriched DAG; `mill-plan` SKILL.
 - **Background doc:** [plugins/mill/doc/proposals/05-plan-format-contract.md](plugins/mill/doc/proposals/05-plan-format-contract.md)
 - No runtime per-file lock layer — single source of truth is the enriched DAG.
 
+**Open design question — per-card review: remove entirely, or gate?**
+
+Originally scoped as "gate per-card review behind a `per-card-threshold` (default 20)". Revisit in light of 2026-04-17 observations and the Planner-grouped review task below — per-card may have no niche left worth the code surface.
+
+- **Option A — remove entirely.** Delete all per-card review code, config keys (`pipeline.*-review.per-card`), and `dispatch: bulk` reviewer definitions scoped to per-card. Small plans get holistic; large plans go to Planner-grouped review once that lands. Simplest architecture; smallest code surface. Current footprint: 10 files under `scripts/millpy/` (engine, workers, plan_validator, plan_review_loop, dag, config, entrypoints, tests).
+- **Option B — gate behind threshold.** Keep per-card but only activate above N cards (default 20). Preserves current behavior as opt-in. Keeps the reviewer/DAG/config code that is otherwise unused day-to-day.
+- **Option C — gate now, sunset later.** Land gating as a transition; remove in a follow-up once Planner-grouped review proves out.
+
+Context favoring removal:
+
+- Gemini-backend task observed (2026-04-17) that single-worker per-card on 6 cards already hit free-tier quota. Per-card × ensemble is effectively unusable on free tier. Holistic stays safe.
+- Planner-grouped plan review (task below) is designed to replace per-card for 30+ card plans.
+- mill-go linear-default task (below) removes Builder-level parallelism — per-card reviewer fan-out no longer matches any other parallelism in the system.
+- The only range where per-card earns its keep today is ~20–30 cards, a narrow band likely covered by grouped review once it lands.
+
+Resolve this question during this task's discussion phase before implementing.
 
 ## Planner-grouped plan review for large plans
 
 - tags: [enhancement, mill-plan]
 - When a plan has 30+ cards, per-card bulk review + holistic tool-use review may not catch inter-group issues effectively. Add an optional Planner-grouped review mode where Planner creates ad-hoc review groups (overlapping subsets of cards) and spawns one reviewer per group in parallel. Same card can appear in multiple groups. Pure Planner-side change — no plan format changes needed.
 - Orthogonal to "Plan format + review architecture rewrite" above. Land that first; re-evaluate the grouped approach after.
-
-## [done] Gemini backend: replace CLI with google-genai SDK + tool-use
-
-- tags: [enhancement, reviewer]
-- Consolidates issue #31 (drives) and #32 (concrete repro: Gemini CLI hangs on large-prompt bulk dispatch, observed 2026-04-16).
-- Replace the Gemini CLI subprocess in `plugins/mill/scripts/millpy/backends/gemini.py` with the `google-genai` SDK.
-- Add tool-use support with a `read_file` tool (mirror Ollama's tool-use shape at `plugins/mill/scripts/millpy/backends/ollama.py`).
-- Proper API-key auth via env var (`GEMINI_API_KEY` or `GOOGLE_API_KEY`).
-- Add timeout + retry logic (Gemini CLI has neither).
-- **Interim mitigation already in main:** swap reviewer ensembles from `gemini-3-flash` to `gemini-2.5-flash` (GA).
-- Open design questions before implementing:
-  - Bulk dispatch: migrate to SDK too, or keep CLI for bulk and only use SDK for tool-use?
-  - Python dep: no `pyproject.toml` at repo root currently — how is the `google-genai` dep managed/declared?
-  - Auth precedence: env var only, or also `.geminic` config fallback?
-  - Model IDs to accept (GA: `gemini-2.5-pro`, `gemini-2.5-flash`; preview: `gemini-3-pro-preview`, `gemini-3-flash-preview`)?
-
 
 ## mill-go Builder-tweaks: session-resume + linear default
 
@@ -126,8 +90,6 @@ Fix:
 
 No removal of DAG code. The `plan_dag.py` work from the Plan-format task stays useful for linear ordering — just without the concurrency.
 
-
-
 ## Plugin-doc path resolution: references must work from installed-plugin context
 
 - tags: [bug, docs]
@@ -141,39 +103,3 @@ No removal of DAG code. The `plan_dag.py` work from the Plan-format task stays u
 - Scope: pick a convention in the discussion phase, then sweep every reference. Keep the change mechanical once the convention is locked.
 - Out of scope: code-only references like `millpy.core.paths.repo_root` (Python symbols resolved via `PYTHONPATH`) — only the file-path text references that Claude or humans open via a path string.
 - **Observed 2026-04-17** during the "mill-spawn / mill-vscode / mill-terminal: subfolder + nested-repo fixes" task discussion, while fixing dead `doc/modules/*` link targets. That sibling task left the prefix form unchanged (`plugins/mill/doc/...`); this task finishes the job.
-
-
-
-## [done] mill-spawn / mill-vscode / mill-terminal: subfolder + nested-repo fixes
-
-- tags: [bug]
-- Two related bugs in the CLI wrappers and `spawn_task.py` when invoked from subdirectories or nested mill-projects.
-
-**1. Path-mirroring: preserve cwd subfolder when switching worktrees**
-
-`mill-vscode.py` and `mill-terminal.py` should open in the subfolder of the new worktree that matches the subfolder of the parent worktree they were invoked from.
-
-- Parent worktree: `C:/Code/millhouse`
-- Invoked from: `C:/Code/millhouse/plugins/mill/scripts/`
-- New worktree: `C:/Code/millhouse.worktrees/<slug>/`
-- Expected behavior: open at `C:/Code/millhouse.worktrees/<slug>/plugins/mill/scripts/`
-- Current behavior: opens at the worktree root
-
-Fix: compute the path offset from cwd to the parent's `project_root()` / `repo_root()`, then append that offset to the new worktree's root.
-
-**2. Worktree location for nested mill-projects uses `project_root()` instead of `repo_root()`**
-
-[spawn_task.py:168](plugins/mill/scripts/millpy/entrypoints/spawn_task.py#L168):
-
-```python
-worktrees_dir = root.parent / f"{root.name}.worktrees"
-```
-
-Here `root` comes from `project_root()`, which walks up from cwd to the nearest `_millhouse/` directory. For nested mill-projects inside a git repo, this gives the wrong answer.
-
-- Git repo root: `C:/Code/py`
-- Mill project root (cwd): `C:/Code/py/projects/piprocessing` (has its own `_millhouse/`)
-- Current behavior: `worktrees_dir = C:/Code/py/projects/piprocessing.worktrees` (inside the git repo — wrong)
-- Expected behavior: `worktrees_dir = C:/Code/py.worktrees` (sibling of the git repo — correct; `git worktree add` only operates at the git-repo level)
-
-Fix: use `repo_root()` (git toplevel) for the worktree container calculation. Keep `project_root()` for `_millhouse/` and `tasks.md` resolution. When the user opens the new worktree, they navigate to the matching subfolder — same as fix 1 above.
