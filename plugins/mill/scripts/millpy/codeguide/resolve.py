@@ -4,9 +4,9 @@ Path resolution for codeguide hooks.
 Two-tier resolution:
 - Routing files (Overview.md, modules/) resolve from cwd — each folder with
   a _codeguide/ is a self-contained routing node.
-- Metadata files (config.yaml, local-rules.md, DocumentationGuide.md,
-  NavigationHooks.md) resolve by walking up from cwd to the nearest ancestor
-  that contains them. These are repo-level concerns.
+- Metadata files (config.yaml, local-rules.md, DocumentationGuide.md)
+  resolve by walking up from cwd to the nearest ancestor that contains
+  them. These are repo-level concerns.
 """
 
 import os

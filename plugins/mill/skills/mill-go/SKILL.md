@@ -188,9 +188,9 @@ For v3 plans, execute cards in layer order using the DAG built in Phase: Setup.
 
    d. **Spawn the implementer.** Invoke with `run_in_background: true`:
       ```bash
-      (cd plugins/mill/scripts && python -m millpy.entrypoints.spawn_agent) \
+      PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_agent \
         --role implementer \
-        --prompt-file _millhouse/task/implementer-brief-card-<card_number>.md \
+        --prompt-file <WORK_DIR>/_millhouse/task/implementer-brief-card-<card_number>.md \
         --provider <implementer-model>
       ```
       Monitor the shell ID. While monitoring, periodically read `_millhouse/task/status.md` and relay each `current_step` change to the user.
@@ -209,11 +209,11 @@ For v3 plans, execute cards in layer order using the DAG built in Phase: Setup.
 
       ii. **Materialize the code-review prompt.** Identify review scope: the files created/modified by this card (from `card_index[card_number]["creates"] + card_index[card_number]["modifies"]`, root-resolved). Write prompt to `_millhouse/scratch/code-review-prompt-r<cr_round>-card-<card_number>.md`.
 
-      iii. **Spawn code-reviewer:**
+      iii. **Spawn code-reviewer in the background.** Invoke Bash with `run_in_background: true` — code reviewers run 1–5+ minutes, so foreground would block user dialogue. Capture the background task ID and wait via `Monitor`. During Monitoring, the Builder may respond to user messages but MUST NOT advance to step iv until the spawn completes.
            ```bash
-           (cd plugins/mill/scripts && python -m millpy.entrypoints.spawn_reviewer) \
+           PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
              --reviewer-name <code-reviewer-name> \
-             --prompt-file _millhouse/scratch/code-review-prompt-r<cr_round>-card-<card_number>.md \
+             --prompt-file <WORK_DIR>/_millhouse/scratch/code-review-prompt-r<cr_round>-card-<card_number>.md \
              --phase code \
              --round <cr_round> \
              --slice-type per-card \
@@ -228,7 +228,7 @@ For v3 plans, execute cards in layer order using the DAG built in Phase: Setup.
 
           **Session resume attempt:** if `session_id` is non-null, use `spawn_agent.py --session-id <session_id>` with the findings file as prompt. If `session_id` is null (normal for current CLI), spawn a **fresh Sonnet session** with the findings file as the prompt:
           ```bash
-          (cd plugins/mill/scripts && python -m millpy.entrypoints.spawn_agent) \
+          PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_agent \
             --role implementer \
             --prompt-file <findings-path> \
             --provider <implementer-model>
@@ -247,14 +247,14 @@ For v3 plans, execute cards in layer order using the DAG built in Phase: Setup.
     ```
     If verify fails, update status.md `phase: blocked`, `blocked_reason: Verify command failed after all cards implemented`. Run Notification Procedure. Stop.
 
-11. **Final holistic code-review.** After verify passes, spawn a final holistic code-review:
+11. **Final holistic code-review.** After verify passes, spawn a final holistic code-review **in the background** (`run_in_background: true`, Monitor for completion — see step 9.h.iii rationale):
 
     Resolve reviewer: `resolve_reviewer_name(cfg, "code", 1)` (or a dedicated holistic reviewer if `pipeline.code-review.holistic` is set).
 
     ```bash
-    (cd plugins/mill/scripts && python -m millpy.entrypoints.spawn_reviewer) \
+    PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
       --reviewer-name <holistic-reviewer-name> \
-      --prompt-file _millhouse/scratch/code-review-prompt-holistic.md \
+      --prompt-file <WORK_DIR>/_millhouse/scratch/code-review-prompt-holistic.md \
       --phase code \
       --round 1 \
       --slice-type holistic \
@@ -335,7 +335,7 @@ Write the event to the YAML code block in `_millhouse/task/status.md`. For block
 ### Step 2: Send notification
 
 ```bash
-(cd plugins/mill/scripts && python -m millpy.entrypoints.notify) \
+PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.notify \
   --event "<EVENT>" \
   --branch "$(git branch --show-current)" \
   --detail "<detail>" \

@@ -31,8 +31,6 @@ Legacy slots (`models.session`, `models.explore`, `models.<phase>-review`, `revi
 
 Read `tasks.md` in the project root (the working directory where `_millhouse/` lives). If it does not exist, stop and tell the user to run `mill-setup` first or create `tasks.md` manually.
 
-**Child worktree guard:** If running in a non-main worktree (detect via `git worktree list --porcelain` — current path is not the first/main entry), warn: "mill-start in-place should be run from the parent worktree. Commits in a child worktree create merge conflicts with the parent." Require user confirmation before proceeding.
-
 ---
 
 ## Arguments
@@ -88,26 +86,12 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    Validate tasks.md per `doc/modules/validation.md` (tasks.md structural rules).
 
-   Write `_millhouse/task/status.md` with the complete fenced structure:
+   Write `_millhouse/task/status.md` by reading `plugins/mill/templates/status-discussing.md`, stripping the leading HTML comment, and substituting:
+   - `<TASK_TITLE>` — the selected task's heading text from `tasks.md`.
+   - `<TASK_DESCRIPTION>` — the task description bullets from `tasks.md` (indent-preserved; fit the `task_description: |` block).
+   - `<TIMESTAMP>` — fresh shell timestamp: `date -u +"%Y-%m-%dT%H:%M:%SZ"`.
 
-   ````markdown
-   # Status
-
-   ```yaml
-   phase: discussing
-   task: <task-title>
-   task_description: |
-     <task description from tasks.md>
-   ```
-
-   ## Timeline
-
-   ```text
-   discussing  <timestamp>
-   ```
-   ````
-
-   Generate the timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`. The Timeline text block must be present in the initial write so subsequent Edit-tool timeline appends have a closing fence to insert before.
+   The Timeline text block must be present in the initial write so subsequent Edit-tool timeline appends have a closing fence to insert before.
 
 ### Phase: Explore
 
@@ -176,11 +160,15 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    Note: discussion-review rejects bulk dispatch at the engine level. If `pipeline.discussion-review.*` points at a bulk recipe, `millpy.entrypoints.spawn_reviewer` exits with a ConfigError and mill-start surfaces the error to the user.
 
-   e. **Spawn the discussion-reviewer.** Invoke via Bash:
+   e. **Spawn the discussion-reviewer in the background.** Invoke Bash with `run_in_background: true` so the assistant can converse with the user while the reviewer runs:
       ```bash
-      (cd plugins/mill/scripts && python -m millpy.entrypoints.spawn_reviewer) --reviewer-name <reviewer-name> --prompt-file _millhouse/scratch/discussion-review-prompt-r<N>.md --phase discussion --round <N>
+      PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
+        --reviewer-name <reviewer-name> \
+        --prompt-file <WORK_DIR>/_millhouse/scratch/discussion-review-prompt-r<N>.md \
+        --phase discussion \
+        --round <N>
       ```
-      The script is synchronous from the caller's perspective. Reviewers are short — do not run in background.
+      Capture the returned background task ID, then use the `Monitor` tool to wait for completion. Discussion reviewers typically run 1–5 minutes — long enough that synchronous foreground spawns block user dialogue. While Monitoring, the skill may respond to user messages, but MUST NOT advance to the next phase until Monitor reports completion. Once complete, read the JSON line from the captured stdout.
 
    f. **Parse the JSON line** from the script's stdout: `{"verdict": "APPROVE" | "GAPS_FOUND" | "UNKNOWN", "review_file": "<absolute-path>"}`.
 
@@ -211,14 +199,9 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
    b. Use the Edit tool to insert `discussed  <timestamp>` on a new line before the closing ` ``` ` of the timeline text block in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
 
-   c. **Prompt user: "Plan this now?"**
+   c. **Report completion.** Print: "Discussion complete. Run `mill-plan` to start autonomous plan writing, then `mill-go` to start implementation."
 
-      Present as a numbered list:
-      1. Yes — invoke `mill-plan` now to start autonomous plan writing (Recommended)
-      2. No — run `mill-plan` manually later
-
-      - **On `1` (Yes, default):** Invoke `mill-plan` via the Skill tool. Report: "mill-plan spawned. Run `mill-go` in another terminal to pre-arm the Builder."
-      - **On `2` (No):** Report: "Discussion complete. Run `mill-plan` to start autonomous plan writing, then `mill-go` to start implementation."
+      **Do NOT invoke `mill-plan` from mill-start.** Handoff to the next phase is always the user's decision — they invoke `mill-plan` (and later `mill-go`) manually. mill-start's responsibility ends after status.md is finalized.
 
 ---
 

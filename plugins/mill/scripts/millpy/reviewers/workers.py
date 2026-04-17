@@ -2,12 +2,12 @@
 reviewers/workers.py — WORKERS registry: atomic worker configurations.
 
 Each entry is a named (provider, model, effort, dispatch_mode) tuple.
-Haiku is deliberately absent — not strong enough for reviews.
+Haiku is available but not a default reviewer choice — previously deemed
+too weak; kept for experimental per-card runs where low token cost matters.
 
-Model-name verification: spawn-agent.ps1 maps:
-  'gemini-3-pro'   → 'gemini-3-pro-preview'   (native Gemini model name)
-  'gemini-flash'   → 'gemini-3-flash-preview'  (native Gemini model name)
-So the WORKERS use the -preview suffix strings that the Gemini CLI accepts.
+Model names are passed verbatim to the Gemini CLI via `gemini --model <name>`:
+  - gemini-3 variants use the `-preview` suffix (gemini-3-pro-preview, gemini-3-flash-preview)
+  - gemini-2.5 variants are GA and use the plain name (gemini-2.5-pro, gemini-2.5-flash)
 
 No cross-import with definitions.py. Registry validation lives in __init__.py.
 """
@@ -16,6 +16,10 @@ from __future__ import annotations
 from millpy.reviewers.base import Worker
 
 WORKERS: dict[str, Worker] = {
+    "haiku": Worker(
+        provider="claude",
+        model="haiku",
+    ),
     "sonnet": Worker(
         provider="claude",
         model="sonnet",
@@ -41,6 +45,14 @@ WORKERS: dict[str, Worker] = {
     "g3pro": Worker(
         provider="gemini",
         model="gemini-3-pro-preview",
+    ),
+    "g25flash": Worker(
+        provider="gemini",
+        model="gemini-2.5-flash",
+    ),
+    "g25pro": Worker(
+        provider="gemini",
+        model="gemini-2.5-pro",
     ),
     "glmflash": Worker(
         provider="ollama",

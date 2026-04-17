@@ -47,14 +47,23 @@ def test_main_missing_config_exits_nonzero(tmp_path, monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 
 class TestPickWorktreeColor:
-    def test_returns_first_palette_color_when_no_siblings(self, tmp_path):
-        """When worktrees_dir is empty, returns the first color in the palette."""
+    """Green is reserved for the main worktree. Child worktrees always
+    pick the first NON-green palette entry. See test_pick_worktree_color.py
+    for the green-exclusion invariant tests.
+    """
+
+    def _first_non_green(self):
+        return next(c for c in spawn_task._WORKTREE_COLOR_PALETTE
+                    if c.lower() != spawn_task._MAIN_WORKTREE_COLOR.lower())
+
+    def test_returns_first_non_green_color_when_no_siblings(self, tmp_path):
+        """When worktrees_dir is empty, returns the first non-green palette color."""
         color = spawn_task._pick_worktree_color(tmp_path)
-        assert color == spawn_task._WORKTREE_COLOR_PALETTE[0]
+        assert color == self._first_non_green()
 
     def test_skips_color_used_by_sibling_worktree(self, tmp_path):
         """Skips a color already used by a sibling worktree's .vscode/settings.json."""
-        first_color = spawn_task._WORKTREE_COLOR_PALETTE[0]
+        first_non_green = self._first_non_green()
         sibling = tmp_path / "sibling"
         sibling.mkdir()
         vscode = sibling / ".vscode"
@@ -62,18 +71,23 @@ class TestPickWorktreeColor:
         (vscode / "settings.json").write_text(
             json.dumps({
                 "workbench.colorCustomizations": {
-                    "titleBar.activeBackground": first_color,
+                    "titleBar.activeBackground": first_non_green,
                 }
             }),
             encoding="utf-8",
         )
 
+        # Skip the first non-green (in use) → return the next non-green.
         color = spawn_task._pick_worktree_color(tmp_path)
-        assert color == spawn_task._WORKTREE_COLOR_PALETTE[1]
+        non_green_palette = [c for c in spawn_task._WORKTREE_COLOR_PALETTE
+                             if c.lower() != spawn_task._MAIN_WORKTREE_COLOR.lower()]
+        assert color == non_green_palette[1]
 
-    def test_wraps_around_when_all_colors_in_use(self, tmp_path):
-        """When all palette colors are in use, wraps around to the first."""
-        for index, color in enumerate(spawn_task._WORKTREE_COLOR_PALETTE):
+    def test_wraps_around_when_all_non_green_colors_in_use(self, tmp_path):
+        """When all non-green colors are in use, wraps to the first non-green."""
+        non_green_palette = [c for c in spawn_task._WORKTREE_COLOR_PALETTE
+                             if c.lower() != spawn_task._MAIN_WORKTREE_COLOR.lower()]
+        for index, color in enumerate(non_green_palette):
             sibling = tmp_path / f"sibling-{index}"
             sibling.mkdir()
             vscode = sibling / ".vscode"
@@ -88,13 +102,14 @@ class TestPickWorktreeColor:
             )
 
         color = spawn_task._pick_worktree_color(tmp_path)
-        assert color == spawn_task._WORKTREE_COLOR_PALETTE[0]
+        assert color == non_green_palette[0]
+        assert color.lower() != spawn_task._MAIN_WORKTREE_COLOR.lower()
 
-    def test_missing_worktrees_dir_returns_first_color(self, tmp_path):
-        """When worktrees_dir does not exist, returns the first palette color."""
+    def test_missing_worktrees_dir_returns_first_non_green(self, tmp_path):
+        """When worktrees_dir does not exist, returns the first non-green palette color."""
         nonexistent = tmp_path / "does-not-exist"
         color = spawn_task._pick_worktree_color(nonexistent)
-        assert color == spawn_task._WORKTREE_COLOR_PALETTE[0]
+        assert color == self._first_non_green()
 
 
 class TestWriteVscodeSettings:

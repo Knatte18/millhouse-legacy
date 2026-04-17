@@ -206,10 +206,6 @@ def main(argv: list[str] | None = None) -> int:
     status_path = project_path / "_millhouse" / "task" / "status.md"
     _write_status(status_path, task_title, task_description, parent_branch)
 
-    # Write discussion placeholder
-    discussion_path = project_path / "_millhouse" / "task" / "discussion.md"
-    _write_discussion_placeholder(discussion_path, task_title)
-
     # Write child registry entry in parent _millhouse/children/
     children_dir = root / "_millhouse" / "children"
     children_dir.mkdir(parents=True, exist_ok=True)
@@ -392,24 +388,12 @@ def _write_status(
     status_path.write_text(content, encoding="utf-8", newline="\n")
 
 
-def _write_discussion_placeholder(discussion_path: Path, task_title: str) -> None:
-    """Write a placeholder discussion.md."""
-    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    content = (
-        f"# Discussion: {task_title}\n"
-        f"\n"
-        f"_Generated {ts}_\n"
-        f"\n"
-        f"## Context\n"
-        f"\n"
-        f"(Fill in context here before running mill-start)\n"
-    )
-    discussion_path.write_text(content, encoding="utf-8", newline="\n")
-
-
 # Color palette for worktree title bars. Round-robin from this list.
+# The first entry (green) is reserved for the main worktree; child worktrees
+# filter it out in `_pick_worktree_color`. See mill-setup/SKILL.md for the
+# main-is-always-green invariant.
 _WORKTREE_COLOR_PALETTE = [
-    "#2d7d46",  # green
+    "#2d7d46",  # green (main worktree only)
     "#7d2d6b",  # purple
     "#2d4f7d",  # blue
     "#7d5c2d",  # yellow
@@ -418,6 +402,24 @@ _WORKTREE_COLOR_PALETTE = [
     "#4a2d7d",  # indigo
     "#7d462d",  # orange
 ]
+
+# The main worktree is always green. Child worktrees exclude it from their
+# rotation so the developer can tell a child from the main at a glance.
+_MAIN_WORKTREE_COLOR = "#2d7d46"
+
+# Named view of _WORKTREE_COLOR_PALETTE — the same source of truth, keyed
+# by human-readable color names. Used by the `mill-color` entrypoint for
+# ad-hoc worktree color overrides.
+WORKTREE_COLOR_NAME_TO_HEX: dict[str, str] = {
+    "green":  "#2d7d46",
+    "purple": "#7d2d6b",
+    "blue":   "#2d4f7d",
+    "yellow": "#7d5c2d",
+    "red":    "#6b2d2d",
+    "cyan":   "#2d6b6b",
+    "indigo": "#4a2d7d",
+    "orange": "#7d462d",
+}
 
 
 def _read_vscode_color(vscode_settings_path: Path) -> str | None:
@@ -436,10 +438,13 @@ def _read_vscode_color(vscode_settings_path: Path) -> str | None:
 
 
 def _pick_worktree_color(worktrees_dir: Path) -> str:
-    """Pick the first color from the palette not used by any sibling worktree.
+    """Pick the first non-green palette color not used by any sibling worktree.
 
-    Scans `.vscode/settings.json` in each directory under ``worktrees_dir``.
-    If all colors are in use, wraps around to the first color in the palette.
+    Green (`_MAIN_WORKTREE_COLOR`) is reserved for the main worktree and
+    is always excluded from the child palette — even if no sibling is
+    currently using it. Scans `.vscode/settings.json` in each directory
+    under ``worktrees_dir``. If every non-green color is in use, wraps
+    around to the first non-green color (purple).
     """
     used_colors: set[str] = set()
     if worktrees_dir.exists():
@@ -451,12 +456,15 @@ def _pick_worktree_color(worktrees_dir: Path) -> str:
             if color:
                 used_colors.add(color.lower())
 
-    for color in _WORKTREE_COLOR_PALETTE:
+    non_green_palette = [c for c in _WORKTREE_COLOR_PALETTE
+                         if c.lower() != _MAIN_WORKTREE_COLOR.lower()]
+
+    for color in non_green_palette:
         if color.lower() not in used_colors:
             return color
 
-    # All colors in use — wrap around
-    return _WORKTREE_COLOR_PALETTE[0]
+    # All non-green colors in use — wrap to first non-green (never green).
+    return non_green_palette[0]
 
 
 def _write_vscode_settings(
@@ -519,6 +527,59 @@ def _write_vscode_settings(
 
     vscode_dir.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(content, encoding="utf-8", newline="\n")
+
+
+def write_vscode_settings_with_color(
+    worktree_path: Path,
+    color_hex: str,
+    slug: str,
+    short_name: str,
+) -> Path:
+    """Write `.vscode/settings.json` under `worktree_path` using an explicit color.
+
+    Unlike `_write_vscode_settings`, which auto-picks a sibling-avoiding color,
+    this helper accepts the hex color directly. Used by the `mill-color`
+    entrypoint for ad-hoc overrides. Overwrites any existing settings.json
+    (explicit user action — no backup, no idempotency skip).
+
+    Returns the path to the written settings.json.
+    """
+    import json
+
+    vscode_dir = worktree_path / ".vscode"
+    settings_path = vscode_dir / "settings.json"
+
+    # Prefer the template if available in the repo layout (parent/plugins/mill/templates).
+    template_path = None
+    for ancestor in [worktree_path, *worktree_path.parents]:
+        candidate = ancestor / "plugins" / "mill" / "templates" / "vscode-settings.json"
+        if candidate.exists():
+            template_path = candidate
+            break
+
+    if template_path is not None:
+        template_text = template_path.read_text(encoding="utf-8")
+    else:
+        template_text = json.dumps({
+            "workbench.colorCustomizations": {
+                "titleBar.activeBackground": "<COLOR_HEX>",
+                "titleBar.activeForeground": "#ffffff",
+                "titleBar.inactiveBackground": "<COLOR_HEX>",
+                "titleBar.inactiveForeground": "#ffffffaa",
+            },
+            "window.title": "<SHORT_NAME>: <SLUG>",
+        }, indent=4) + "\n"
+
+    content = (
+        template_text
+        .replace("<COLOR_HEX>", color_hex)
+        .replace("<SHORT_NAME>", short_name)
+        .replace("<SLUG>", slug)
+    )
+
+    vscode_dir.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(content, encoding="utf-8", newline="\n")
+    return settings_path
 
 
 if __name__ == "__main__":

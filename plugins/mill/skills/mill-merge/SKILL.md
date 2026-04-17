@@ -123,6 +123,18 @@ git -C <parent-path> push
 ```
 Squash merge collapses all worktree commits into a single commit on the parent branch.
 
+### 4b. How `[done]` reaches the parent (design note)
+
+**Invariant: the child session never writes directly to the parent's `tasks.md`.** The `[active]` → `[done]` transition in the parent is carried entirely by git merge. This is by design and closes issue #25.
+
+Step 3 above commits the `[active]` → `[done]` edit in the **child**'s `tasks.md`. From there, the marker reaches the parent's `tasks.md` along one of two paths, depending on the config:
+
+- **Path A — auto-merge (`git.auto-merge: true`, or `require-pr-to-base: false`):** Step 4 performs `git -C <parent-path> merge --squash` immediately. The squash commit carries the child's `[done]` edit into the parent's `tasks.md` at merge time. A reader of parent's `tasks.md` sees `[done]` within seconds of mill-merge finishing.
+
+- **Path B — PR-only (`require-pr-to-base: true` AND `parent-branch == base-branch`):** Step 4 creates a PR, writes `phase: pr-pending` to `_millhouse/task/status.md`, and exits. The parent's `tasks.md` is **still `[active]` at this point** — mill-merge performed no parent-side write. Once the PR lands on GitHub (manual merge, bot, or automation), the landing merge commit brings the child's `[done]` `tasks.md` into the parent. Until that lands, a reader of parent's `tasks.md` sees `[active]`.
+
+**Consequence:** in Path B, `[done]` in the parent lags the "complete" signal by however long the PR sits in review. This is deliberate — `[done]` means "merged", not "ready to merge". If you want a "ready to merge" signal, use `phase: pr-pending` in `_millhouse/task/status.md` (which is what the skill already writes).
+
 ### 5. Update parent's child registry
 
 If `<parent-path>/_millhouse/children/` exists, find the child registry file whose YAML frontmatter contains `branch: <CHILD_BRANCH>` (search all `.md` files in the folder). If found:
@@ -168,7 +180,7 @@ Write the event to the YAML code block in `_millhouse/task/status.md`. For block
 ### Step 2: Send notification
 
 ```bash
-(cd plugins/mill/scripts && python -m millpy.entrypoints.notify) \
+PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.notify \
   --event "<EVENT>" \
   --branch "$(git branch --show-current)" \
   --detail "<detail>" \

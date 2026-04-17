@@ -13,6 +13,7 @@ The template lives in `doc/modules/` (alongside `handoff-brief.md`) so that the 
 | `<PLAN_PATH>` | Absolute path to the plan: `_millhouse/task/plan` (v2 directory) or `_millhouse/task/plan.md` (v1 file). Use `plan_io.resolve_plan_path(task_dir)` to read the correct format. |
 | `<STATUS_PATH>` | Absolute path to `_millhouse/task/status.md` |
 | `<WORK_DIR>` | Absolute path to the worktree (output of `git rev-parse --show-toplevel`) |
+| `<SCRIPTS_DIR>` | `<WORK_DIR>/plugins/mill/scripts`. Used as `PYTHONPATH=<SCRIPTS_DIR>` when spawning millpy entrypoints — replaces the old `(cd plugins/mill/scripts && ...)` pattern which broke relative-path args when called from a child worktree. No `cd` is involved; cwd stays at `<WORK_DIR>`. |
 | `<REPO_ROOT>` | Same as `<WORK_DIR>` (alias kept for clarity in the brief body) |
 | `<VERIFY_CMD>` | The `verify:` value from plan frontmatter |
 | `<MAX_CODE_REVIEW_ROUNDS>` | The resolved max rounds (CLI arg or `reviews.code` config or default 3) |
@@ -181,7 +182,14 @@ c. Materialize the prompt template from `plugins/mill/doc/prompts/code-review.md
 
 d. Resolve the reviewer name for round `N` from `<CODE_REVIEW_RESOLUTION_SNAPSHOT>`: look up integer key `N` (as string); fall back to `default`. The snapshot contains the `pipeline.code-review` block verbatim from the config (reviewer names, not model names). Each reviewer name resolves via `millpy.core.config.resolve_reviewer_name` internally, which reads `pipeline.code-review.<N>|default` with legacy fallback paths.
 
-e. Spawn synchronously via Bash: `python plugins/mill/scripts/spawn_reviewer.py --reviewer-name <reviewer-name> --prompt-file _millhouse/scratch/code-review-prompt-r<N>.md --phase code --round <N> --plan-start-hash <plan_start_hash>`. (Reviewers are short — no `run_in_background`.) Read `plan_start_hash` from the `plan_start_hash:` field in the YAML block of `<STATUS_PATH>`.
+e. Spawn in the background via Bash (`run_in_background: true`) — code reviewers run 1–5+ minutes, long enough that foreground would block everything else the implementer is doing. Capture the background task ID and wait via the `Monitor` tool; while waiting, the implementer may continue non-spawn work (reading files, preparing fixer reports) but MUST NOT start the next round until Monitor reports completion.
+   ```bash
+   PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
+     --reviewer-name <reviewer-name> \
+     --prompt-file <WORK_DIR>/_millhouse/scratch/code-review-prompt-r<N>.md \
+     --phase code --round <N> --plan-start-hash <plan_start_hash>
+   ```
+   Read `plan_start_hash` from the `plan_start_hash:` field in the YAML block of `<STATUS_PATH>`.
 
 f. Parse the JSON line from stdout: `{"verdict": "APPROVE" | "REQUEST_CHANGES" | "UNKNOWN", "review_file": "<absolute-path>"}`.
 
@@ -319,10 +327,10 @@ For completion events, ensure `phase: complete`.
 
 #### Step 2: Send notification
 
-Run the `notify.sh` script. It reads `_millhouse/config.yaml`, detects the platform, and sends a desktop toast (and Slack, when enabled). Best-effort — failures warn on stderr, never block execution.
+Run the `notify` Python entrypoint. It reads `_millhouse/config.yaml`, detects the platform, and sends a desktop toast (and Slack, when enabled). Best-effort — failures warn on stderr, never block execution.
 
 ```bash
-bash "$(git rev-parse --show-toplevel)/plugins/mill/scripts/notify.sh" \
+PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.notify \
   --event "<EVENT>" \
   --branch "$(git branch --show-current)" \
   --detail "<detail>" \

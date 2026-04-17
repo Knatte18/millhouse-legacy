@@ -94,21 +94,13 @@ If `_millhouse/children/` does not exist in the parent, skip silently (backward 
 
 **Write the `## Abandon` section to the child's `_millhouse/task/status.md`:**
 
-Use the Edit tool to insert a new section after the closing ``` of the YAML code block and before the `## Timeline` section:
+Read `plugins/mill/templates/status-abandoned.md`, strip the leading HTML comment, and substitute:
+- `<ABANDON_REASON>` — user-provided reason.
+- `<LAST_PHASE>` — `phase` field from the status.md YAML block.
+- `<LAST_STEP>` — `current_step` field from the YAML block, or `N/A` if unset.
+- `<CONTEXT_SUMMARY>` — the 2–3 line auto-generated summary.
 
-````markdown
-## Abandon
-
-```yaml
-reason: <user-provided reason>
-last_phase: <phase from status.md YAML>
-last_step: <current_step from status.md YAML, or N/A if not set>
-context: |
-  <2-3 line auto-generated summary>
-```
-````
-
-If a `## Abandon` section already exists from a prior abandon, overwrite it (latest-only).
+Use the Edit tool to insert the substituted section after the closing ``` of the YAML code block and before the `## Timeline` section. If a `## Abandon` section already exists from a prior abandon, overwrite it (latest-only).
 
 **Update the phase in the YAML code block** of `_millhouse/task/status.md` from its current value to `abandoned`. Insert a timeline entry `abandoned  <UTC ISO 8601 timestamp>` before the closing ``` of the `## Timeline` text block using the Edit tool.
 

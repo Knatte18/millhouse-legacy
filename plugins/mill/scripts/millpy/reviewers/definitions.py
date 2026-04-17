@@ -37,4 +37,19 @@ REVIEWERS: dict[str, Ensemble] = {
         worker_count=3,
         handler="g3flash",
     ),
+    "g25flash-x3-sonnetmax": Ensemble(
+        worker="g25flash",
+        worker_count=3,
+        handler="sonnetmax",
+    ),
+    "g25flash-x3-g25flash": Ensemble(
+        worker="g25flash",
+        worker_count=3,
+        handler="g25flash",
+    ),
+    "g25pro-x2-g25flash": Ensemble(
+        worker="g25pro",
+        worker_count=2,
+        handler="g25flash",
+    ),
 }

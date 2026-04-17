@@ -553,19 +553,36 @@ def _extract_field(card_text: str, field_name: str) -> str | None:
     return "\n".join(collected)
 
 
-def _extract_bullet_paths(field_value: str) -> set[str]:
-    """Extract backtick-wrapped path tokens from a bullet-list field value.
+_PATH_EXTENSIONS = (
+    ".py", ".md", ".json", ".yaml", ".yml", ".toml",
+    ".sh", ".ps1", ".ts", ".js", ".tsx", ".jsx",
+)
 
-    Handles values like:
-      `plugins/mill/foo.py`, `plugins/mill/bar.py`
-    or multi-line:
-      - `plugins/mill/foo.py` — description
+
+def _looks_like_path(token: str) -> bool:
+    """A token is treated as a path if it contains '/' or ends with a known
+    source-file extension. Code identifiers (`_FOO`, `do_thing()`),
+    placeholders (`<TOKEN>`, `{foo}`), and format strings are ignored.
+    """
+    if "/" in token:
+        return True
+    lower = token.lower()
+    return any(lower.endswith(ext) for ext in _PATH_EXTENSIONS)
+
+
+def _extract_bullet_paths(field_value: str) -> set[str]:
+    """Extract backtick-wrapped path-like tokens from a bullet-list field value.
+
+    A token counts as a path if it contains '/' or ends with a known source
+    extension (see `_PATH_EXTENSIONS`). Code identifiers and placeholders
+    are ignored — so an Explore bullet like
+        `scripts/foo.py` — the `_BAR` constant, `do_thing()` helper
+    extracts only `scripts/foo.py`, not `_BAR` or `do_thing()`.
     """
     paths: list[str] = []
-    # Find all backtick-wrapped tokens
     for match in re.finditer(r"`([^`]+)`", field_value):
         token = match.group(1).strip()
-        if token:
+        if token and _looks_like_path(token):
             paths.append(token)
     return set(paths)
 

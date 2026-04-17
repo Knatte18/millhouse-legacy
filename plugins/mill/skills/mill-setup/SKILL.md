@@ -70,36 +70,14 @@ Migration is text-based line manipulation, not YAML-library round-trip. millpy h
 
 **Extraction pass.** Use the millpy config loader (`python -c "from millpy.core.config import load; ..."`) to read the legacy file into a dict. Pull these values with sensible fallbacks:
 - `pipeline.implementer` ← legacy `models.implementer` (fallback: `sonnet`)
-- `pipeline.discussion-review.default` ← legacy `review-modules.discussion.default` → `models.discussion-review.default` → fallback `g3flash-x3-sonnetmax`
-- `pipeline.plan-review.default` → fallback `g3flash-x3-sonnetmax`
-- `pipeline.code-review.default` → fallback `g3flash-x3-sonnetmax`
-- `pipeline.discussion-review.default` → fallback `sonnetmax`
+- `pipeline.discussion-review.default` ← legacy `review-modules.discussion.default` → `models.discussion-review.default` → fallback `sonnetmax` (MUST be a tool-use reviewer; discussion-review never runs bulk-mode workers)
+- `pipeline.plan-review.default` → fallback `sonnet`
+- `pipeline.code-review.default` → fallback `sonnet`
 - `pipeline.discussion-review.rounds` → fallback `2`
 - `pipeline.plan-review.rounds` → fallback `3`
 - `pipeline.code-review.rounds` → fallback `3`
 
-If `pipeline:` block is missing, create it with the fallback values:
-
-```yaml
-pipeline:
-  implementer: sonnet
-  discussion-review:
-    rounds: 2
-    default: sonnetmax
-  plan-review:
-    rounds: 3
-    default: g3flash-x3-sonnetmax
-    holistic: sonnetmax
-    per-card: g3flash
-  code-review:
-    rounds: 3
-    default: g3flash-x3-sonnetmax
-    holistic: g3flash-x3-g3flash
-    per-card: g3flash
-
-runtime:
-  pre-arm-timeout-seconds: 14400
-```
+If `pipeline:` block is missing, read `plugins/mill/templates/millhouse-config.yaml`, substitute `<IMPLEMENTER>` with the resolved implementer name (from the extraction pass above, fallback `sonnet`), substitute `<SHORT_NAME>` with the value from Step 4a, and write the result to `_millhouse/config.yaml` as the source of truth for the pipeline schema. The template already contains `g25flash`-based reviewer names; do NOT hardcode reviewer names in this SKILL file.
 
 **Validation note.** After writing, reload the file via `millpy.core.config.load` and call `millpy.core.config.resolve_reviewer_name(cfg, "plan", 1, slice_type="per-card")` as a smoke test. A `ConfigError` from the resolver indicates an edge case — stop with the error and tell the user to inspect `_millhouse/config.yaml` manually.
 
@@ -118,31 +96,29 @@ Generate five `.py` forwarding wrappers in `_millhouse/`. Each delegates to the 
 | `_millhouse/mill-worktree.py` | `worktree` |
 | `_millhouse/mill-terminal.py` | `open_terminal` |
 | `_millhouse/mill-vscode.py` | `open_vscode` |
+| `_millhouse/mill-color.py` | `set_worktree_color` |
 
 **Plugin-cache junction check (detect-only, never mutate).** After writing the wrappers, check whether `%USERPROFILE%\.claude\plugins\cache\millhouse\mill` exists and resolves to a readable directory. If missing or dangling, print a warning line (NOT a hard error) telling the user to run the symlink-plugins repair script (`symlink-plugins` in the millhouse repo checkout) to repair it. **Do not modify the junction** — this is explicit user policy. No `New-Item -ItemType Junction`, no `Remove-Item` against the junction path.
 
 ### Step 6: Write VS Code settings
 
-If `.vscode/settings.json` already exists, skip (preserves existing color settings on re-run).
+**Invariant: the main worktree is always green (`#2d7d46`).** Child worktrees exclude green from their palette by design — see `_pick_worktree_color` / `_MAIN_WORKTREE_COLOR` in [plugins/mill/scripts/millpy/entrypoints/spawn_task.py](../../scripts/millpy/entrypoints/spawn_task.py). The green titleBar is how the developer tells the main worktree apart from child worktrees at a glance.
 
-If it does not exist, create `.vscode/` directory. Read `plugins/mill/templates/vscode-settings.json`, substitute `<COLOR_HEX>` with `#2d7d46`, `<SHORT_NAME>` with the value from Step 4a, and `<SLUG>` with `${activeEditorShort}`, then write to `.vscode/settings.json`.
+The step is idempotent against re-runs. Use the logic below, not a blanket "skip if exists":
+
+1. **`.vscode/settings.json` does not exist** → create `.vscode/` directory. Read `plugins/mill/templates/vscode-settings.json`, substitute `<COLOR_HEX>` with `#2d7d46`, `<SHORT_NAME>` with the value from Step 4a (`repo.short-name` from `_millhouse/config.yaml`, guaranteed to exist by the prior config-write step), and `<SLUG>` with `${activeEditorShort}`, then write to `.vscode/settings.json`.
+
+2. **`.vscode/settings.json` exists with `titleBar.activeBackground == "#2d7d46"`** → no-op. The invariant already holds.
+
+3. **`.vscode/settings.json` exists with a non-green `titleBar.activeBackground`** → back up the current file to `.vscode/settings.json.bak` in the same directory (overwrite any pre-existing `.bak`), then overwrite `settings.json` from the template as in case 1. The `.bak` is transient — not explicitly gitignored, but developers can delete it safely.
+
+Do not rotate the main worktree through the child palette; green is hardcoded. Do not change the `<SLUG>` substitution (currently `${activeEditorShort}`) — VS Code resolves this dynamically.
 
 ### Step 7: Update CLAUDE.md
 
-If `CLAUDE.md` exists, check for a `## Kanban` or `## Tasks` section. If either section exists, replace the section content with the new template below. If neither section exists, append it. Also check for a `## Startup` section — if missing, add it before `## Tasks`.
+Read `plugins/mill/templates/claude-md-sections.md` (the `## Startup` + `## Tasks` content; no tokens to substitute — strip the leading HTML comment before writing).
 
-```markdown
-## Startup
-On first message in a conversation, invoke `mill:conversation` and `mill:workflow` before responding.
-
-## Tasks
-
-- Task list: `tasks.md` in project root — git-tracked, `## ` headings for tasks, optional `[phase]` markers.
-- Phase tracking: `_millhouse/task/status.md` — `phase:` field is the authoritative source. `## Timeline` section records chronological phase history.
-- `_millhouse/` is gitignored. On spawn, it is copied (excluding `task/`, `scratch/`, and `children/`) from parent to new worktree.
-- Run `mill-setup` to initialize after a fresh clone (safe to re-run; skips existing files).
-- Format reference: `plugins/mill/doc/formats/tasksmd.md` (tasks.md format).
-```
+If `CLAUDE.md` exists, check for a `## Kanban` or `## Tasks` section. If either section exists, replace its content with the template body. If neither exists, append the template body. Also check for a `## Startup` section — if missing, add it before `## Tasks`.
 
 If `CLAUDE.md` does not exist, create it with these rules.
 

@@ -150,7 +150,7 @@ mill-plan proceeds through named phases. Each phase updates the YAML code block 
       holistic_reviewer = resolve_reviewer_name(cfg, "plan", N, slice_type="holistic")
       ```
 
-   d. **Advance the loop and spawn all reviewers in parallel.** Call `slices = loop.next_round_plan()` to increment the round counter and obtain the slice list (`["card-1", "card-2", ..., "holistic"]`). Use `run_in_background: true` for all but the last reviewer, then Monitor each.
+   d. **Advance the loop and spawn all reviewers in parallel (background).** Call `slices = loop.next_round_plan()` to increment the round counter and obtain the slice list (`["card-1", "card-2", ..., "holistic"]`). Plan reviewers run 1–5+ minutes, so **every** spawn uses `run_in_background: true` — start all N per-card spawns plus the 1 holistic spawn in a single message (one Bash call per spawn), then use `Monitor` to wait for each. While Monitoring, the skill may respond to user messages. It MUST NOT advance to step e until every spawn has completed.
 
       **Per-card reviewers** — one per card in the plan:
 
@@ -176,13 +176,13 @@ mill-plan proceeds through named phases. Each phase updates the YAML code block 
       5. Write materialized prompt to `_millhouse/scratch/plan-review-prompt-r<N>-card-<card_number>.md`.
 
       ```bash
-      (cd plugins/mill/scripts && python -m millpy.entrypoints.spawn_reviewer) \
+      PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
         --reviewer-name <per-card-reviewer-name> \
-        --prompt-file _millhouse/scratch/plan-review-prompt-r<N>-card-<card_number>.md \
+        --prompt-file <WORK_DIR>/_millhouse/scratch/plan-review-prompt-r<N>-card-<card_number>.md \
         --phase plan \
         --round <N> \
-        --plan-overview _millhouse/task/plan/00-overview.md \
-        --plan-batch _millhouse/task/plan/card-NN-<slug>.md \
+        --plan-overview <WORK_DIR>/_millhouse/task/plan/00-overview.md \
+        --plan-batch <WORK_DIR>/_millhouse/task/plan/card-NN-<slug>.md \
         --slice-type per-card \
         --slice-id card-<card_number>
       ```
@@ -193,12 +193,12 @@ mill-plan proceeds through named phases. Each phase updates the YAML code block 
       3. Write to `_millhouse/scratch/plan-review-prompt-r<N>-holistic.md`.
 
       ```bash
-      (cd plugins/mill/scripts && python -m millpy.entrypoints.spawn_reviewer) \
+      PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
         --reviewer-name <holistic-reviewer-name> \
-        --prompt-file _millhouse/scratch/plan-review-prompt-r<N>-holistic.md \
+        --prompt-file <WORK_DIR>/_millhouse/scratch/plan-review-prompt-r<N>-holistic.md \
         --phase plan \
         --round <N> \
-        --plan-dir-path _millhouse/task/plan/ \
+        --plan-dir-path <WORK_DIR>/_millhouse/task/plan/ \
         --slice-type holistic \
         --slice-id holistic
       ```
@@ -287,7 +287,7 @@ Write the event to the YAML code block in `_millhouse/task/status.md`. For block
 Run the `notify` Python entrypoint. Best-effort — failures warn on stderr, never block execution.
 
 ```bash
-(cd plugins/mill/scripts && python -m millpy.entrypoints.notify) \
+PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.notify \
   --event "<EVENT>" \
   --branch "$(git branch --show-current)" \
   --detail "<detail>" \

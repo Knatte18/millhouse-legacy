@@ -98,10 +98,9 @@ def run_reviewer(
 
     if review_file_path is None:
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
-        if slice_id:
-            review_file_path = reviews_dir / f"{ts}-{reviewer_name}-{slice_id}-r{round}.md"
-        else:
-            review_file_path = reviews_dir / f"{ts}-{reviewer_name}-r{round}.md"
+        review_file_path = reviews_dir / _make_review_filename(
+            ts, reviewer_name, slice_id, round
+        )
 
     # Step 5: Create the reviews directory (after validation succeeded).
     reviews_dir.mkdir(parents=True, exist_ok=True)
@@ -135,6 +134,23 @@ def run_reviewer(
             log("engine", f"failed to write bot-gate marker: {exc}")
 
     return result
+
+
+def _make_review_filename(
+    ts: str,
+    reviewer_name: str,
+    slice_id: str | None,
+    round: int,
+) -> str:
+    """Build a review filename of the form `<ts>-<reviewer_name>[-<slice_id>]-r<round>.md`.
+
+    Callers in parallel-fan-out contexts (per-card code review, per-batch plan
+    review) MUST pass a non-empty `slice_id` so concurrent files don't collide.
+    Single-slice callers pass `slice_id=None` and accept the shorter filename.
+    """
+    if slice_id:
+        return f"{ts}-{reviewer_name}-{slice_id}-r{round}.md"
+    return f"{ts}-{reviewer_name}-r{round}.md"
 
 
 def _resolve_reviewer(reviewer_name: str):
