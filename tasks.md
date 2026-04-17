@@ -128,7 +128,24 @@ Fix:
 No removal of DAG code. The `plan_dag.py` work from the Plan-format task stays useful for linear ordering — just without the concurrency.
 
 
-## mill-spawn / mill-vscode / mill-terminal: subfolder + nested-repo fixes
+
+## Plugin-doc path resolution: references must work from installed-plugin context
+
+- tags: [bug, docs]
+- All references in skill files, prompt templates, and doc files that use the `plugins/mill/...` prefix (doc/, scripts/, templates/) work when Millhouse is the repo being worked on, but break when Millhouse is installed as a Claude plugin in another repo — the installed files live at `~/.claude/plugins/cache/millhouse/mill/<version>/...`, not at `plugins/mill/...` relative to the user's cwd.
+- Approximate scale: ~127 occurrences across ~40 files (skills, doc, prompts, templates, tests).
+- Requires a design decision on the resolution convention before the sweep:
+  - **A.** Relative-to-SKILL paths (e.g. `../../doc/formats/plan.md` from a SKILL file).
+  - **B.** `<PLUGIN_ROOT>` token, resolved by Claude from the "Base directory for this skill" hint.
+  - **C.** Three-tier resolution documented in each SKILL (like `mill-spawn/SKILL.md` does for `spawn_task.py`).
+  - **D.** Runtime resolver helper — a millpy function Claude is instructed to call to resolve logical doc names.
+- Scope: pick a convention in the discussion phase, then sweep every reference. Keep the change mechanical once the convention is locked.
+- Out of scope: code-only references like `millpy.core.paths.repo_root` (Python symbols resolved via `PYTHONPATH`) — only the file-path text references that Claude or humans open via a path string.
+- **Observed 2026-04-17** during the "mill-spawn / mill-vscode / mill-terminal: subfolder + nested-repo fixes" task discussion, while fixing dead `doc/modules/*` link targets. That sibling task left the prefix form unchanged (`plugins/mill/doc/...`); this task finishes the job.
+
+
+
+## [done] mill-spawn / mill-vscode / mill-terminal: subfolder + nested-repo fixes
 
 - tags: [bug]
 - Two related bugs in the CLI wrappers and `spawn_task.py` when invoked from subdirectories or nested mill-projects.

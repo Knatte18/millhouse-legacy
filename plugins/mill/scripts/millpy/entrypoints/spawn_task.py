@@ -20,7 +20,7 @@ import datetime
 import re
 import shutil
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     from millpy.core.config import ConfigError, load
     from millpy.core.git_ops import current_branch, git
     from millpy.core.log_util import log
-    from millpy.core.paths import project_root
+    from millpy.core.paths import cwd_offset, project_root, repo_root
     from millpy.core.subprocess_util import run as subprocess_run
     from millpy.tasks import tasks_md
 
@@ -64,9 +64,17 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         root = project_root()
+        git_root = repo_root()
     except Exception as exc:
         print(f"[spawn_task] Not in a git repository: {exc}", file=sys.stderr)
         return 1
+
+    # nested_offset = path from git toplevel down to the mill project root.
+    # Flat layouts: "." (project == git toplevel).
+    # Nested layouts: e.g. "projects/sub" when `_millhouse/` lives below the
+    # git toplevel.
+    _nested_parts = root.resolve().relative_to(git_root.resolve()).parts
+    nested_offset = PurePosixPath(*_nested_parts) if _nested_parts else PurePosixPath(".")
 
     config_path = root / "_millhouse" / "config.yaml"
     if not config_path.exists():
@@ -164,14 +172,17 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         log("spawn_task", f"Git commit/push failed: {exc}")
 
-    # Create worktree via git worktree add
-    worktrees_dir = root.parent / f"{root.name}.worktrees"
+    # Create worktree via git worktree add. worktrees_dir is the sibling of
+    # the git toplevel (not the mill project root) — `git worktree add` only
+    # operates at the git-repo level, and nesting the worktrees directory
+    # inside the same git repo is not safe.
+    worktrees_dir = git_root.parent / f"{git_root.name}.worktrees"
     worktrees_dir.mkdir(parents=True, exist_ok=True)
     project_path = worktrees_dir / slug
 
     result = git(
         ["worktree", "add", "-b", branch_name, str(project_path)],
-        cwd=root,
+        cwd=git_root,
     )
     if result.returncode != 0:
         print(f"[spawn_task] git worktree add failed: {result.stderr}", file=sys.stderr)
@@ -179,12 +190,27 @@ def main(argv: list[str] | None = None) -> int:
 
     log("spawn_task", f"Worktree created at {project_path}")
 
-    # Write .vscode/settings.json with a unique worktree color
-    _write_vscode_settings(project_path, slug, root, config_path)
+    # project_in_worktree — the mill-project-root inside the new worktree.
+    # Flat layouts: equals project_path (the git toplevel of the worktree).
+    # Nested layouts: project_path / <nested_offset>, e.g.
+    # "<git>.worktrees/<slug>/projects/sub".
+    if str(nested_offset) == ".":
+        project_in_worktree = project_path
+    else:
+        project_in_worktree = project_path / str(nested_offset)
 
-    # Copy _millhouse/ (excluding task/, scratch/, children/)
+    # Write .vscode/settings.json with a unique worktree color. Pass the
+    # explicit git-level worktrees_dir so sibling-color scanning sees all
+    # sibling worktrees regardless of layout.
+    _write_vscode_settings(
+        project_in_worktree, slug, root, config_path, worktrees_dir=worktrees_dir
+    )
+
+    # Copy _millhouse/ (excluding task/, scratch/, children/) to the mill
+    # project root inside the worktree (deeper than project_path in nested
+    # layouts).
     src_millhouse = root / "_millhouse"
-    dst_millhouse = project_path / "_millhouse"
+    dst_millhouse = project_in_worktree / "_millhouse"
     dst_millhouse.mkdir(parents=True, exist_ok=True)
 
     exclude = {"task", "scratch", "children"}
@@ -199,11 +225,11 @@ def main(argv: list[str] | None = None) -> int:
                 shutil.copy2(str(item), str(dst))
 
     # Create scratch and task structures
-    (project_path / "_millhouse" / "scratch" / "reviews").mkdir(parents=True, exist_ok=True)
-    (project_path / "_millhouse" / "task" / "reviews").mkdir(parents=True, exist_ok=True)
+    (project_in_worktree / "_millhouse" / "scratch" / "reviews").mkdir(parents=True, exist_ok=True)
+    (project_in_worktree / "_millhouse" / "task" / "reviews").mkdir(parents=True, exist_ok=True)
 
     # Write status.md
-    status_path = project_path / "_millhouse" / "task" / "status.md"
+    status_path = project_in_worktree / "_millhouse" / "task" / "status.md"
     _write_status(status_path, task_title, task_description, parent_branch)
 
     # Write child registry entry in parent _millhouse/children/
@@ -238,11 +264,23 @@ def main(argv: list[str] | None = None) -> int:
     child_path.write_text(child_content, encoding="utf-8", newline="\n")
     log("spawn_task", f"Child registry: {child_filename}")
 
-    # Open VS Code if requested
+    # Open VS Code if requested. Apply the cwd-offset rule so VS Code opens
+    # the subfolder matching the orchestrator's current cwd. cwd_offset
+    # includes both the nested-project offset (project lives below git
+    # toplevel) and any further subfolder the user was in.
     if args.vscode:
         code = shutil.which("code.cmd") or shutil.which("code")
         if code:
-            subprocess_run([code, str(project_path)])
+            try:
+                vscode_offset = cwd_offset()
+            except Exception as exc:
+                log("spawn_task", f"cwd_offset failed, opening project_path: {exc}")
+                vscode_offset = PurePosixPath(".")
+            if str(vscode_offset) == ".":
+                launch_path = project_path
+            else:
+                launch_path = project_path / str(vscode_offset)
+            subprocess_run([code, str(launch_path)])
         else:
             print("[spawn_task] code.cmd not found on PATH.", file=sys.stderr)
 
@@ -468,18 +506,26 @@ def _pick_worktree_color(worktrees_dir: Path) -> str:
 
 
 def _write_vscode_settings(
-    project_path: Path,
+    project_in_worktree: Path,
     slug: str,
     repo_root: Path,
     config_path: Path,
+    worktrees_dir: Path | None = None,
 ) -> None:
-    """Write .vscode/settings.json in the new worktree with a unique color.
+    """Write .vscode/settings.json under ``project_in_worktree`` with a unique color.
+
+    ``project_in_worktree`` is the mill-project root inside the new worktree
+    (git toplevel in flat layouts; git toplevel + nested_offset in nested
+    layouts). ``worktrees_dir`` is the git-level directory containing all
+    sibling worktrees — used for color-scanning. If omitted, falls back to
+    ``project_in_worktree.parent`` for backwards compatibility with existing
+    callers/tests exercising the helper in a flat-layout temp directory.
 
     Idempotent — skips if .vscode/settings.json already exists.
     """
     import json
 
-    vscode_dir = project_path / ".vscode"
+    vscode_dir = project_in_worktree / ".vscode"
     settings_path = vscode_dir / "settings.json"
 
     if settings_path.exists():
@@ -515,9 +561,10 @@ def _write_vscode_settings(
             "window.title": "<SHORT_NAME>: <SLUG>",
         }, indent=4) + "\n"
 
-    # Pick a color
-    worktrees_dir = project_path.parent
-    color = _pick_worktree_color(worktrees_dir)
+    # Pick a color — scan siblings in the explicit git-level worktrees_dir
+    # when available; otherwise fall back to project_in_worktree.parent.
+    _worktrees_dir = worktrees_dir if worktrees_dir is not None else project_in_worktree.parent
+    color = _pick_worktree_color(_worktrees_dir)
 
     # Substitute tokens
     content = template_text

@@ -74,6 +74,14 @@ def parse(path: Path) -> list[Task]:
         if current_line is None:
             return
         body = "".join(body_lines)
+        # Normalize trailing whitespace so parse→render→parse is idempotent:
+        # collapse all-whitespace bodies to empty string, and strip trailing
+        # blank lines down to a single "\n" terminator. Leading and interior
+        # blank lines are preserved verbatim.
+        if not body.strip():
+            body = ""
+        else:
+            body = body.rstrip("\n") + "\n"
         tasks.append(Task(
             title=current_title,
             phase=current_phase,

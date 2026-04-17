@@ -50,12 +50,14 @@ def test_flat_layout_launch_cwd_equals_worktree(temp_git_repo, monkeypatch):
     (child_worktree / "_millhouse").mkdir()
 
     captured_cwd = {}
+    captured_argv = {}
     real_run = _make_real_run_passthrough()
 
     def _fake_subprocess_run(argv, *args, cwd=None, **kwargs):
         if argv and argv[0] == "git":
             return real_run(argv, cwd=cwd, **kwargs)
         captured_cwd["cwd"] = cwd
+        captured_argv["argv"] = argv
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
     monkeypatch.chdir(temp_git_repo)
@@ -65,6 +67,7 @@ def test_flat_layout_launch_cwd_equals_worktree(temp_git_repo, monkeypatch):
     exit_code = open_vscode.main()
     assert exit_code == 0
     assert Path(captured_cwd["cwd"]).resolve() == child_worktree.resolve()
+    assert Path(captured_argv["argv"][1]).resolve() == child_worktree.resolve()
 
 
 def test_nested_layout_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
@@ -75,12 +78,14 @@ def test_nested_layout_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
     (child_worktree / "projects" / "sub").mkdir(parents=True)
 
     captured_cwd = {}
+    captured_argv = {}
     real_run = _make_real_run_passthrough()
 
     def _fake_subprocess_run(argv, *args, cwd=None, **kwargs):
         if argv and argv[0] == "git":
             return real_run(argv, cwd=cwd, **kwargs)
         captured_cwd["cwd"] = cwd
+        captured_argv["argv"] = argv
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
     monkeypatch.chdir(project)
@@ -90,6 +95,7 @@ def test_nested_layout_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
     exit_code = open_vscode.main()
     assert exit_code == 0
     assert Path(captured_cwd["cwd"]).resolve() == (child_worktree / "projects" / "sub").resolve()
+    assert Path(captured_argv["argv"][1]).resolve() == (child_worktree / "projects" / "sub").resolve()
 
 
 def test_offset_failure_falls_back_to_worktree(temp_git_repo, monkeypatch):
@@ -98,12 +104,14 @@ def test_offset_failure_falls_back_to_worktree(temp_git_repo, monkeypatch):
     child_worktree.mkdir()
 
     captured_cwd = {}
+    captured_argv = {}
     real_run = _make_real_run_passthrough()
 
     def _fake_subprocess_run(argv, *args, cwd=None, **kwargs):
         if argv and argv[0] == "git":
             return real_run(argv, cwd=cwd, **kwargs)
         captured_cwd["cwd"] = cwd
+        captured_argv["argv"] = argv
         return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
     def _raise_always(*args, **kwargs):
@@ -112,8 +120,70 @@ def test_offset_failure_falls_back_to_worktree(temp_git_repo, monkeypatch):
     monkeypatch.chdir(temp_git_repo)
     monkeypatch.setattr("millpy.core.subprocess_util.run", _fake_subprocess_run)
     monkeypatch.setattr("millpy.worktree.children.list_children", lambda _: [_make_child(child_worktree)])
-    monkeypatch.setattr("millpy.core.paths.project_offset", _raise_always)
+    monkeypatch.setattr("millpy.core.paths.cwd_offset", _raise_always)
 
     exit_code = open_vscode.main()
     assert exit_code == 0
     assert Path(captured_cwd["cwd"]).resolve() == child_worktree.resolve()
+    assert Path(captured_argv["argv"][1]).resolve() == child_worktree.resolve()
+
+
+def test_flat_subfolder_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
+    """Flat layout with cwd in a subfolder: launch_cwd and argv path == child/<subfolder>."""
+    (temp_git_repo / "_millhouse" / "children").mkdir(parents=True)
+    subfolder = temp_git_repo / "plugins" / "mill" / "scripts"
+    subfolder.mkdir(parents=True)
+
+    child_worktree = temp_git_repo / "fake-child-worktree"
+    child_worktree.mkdir()
+    (child_worktree / "plugins" / "mill" / "scripts").mkdir(parents=True)
+
+    captured_cwd = {}
+    captured_argv = {}
+    real_run = _make_real_run_passthrough()
+
+    def _fake_subprocess_run(argv, *args, cwd=None, **kwargs):
+        if argv and argv[0] == "git":
+            return real_run(argv, cwd=cwd, **kwargs)
+        captured_cwd["cwd"] = cwd
+        captured_argv["argv"] = argv
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.chdir(subfolder)
+    monkeypatch.setattr("millpy.core.subprocess_util.run", _fake_subprocess_run)
+    monkeypatch.setattr("millpy.worktree.children.list_children", lambda _: [_make_child(child_worktree)])
+
+    exit_code = open_vscode.main()
+    assert exit_code == 0
+    expected = (child_worktree / "plugins" / "mill" / "scripts").resolve()
+    assert Path(captured_cwd["cwd"]).resolve() == expected
+    assert Path(captured_argv["argv"][1]).resolve() == expected
+
+
+def test_argv_uses_launch_cwd_not_worktree_when_offset_nonempty(temp_git_repo, monkeypatch):
+    """Critical invariant: argv path always equals launch_cwd, not child.worktree."""
+    project = temp_git_repo / "projects" / "sub"
+    (project / "_millhouse" / "children").mkdir(parents=True)
+
+    child_worktree = temp_git_repo / "fake-child-worktree"
+    child_worktree.mkdir()
+    (child_worktree / "projects" / "sub").mkdir(parents=True)
+
+    captured_argv = {}
+    real_run = _make_real_run_passthrough()
+
+    def _fake_subprocess_run(argv, *args, cwd=None, **kwargs):
+        if argv and argv[0] == "git":
+            return real_run(argv, cwd=cwd, **kwargs)
+        captured_argv["argv"] = argv
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.chdir(project)
+    monkeypatch.setattr("millpy.core.subprocess_util.run", _fake_subprocess_run)
+    monkeypatch.setattr("millpy.worktree.children.list_children", lambda _: [_make_child(child_worktree)])
+
+    exit_code = open_vscode.main()
+    assert exit_code == 0
+    argv_path = Path(captured_argv["argv"][1]).resolve()
+    assert argv_path == (child_worktree / "projects" / "sub").resolve()
+    assert argv_path != child_worktree.resolve()

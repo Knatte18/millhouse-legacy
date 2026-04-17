@@ -18,20 +18,12 @@ import sys
 from pathlib import Path
 
 
-def _build_launch_argv(child) -> list[str]:
-    """Build the argv that would open VS Code in the child worktree.
+def _build_launch_argv(child, launch_path: str | Path) -> list[str]:
+    """Build the argv that would open VS Code at ``launch_path``.
 
-    Exposed for parity-smoke testing without actually opening a window.
-
-    Parameters
-    ----------
-    child:
-        A Child dataclass instance.
-
-    Returns
-    -------
-    list[str]
-        The argv to pass to subprocess_util.run.
+    ``launch_path`` is the exact filesystem location VS Code should open —
+    typically the child worktree root in flat layouts, or a subfolder inside
+    the child worktree when the parent's cwd is offset from the git toplevel.
     """
     code = (
         shutil.which("code.cmd")
@@ -44,8 +36,7 @@ def _build_launch_argv(child) -> list[str]:
             "code.cmd",
         )
     )
-    worktree_path = str(child.worktree) if child.worktree else "."
-    return [code, worktree_path]
+    return [code, str(launch_path)]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -62,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         Exit code.
     """
     from millpy.core.log_util import log
-    from millpy.core.paths import project_offset, project_root, repo_root
+    from millpy.core.paths import cwd_offset, project_root
     from millpy.core.subprocess_util import run as subprocess_run
     from millpy.worktree.children import list_children
 
@@ -105,12 +96,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         selected = active[num - 1]
 
-    # cwd bug fix: use child worktree as cwd (not repo root)
-    # nested-project offset (B.4): same pattern as open_terminal.py.
+    # Preserve the parent's cwd subfolder when opening the child worktree.
+    # For flat layouts where cwd == git root, offset is "." and the join
+    # is a no-op.
     try:
-        parent_git_root = repo_root(Path.cwd())
-        parent_project_root = project_root(Path.cwd())
-        offset = project_offset(parent_git_root, parent_project_root)
+        offset = cwd_offset()
     except Exception as exc:
         log("open_vscode", f"offset computation failed, falling back to worktree root: {exc}")
         offset = None
@@ -122,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\nOpening VS Code in: {launch_cwd}\n")
 
-    launch_argv = _build_launch_argv(selected)
+    launch_argv = _build_launch_argv(selected, launch_cwd)
     log("open_vscode", f"launch_argv={launch_argv} cwd={launch_cwd}")
 
     subprocess_run(launch_argv, cwd=launch_cwd)

@@ -102,7 +102,7 @@ def test_nested_layout_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
 
 
 def test_offset_failure_falls_back_to_worktree(temp_git_repo, monkeypatch):
-    """If project_offset raises, launch_cwd falls back to selected.worktree."""
+    """If cwd_offset raises, launch_cwd falls back to selected.worktree."""
     (temp_git_repo / "_millhouse" / "children").mkdir(parents=True)
 
     child_worktree = temp_git_repo / "fake-child-worktree"
@@ -126,8 +126,39 @@ def test_offset_failure_falls_back_to_worktree(temp_git_repo, monkeypatch):
     monkeypatch.chdir(temp_git_repo)
     monkeypatch.setattr("millpy.core.subprocess_util.run", _fake_subprocess_run)
     monkeypatch.setattr("millpy.worktree.children.list_children", _fake_list_children)
-    monkeypatch.setattr("millpy.core.paths.project_offset", _raise_always)
+    monkeypatch.setattr("millpy.core.paths.cwd_offset", _raise_always)
 
     exit_code = open_terminal.main()
     assert exit_code == 0
     assert Path(captured_cwd["cwd"]).resolve() == child_worktree.resolve()
+
+
+def test_flat_subfolder_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
+    """Flat layout with cwd in a subfolder: launch_cwd == child/<subfolder>."""
+    (temp_git_repo / "_millhouse" / "children").mkdir(parents=True)
+    subfolder = temp_git_repo / "plugins" / "mill" / "scripts"
+    subfolder.mkdir(parents=True)
+
+    child_worktree = temp_git_repo / "fake-child-worktree"
+    child_worktree.mkdir()
+    (child_worktree / "plugins" / "mill" / "scripts").mkdir(parents=True)
+
+    captured_cwd = {}
+    real_run = __import__("millpy.core.subprocess_util", fromlist=["run"]).run
+
+    def _fake_subprocess_run(argv, *args, cwd=None, **kwargs):
+        if argv and argv[0] == "git":
+            return real_run(argv, cwd=cwd, **kwargs)
+        captured_cwd["cwd"] = cwd
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    def _fake_list_children(millhouse_dir):
+        return [_make_child(child_worktree)]
+
+    monkeypatch.chdir(subfolder)
+    monkeypatch.setattr("millpy.core.subprocess_util.run", _fake_subprocess_run)
+    monkeypatch.setattr("millpy.worktree.children.list_children", _fake_list_children)
+
+    exit_code = open_terminal.main()
+    assert exit_code == 0
+    assert Path(captured_cwd["cwd"]).resolve() == (child_worktree / "plugins" / "mill" / "scripts").resolve()

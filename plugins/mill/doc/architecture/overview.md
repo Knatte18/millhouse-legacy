@@ -1,6 +1,6 @@
 # Mill Overview
 
-Top-level reference for the mill plugin's autonomous task flow. Read this first if you are new to mill, or returning to it after a while. The detailed schemas live in `doc/modules/`; this document explains how they fit together.
+Top-level reference for the mill plugin's autonomous task flow. Read this first if you are new to mill, or returning to it after a while. The detailed schemas live under `doc/formats/`, `doc/prompts/`, and `doc/architecture/`; this document explains how they fit together (see the module table below for exact paths).
 
 This file is discoverable via grep / search across `plugins/mill/`. A `README.md` link is a future enhancement.
 
@@ -160,18 +160,18 @@ In-flight `_millhouse/task/discussion.md` or `plan.md` files written before this
 
 | Document | What it covers |
 |---|---|
-| `doc/modules/discussion-format.md` | Schema for `_millhouse/task/discussion.md` (mill-start's output) |
-| `doc/modules/discussion-review.md` | Discussion-reviewer protocol (read-only sub-agent invoked by mill-start) |
-| `doc/modules/plan-format.md` | Schema for `_millhouse/task/plan.md`, including the atomic step-card invariant |
-| `doc/modules/plan-review.md` | Plan-reviewer protocol (read-only sub-agent invoked by mill-go) |
-| `doc/modules/code-review.md` | Code-reviewer protocol (`tool-use` dispatch — Claude reviewers) |
-| `doc/modules/code-review-bulk.md` | Code-reviewer prompt template for `bulk` dispatch (Gemini workers) |
-| `doc/modules/reviewer-modules.md` | Reviewer-module architecture guide: recipe schema, dispatch modes, failure modes, adding ensembles |
-| `doc/modules/implementer-brief.md` | Thread B's prompt template — the runtime spec for Phase 3+4 |
-| `doc/modules/handoff-brief.md` | `_millhouse/handoff.md` format (mill-spawn → mill-start handoff) |
-| `doc/modules/tasksmd-format.md` | `tasks.md` format reference (the git-tracked task list) |
-| `doc/modules/validation.md` | Structural validation rules for `tasks.md`, `status.md`, `config.yaml`, and `plan.md` |
-| `doc/modules/markdown-format.md` | Markdown formatting conventions for mill-generated files |
+| `plugins/mill/doc/formats/discussion.md` | Schema for `_millhouse/task/discussion.md` (mill-start's output) |
+| `plugins/mill/doc/prompts/discussion-review.md` | Discussion-reviewer protocol (read-only sub-agent invoked by mill-start) |
+| `plugins/mill/doc/formats/plan.md` | Schema for `_millhouse/task/plan.md`, including the atomic step-card invariant |
+| `plugins/mill/doc/prompts/plan-review.md` | Plan-reviewer protocol (read-only sub-agent invoked by mill-go) |
+| `plugins/mill/doc/prompts/code-review.md` | Code-reviewer protocol (`tool-use` dispatch — Claude reviewers) |
+| `plugins/mill/doc/prompts/code-review-bulk.md` | Code-reviewer prompt template for `bulk` dispatch (Gemini workers) |
+| `plugins/mill/doc/architecture/reviewer-modules.md` | Reviewer-module architecture guide: recipe schema, dispatch modes, failure modes, adding ensembles |
+| `plugins/mill/doc/prompts/implementer-brief.md` | Thread B's prompt template — the runtime spec for Phase 3+4 |
+| `plugins/mill/doc/formats/handoff-brief.md` | `_millhouse/handoff.md` format (mill-spawn → mill-start handoff) |
+| `plugins/mill/doc/formats/tasksmd.md` | `tasks.md` format reference (the git-tracked task list) |
+| `plugins/mill/doc/formats/validation.md` | Structural validation rules for `tasks.md`, `status.md`, `config.yaml`, and `plan.md` |
+| `plugins/mill/doc/formats/markdown.md` | Markdown formatting conventions for mill-generated files |
 
 ## Status File Channel
 
@@ -179,4 +179,4 @@ In-flight `_millhouse/task/discussion.md` or `plan.md` files written before this
 
 User visibility relies on VS Code live-updating the status.md file in the editor. There is no socket, no queue, no fancy IPC. The status file is the truth — if its `phase:` value disagrees with the script's exit JSON, mill-go trusts status.md and reports the discrepancy.
 
-Format details and the timeline text-block schema live in `doc/modules/discussion-format.md` (`## status.md Schema` section).
+Format details and the timeline text-block schema live in `plugins/mill/doc/formats/discussion.md` (`## status.md Schema` section).

@@ -2,7 +2,7 @@
 
 This is the prompt template that `mill-go` Phase: Spawn Thread B materializes and passes to `spawn-agent.ps1 -Role implementer`. It is the canonical specification for Thread B's responsibilities, lifecycle, and failure handling. Edit it like a SKILL.md — every line is part of Thread B's runtime instructions.
 
-The template lives in `doc/modules/` (alongside `handoff-brief.md`) so that the spawn-time materialization pattern matches the existing brief precedent: `mill-go` reads this template and substitutes runtime values to produce a concrete prompt at `_millhouse/task/implementer-brief-instance.md`, then passes that path as `-PromptFile`.
+The template lives in `plugins/mill/doc/prompts/` (alongside other prompt templates; `handoff-brief.md` now lives under `plugins/mill/doc/formats/`) so that the spawn-time materialization pattern matches the existing brief precedent: `mill-go` reads this template and substitutes runtime values to produce a concrete prompt at `_millhouse/task/implementer-brief-instance.md`, then passes that path as `-PromptFile`.
 
 ## Substitution Tokens
 

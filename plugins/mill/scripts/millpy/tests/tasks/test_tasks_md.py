@@ -193,3 +193,84 @@ class TestValidate:
         p = write_tasks(tmp_path, WITH_GT_MARKER)
         errors = validate(p)
         assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# parse() body normalization (trailing whitespace)
+# ---------------------------------------------------------------------------
+
+class TestParseBodyNormalization:
+    def test_parse_normalizes_trailing_blank_lines_to_single_newline(self, tmp_path):
+        """Two blank lines before next heading collapse to exactly one \\n terminator."""
+        content = "# Tasks\n\n## A\n\nbody A\n\n\n## B\n"
+        p = tmp_path / "tasks.md"
+        p.write_text(content, encoding="utf-8")
+        tasks = parse(p)
+        assert tasks[0].body.endswith("\n")
+        assert not tasks[0].body.endswith("\n\n")
+        assert not tasks[0].body.endswith("\n\n\n")
+
+    def test_parse_collapses_whitespace_only_body_to_empty(self, tmp_path):
+        """Heading immediately followed by a blank line and the next heading → body == ''."""
+        content = "# Tasks\n\n## A\n\n## B\n"
+        p = tmp_path / "tasks.md"
+        p.write_text(content, encoding="utf-8")
+        tasks = parse(p)
+        assert tasks[0].body == ""
+
+    def test_render_parse_render_is_idempotent(self, tmp_path):
+        """parse → render → write → parse → render produces byte-exact output."""
+        content = (
+            "# Tasks\n\n"
+            "## One\nprose body one.\n\n"
+            "## [active] Two\n- bullet a\n- bullet b\n\n"
+            "## [done] Three\nprose body three.\n"
+        )
+        p = tmp_path / "tasks.md"
+        p.write_text(content, encoding="utf-8")
+        parsed1 = parse(p)
+        rendered1 = render(parsed1)
+        p2 = tmp_path / "tasks2.md"
+        p2.write_text(rendered1, encoding="utf-8")
+        parsed2 = parse(p2)
+        rendered2 = render(parsed2)
+        assert rendered1 == rendered2
+
+    def test_blank_lines_between_tasks_do_not_accumulate_on_roundtrip(self, tmp_path):
+        """Triple parse→render→write round-trip preserves byte count after the first."""
+        content = (
+            "# Tasks\n\n"
+            "## One\nbody one.\n\n"
+            "## Two\nbody two.\n"
+        )
+        p = tmp_path / "tasks.md"
+        p.write_text(content, encoding="utf-8")
+
+        def _round_trip(path: Path) -> Path:
+            tasks_ = parse(path)
+            rendered = render(tasks_)
+            out = tmp_path / f"rt-{path.name}"
+            out.write_text(rendered, encoding="utf-8")
+            return out
+
+        p1 = _round_trip(p)
+        size1 = p1.stat().st_size
+        p2 = _round_trip(p1)
+        p3 = _round_trip(p2)
+        assert p3.stat().st_size == size1
+
+    def test_leading_blank_in_body_preserved(self, tmp_path):
+        """Leading blank line in body (between heading and content) is preserved."""
+        content = "# Tasks\n\n## A\n\nbody\n\n## B\n"
+        p = tmp_path / "tasks.md"
+        p.write_text(content, encoding="utf-8")
+        tasks = parse(p)
+        assert tasks[0].body.startswith("\n")
+
+    def test_interior_blank_lines_preserved(self, tmp_path):
+        """Interior blank lines (paragraph breaks inside a body) are preserved."""
+        content = "# Tasks\n\n## A\n\npara one.\n\npara two.\n"
+        p = tmp_path / "tasks.md"
+        p.write_text(content, encoding="utf-8")
+        tasks = parse(p)
+        assert "para one.\n\npara two.\n" in tasks[0].body

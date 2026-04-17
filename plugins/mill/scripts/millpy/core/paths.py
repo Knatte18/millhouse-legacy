@@ -108,6 +108,40 @@ def project_offset(git_root: Path, project_root: Path) -> PurePosixPath:
     return PurePosixPath(*parts)
 
 
+def cwd_offset(start: Path | None = None) -> PurePosixPath:
+    """Return the relative offset from the git toplevel to ``start``.
+
+    Parameters
+    ----------
+    start:
+        Probe directory. Defaults to ``Path.cwd()``. Resolved (absolute,
+        symlinks followed) before comparison.
+
+    Returns
+    -------
+    PurePosixPath
+        - ``PurePosixPath(".")`` when ``start`` equals the git toplevel.
+        - ``PurePosixPath("sub/deeper")`` when ``start`` is a subfolder.
+        The returned path uses forward slashes on every platform, making
+        it safe to append to any target path regardless of OS.
+
+    Raises
+    ------
+    RepoRootNotFound
+        If ``start`` is not inside any git repository.
+    ValueError
+        If ``start`` is not a subpath of the git toplevel (e.g. resolves
+        outside the repo).
+    """
+    probe = Path(start).resolve() if start is not None else Path.cwd().resolve()
+    git_root = repo_root(start=probe).resolve()
+    relative = probe.relative_to(git_root)
+    parts = relative.parts
+    if not parts:
+        return PurePosixPath(".")
+    return PurePosixPath(*parts)
+
+
 def millhouse_dir(start: Path | None = None) -> Path:
     """Return the _millhouse directory at the mill project root.
 

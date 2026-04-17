@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         Exit code.
     """
     from millpy.core.log_util import log
-    from millpy.core.paths import project_offset, project_root, repo_root
+    from millpy.core.paths import cwd_offset, project_root
     from millpy.core.subprocess_util import run as subprocess_run
     from millpy.worktree.children import Child, find_by_slug, list_children
 
@@ -96,16 +96,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         selected = active[num - 1]
 
-    # cwd bug fix: use child worktree as cwd (not repo root)
-    # nested-project offset (B.4): when the parent project lives at
-    # <git>/projects/sub/, open at <child-worktree>/projects/sub/ instead
-    # of the child worktree's git toplevel. The offset is derived from the
-    # parent's state (the orchestrator's current cwd is inside the parent).
-    # For flat layouts the offset is "." and the join is a no-op.
+    # Preserve the parent's cwd subfolder when opening the child worktree.
+    # For flat layouts where cwd == git root, offset is "." and the join
+    # is a no-op.
     try:
-        parent_git_root = repo_root(Path.cwd())
-        parent_project_root = project_root(Path.cwd())
-        offset = project_offset(parent_git_root, parent_project_root)
+        offset = cwd_offset()
     except Exception as exc:
         log("open_terminal", f"offset computation failed, falling back to worktree root: {exc}")
         offset = None

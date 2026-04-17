@@ -10,6 +10,7 @@ import pytest
 
 from millpy.core.paths import (
     RepoRootNotFound,
+    cwd_offset,
     millhouse_dir,
     plugin_root,
     project_offset,
@@ -137,3 +138,45 @@ def test_millhouse_dir_flat_layout_unchanged(temp_git_repo):
     """In flat layout, millhouse_dir() == repo_root() / '_millhouse' (same as before)."""
     (temp_git_repo / "_millhouse").mkdir()
     assert millhouse_dir(start=temp_git_repo) == temp_git_repo / "_millhouse"
+
+
+# -------------------------------------------------------------------
+# cwd_offset
+# -------------------------------------------------------------------
+
+
+def test_cwd_offset_equal_to_git_root_returns_dot(temp_git_repo):
+    """cwd_offset(start=<git-root>) returns PurePosixPath('.')."""
+    assert cwd_offset(start=temp_git_repo) == PurePosixPath(".")
+
+
+def test_cwd_offset_subfolder_returns_relative(temp_git_repo):
+    """cwd_offset(start=<git>/sub/deeper) returns PurePosixPath('sub/deeper')."""
+    deeper = temp_git_repo / "sub" / "deeper"
+    deeper.mkdir(parents=True)
+    assert cwd_offset(start=deeper) == PurePosixPath("sub/deeper")
+
+
+def test_cwd_offset_uses_forward_slashes_on_all_platforms(temp_git_repo):
+    """The returned value is a PurePosixPath; its str contains only forward slashes."""
+    deeper = temp_git_repo / "a" / "b" / "c"
+    deeper.mkdir(parents=True)
+    result = cwd_offset(start=deeper)
+    assert isinstance(result, PurePosixPath)
+    assert "\\" not in str(result)
+
+
+def test_cwd_offset_outside_git_raises_value_error(tmp_path):
+    """A path not inside any git repo raises ValueError or RepoRootNotFound."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    with pytest.raises((ValueError, RepoRootNotFound)):
+        cwd_offset(start=outside)
+
+
+def test_cwd_offset_defaults_to_cwd(temp_git_repo, monkeypatch):
+    """Default start=None reads Path.cwd()."""
+    sub = temp_git_repo / "sub"
+    sub.mkdir()
+    monkeypatch.chdir(sub)
+    assert cwd_offset() == PurePosixPath("sub")

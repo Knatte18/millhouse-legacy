@@ -84,7 +84,7 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
 3. **Move to Active.** Add `[active]` marker to the selected task's heading in `tasks.md`. E.g., `## Task Title` becomes `## [active] Task Title`. Stage, commit, and push `tasks.md` immediately. The `[active]` marker stays in place through the entire discuss/plan/implement/test/review window until merge or abandon.
 
-   Validate tasks.md per `doc/modules/validation.md` (tasks.md structural rules).
+   Validate tasks.md per `plugins/mill/doc/formats/validation.md` (tasks.md structural rules).
 
    Write `_millhouse/task/status.md` by reading `plugins/mill/templates/status-discussing.md`, stripping the leading HTML comment, and substituting:
    - `<TASK_TITLE>` — the selected task's heading text from `tasks.md`.
@@ -127,7 +127,7 @@ If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, o
 
 ### Phase: Discussion File
 
-7. **Write the discussion file.** After the user approves the approach, write the structured discussion file per `doc/modules/discussion-format.md` to `_millhouse/task/discussion.md`.
+7. **Write the discussion file.** After the user approves the approach, write the structured discussion file per `plugins/mill/doc/formats/discussion.md` to `_millhouse/task/discussion.md`.
 
    Include everything from the conversation:
    - The evolved problem statement (not the original task description)

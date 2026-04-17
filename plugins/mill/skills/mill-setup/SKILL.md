@@ -44,7 +44,7 @@ git commit -m "chore: initialize tasks.md"
 git push
 ```
 
-Validate per `doc/modules/validation.md` (tasks.md structural rules). If validation fails, report the issue to the user and stop.
+Validate per `plugins/mill/doc/formats/validation.md` (tasks.md structural rules). If validation fails, report the issue to the user and stop.
 
 ### Step 4: Write config
 

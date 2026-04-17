@@ -15,14 +15,14 @@ pipeline:
     default: sonnetmax
   plan-review:
     rounds: 3
-    default: g25flash-x3-sonnetmax
+    default: sonnetmax
     holistic: sonnetmax
-    per-card: g25flash
+    per-card: sonnetmax
   code-review:
     rounds: 3
-    default: g25flash-x3-sonnetmax
-    holistic: g25flash-x3-g25flash
-    per-card: g25flash
+    default: sonnetmax
+    holistic: sonnetmax
+    per-card: sonnetmax
 
 runtime:
   pre-arm-timeout-seconds: 14400

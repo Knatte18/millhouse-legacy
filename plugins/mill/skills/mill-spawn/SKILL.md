@@ -54,7 +54,7 @@ If description provided:
 
 ### Step 4: Validate
 
-Validate `tasks.md` per `doc/modules/validation.md` (tasks.md structural rules). If validation fails, report the issue to the user and stop.
+Validate `tasks.md` per `plugins/mill/doc/formats/validation.md` (tasks.md structural rules). If validation fails, report the issue to the user and stop.
 
 ### Step 5: Commit and push
 

@@ -292,3 +292,37 @@ class TestResolveMaxRounds:
         """
         cfg = load(write_yaml(tmp_path, text))
         assert resolve_max_rounds(cfg, "code") == 5
+
+
+def test_template_pipeline_block_contains_no_gemini_reviewer():
+    """Regression gate: plugins/mill/templates/millhouse-config.yaml must not
+    reference gemini-based reviewers inside the pipeline block. Reviewer
+    defaults switched to sonnetmax on 2026-04-17 because gemini backends
+    were unstable."""
+    import subprocess
+    toplevel = subprocess.check_output(
+        ["git", "rev-parse", "--show-toplevel"], text=True
+    ).strip()
+    template = Path(toplevel) / "plugins" / "mill" / "templates" / "millhouse-config.yaml"
+    text = template.read_text(encoding="utf-8")
+
+    lines = text.splitlines()
+    in_pipeline = False
+    pipeline_lines: list[str] = []
+    for line in lines:
+        if line.startswith("pipeline:"):
+            in_pipeline = True
+            continue
+        if in_pipeline:
+            if line and not line.startswith(" ") and not line.startswith("\t"):
+                break
+            pipeline_lines.append(line)
+    pipeline_text = "\n".join(pipeline_lines)
+
+    assert "gemini" not in pipeline_text.lower(), (
+        f"Template pipeline block still references gemini:\n{pipeline_text}"
+    )
+    for token in ("g25flash", "g25pro", "g3flash", "g3pro"):
+        assert token not in pipeline_text, (
+            f"Template pipeline block still references {token!r}:\n{pipeline_text}"
+        )
