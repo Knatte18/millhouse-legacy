@@ -139,6 +139,7 @@ class EnsembleReviewer:
                     phase=phase,
                     round=round,
                     output_path=prep_out,
+                    files_from=files_from,
                 )
 
             # Collect worker results
@@ -191,11 +192,35 @@ class EnsembleReviewer:
         # Import here to avoid circular import at module level.
         from millpy.reviewers import handler as handler_mod  # noqa: PLC0415
 
+        # For holistic plan-review (plan_dir_path set, no explicit files_from)
+        # derive files_from from plan's `## All Files Touched` so the handler
+        # has the same source-file verification basis as workers do. Filter to
+        # existing files only — entries for files the plan will CREATE do not
+        # yet exist on disk and would crash bulk_payload.build_payload.
+        handler_files_from = files_from
+        if handler_files_from is None and plan_dir_path is not None:
+            try:
+                from millpy.core.plan_io import resolve_plan_path, read_files_touched  # noqa: PLC0415
+                from millpy.core.paths import repo_root as _repo_root  # noqa: PLC0415
+                plan_loc = resolve_plan_path(plan_dir_path.parent)
+                if plan_loc is not None:
+                    touched = read_files_touched(plan_loc)
+                    repo = _repo_root()
+                    existing = [p for p in touched if (repo / p).exists() and (repo / p).is_file()]
+                    if existing:
+                        tmp_files_from = scratch_dir / f"{ts}-handler-files-from-r{round}.txt"
+                        tmp_files_from.write_text("\n".join(existing) + "\n", encoding="utf-8")
+                        handler_files_from = tmp_files_from
+                        log("ensemble", f"derived handler files_from for holistic plan review: {len(existing)} files (skipped {len(touched) - len(existing)} non-existent)")
+            except Exception as exc:
+                log("ensemble", f"failed to derive handler files_from from plan: {exc}")
+
         handler_mod.synthesize(
             successful,
             handler_obj,
             output_path=review_file_path,
             prep_notes=prep_notes,
+            files_from=handler_files_from,
         )
 
         # Extract verdict from the synthesized review. Handler output uses
@@ -244,8 +269,11 @@ def _materialize_prompt(
         are missing from the template.
 
     **Bulk workers in v2 whole-plan mode** (``plan_dir_path`` set):
-        Raises ``ConfigError`` — whole-plan mode is tool-use-only. The engine
-        guard should have caught this first; this is a belt-and-suspenders check.
+        Load ``plan-review-bulk-holistic.md`` template (added 2026-04-17).
+        Concatenate all ``.md`` files in ``plan_dir_path`` as the ``<PLAN_CONTENT>``
+        payload; inline source files from the plan's ``## All Files Touched`` as
+        ``<FILES_PAYLOAD>``. Raises ``ConfigError`` if the template is missing or
+        lacks the required placeholders.
 
     **Bulk workers in v1 single-file mode** (existing code-review-bulk path):
         Load ``<phase>-review-bulk.md`` template.
@@ -262,16 +290,83 @@ def _materialize_prompt(
     if worker.dispatch_mode != "bulk":
         return prompt_file.read_text(encoding="utf-8", errors="replace")
 
+    root = repo_root()
+
     # ------------------------------------------------------------------
-    # Bulk: whole-plan guard (belt-and-suspenders — engine should catch this)
+    # Bulk: holistic plan-review mode (whole plan concatenated inline)
     # ------------------------------------------------------------------
     if plan_dir_path is not None:
-        raise ConfigError(
-            "plan-review whole-plan mode does not support bulk dispatch. "
-            "Configure pipeline.plan-review.default to a tool-use reviewer."
-        )
+        plan_files = sorted(plan_dir_path.glob("*.md"))
+        parts: list[str] = []
+        for pf in plan_files:
+            content = pf.read_text(encoding="utf-8", errors="replace")
+            parts.append(f"=== {pf.name} ===\n{content}")
+        full_plan = "\n\n".join(parts) if parts else "(plan directory is empty)"
 
-    root = repo_root()
+        template_path = root / "plugins" / "mill" / "doc" / "prompts" / "plan-review-bulk-holistic.md"
+        if not template_path.exists():
+            raise ConfigError(
+                f"plan-review-bulk-holistic.md not found at {template_path}. "
+                "Create the template before using bulk holistic plan review."
+            )
+        template = template_path.read_text(encoding="utf-8", errors="replace")
+
+        if "<PLAN_CONTENT>" not in template:
+            raise ConfigError(
+                f"plan-review-bulk-holistic.md at {template_path} is missing "
+                "<PLAN_CONTENT> placeholder"
+            )
+        if "<FILES_PAYLOAD>" not in template:
+            raise ConfigError(
+                f"plan-review-bulk-holistic.md at {template_path} is missing "
+                "<FILES_PAYLOAD> placeholder"
+            )
+
+        # Build source-file FILES_PAYLOAD so bulk holistic reviewers can verify
+        # plan claims against actual code. Read every path in the plan overview's
+        # `## All Files Touched` section, resolve via plan_io (applies root prefix),
+        # skip entries that don't exist on disk (log the skip — gap in plan).
+        source_paths: list[Path] = []
+        try:
+            from millpy.core.plan_io import resolve_plan_path, read_files_touched  # noqa: PLC0415
+            plan_loc = resolve_plan_path(plan_dir_path.parent)
+            if plan_loc is not None:
+                touched = read_files_touched(plan_loc)
+                for rel in touched:
+                    abs_path = root / rel
+                    if abs_path.exists() and abs_path.is_file():
+                        source_paths.append(abs_path)
+                    else:
+                        log("ensemble", f"holistic-bulk: skipping non-existent file from plan: {rel}")
+        except Exception as exc:
+            log("ensemble", f"holistic-bulk: could not resolve source files from plan: {exc}")
+        if source_paths:
+            files_payload = bulk_payload_mod.build_payload(source_paths, base_dir=root)
+        else:
+            files_payload = "(no source files in plan — holistic review cannot verify against code)"
+
+        constraints_path = root / "CONSTRAINTS.md"
+        if constraints_path.exists():
+            constraints_content = constraints_path.read_text(encoding="utf-8", errors="replace")
+        else:
+            constraints_content = "(no CONSTRAINTS.md)"
+
+        # One-pass regex substitution avoids recursive inflation:
+        # plan content and file payload both contain placeholder mentions
+        # ("substitute <FILES_PAYLOAD>", etc.) as literal prose; chained
+        # .replace() calls would rewrite those too, causing 27x blowup to
+        # 5 MB. Regex subn on the TEMPLATE touches each placeholder exactly
+        # once and leaves substituted content's prose untouched.
+        import re as _re  # noqa: PLC0415
+        substitutions = {
+            "<PLAN_CONTENT>": full_plan,
+            "<FILES_PAYLOAD>": files_payload,
+            "<CONSTRAINTS_CONTENT>": constraints_content,
+            "<ROUND>": str(round),
+        }
+        placeholder_keys = sorted(substitutions.keys(), key=len, reverse=True)
+        pattern = _re.compile("|".join(_re.escape(k) for k in placeholder_keys))
+        return pattern.sub(lambda m: substitutions[m.group(0)], template)
 
     # ------------------------------------------------------------------
     # Bulk: v2 per-batch mode
@@ -418,8 +513,16 @@ def _run_handler_prep(
     phase: str,
     round: int,
     output_path: Path,
+    files_from: Path | None = None,
 ) -> Path:
-    """Run the handler prep pass. Returns the prep notes path."""
+    """Run the handler prep pass. Returns the prep notes path.
+
+    Substitutes ``<SUBJECT>`` (from ``files_from`` list) and ``<NOTES_PATH>``
+    (the output_path) in the handler-prep.md template before dispatch. The
+    handler writes the prep notes to ``output_path`` via its Write tool per
+    the template instructions; the engine does NOT overwrite — stdout only
+    carries the PREP_DONE completion signal.
+    """
     root = repo_root()
     prep_template_path = root / "plugins" / "mill" / "doc" / "prompts" / "handler-prep.md"
 
@@ -427,7 +530,22 @@ def _run_handler_prep(
         log("ensemble", f"handler-prep.md not found at {prep_template_path}; skipping prep")
         raise FileNotFoundError(str(prep_template_path))
 
-    prep_prompt = prep_template_path.read_text(encoding="utf-8", errors="replace")
+    prep_template = prep_template_path.read_text(encoding="utf-8", errors="replace")
+
+    # Build <SUBJECT> substitution from files_from
+    if files_from is not None and files_from.exists():
+        raw_paths = files_from.read_text(encoding="utf-8", errors="replace").splitlines()
+        paths = [p.strip() for p in raw_paths if p.strip()]
+        subject = "\n".join(f"- {p}" for p in paths) if paths else "(no files listed)"
+    else:
+        subject = "(no file list provided)"
+
+    prep_prompt = (
+        prep_template
+        .replace("<SUBJECT>", subject)
+        .replace("<NOTES_PATH>", str(output_path))
+    )
+
     backend = BACKENDS[handler_worker.provider]
     result = backend.dispatch_tool_use(
         prep_prompt,
@@ -435,6 +553,7 @@ def _run_handler_prep(
         effort=handler_worker.effort,
         max_turns=handler_worker.max_turns,
     )
-    if result.result_text:
-        output_path.write_text(result.result_text, encoding="utf-8")
+
+    if not output_path.exists():
+        log("ensemble", f"handler prep did not write {output_path}; synthesis proceeds without prep notes")
     return output_path

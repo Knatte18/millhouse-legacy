@@ -150,7 +150,7 @@ class TestEnsembleDegradation:
         (fake_root / "_millhouse" / "scratch" / "reviews").mkdir(parents=True)
         fake_review_file.write_text("VERDICT: APPROVE\n", encoding="utf-8")
 
-        def fake_synthesize(worker_results, handler_worker, output_path, prep_notes=None):
+        def fake_synthesize(worker_results, handler_worker, output_path, prep_notes=None, files_from=None):
             output_path.write_text("VERDICT: APPROVE\n", encoding="utf-8")
             return output_path
 

@@ -9,12 +9,16 @@ Two public functions:
   stdout verdict line.
 
 - ``extract_verdict_from_text(text)`` — multi-format extraction of a
-  verdict string from arbitrary text. Recognizes (in priority order):
-  (1) YAML frontmatter ``verdict:`` field, (2) JSON object as the last
-  non-empty line (with optional backtick fences), (3) ``VERDICT:``
-  prefix line (backward-compat). Falls back to ``"UNKNOWN"`` when no
-  recognizable format is present. Used by the reviewer engine's
-  ``_extract_verdict`` single-worker and ensemble paths.
+  verdict string from arbitrary text. Tries in priority order:
+  (1) YAML frontmatter ``verdict:`` field,
+  (2) JSON object as the last non-empty line (with optional backtick fences),
+  (3) ``VERDICT:`` prefix line (backward-compat),
+  (4) body-grep: any line matching ``^[*#\\s]*verdict[*#\\s]*[:\\-—][#*\\s]*(\\w+)``
+      case-insensitively (catches ``**Verdict:** APPROVE``, ``### Verdict — X``, etc.).
+  Returns ``"UNKNOWN"`` when text is empty or whitespace-only; returns ``"ERROR"``
+  when text is non-empty but no recognizable format is present (signals
+  "text exists but unparseable" vs "no text at all").
+  Used by the reviewer engine's single-worker and ensemble paths.
 
 Historical context — live repros driving the multi-format design:
 
@@ -44,6 +48,12 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
+
+
+VERDICT_ERROR = "ERROR"
+"""Sentinel returned by ``extract_verdict_from_text`` when text is non-empty but
+contains no recognizable verdict format. Distinct from ``"UNKNOWN"``, which is
+returned only for empty/whitespace-only input."""
 
 
 class VerdictParseError(ValueError):
@@ -132,8 +142,8 @@ def _extract_from_frontmatter(text: str) -> str | None:
 def _clean_value(value: str) -> str:
     """Strip surrounding quotes and trailing punctuation from a verdict value."""
     value = value.strip()
-    if len(value) >= 2:
-        if (value[0] == '"' and value[-1] == '"') or (value[0] == "'" and value[-1] == "'"):
+    for q in ('"', "'"):
+        while len(value) >= 2 and value[0] == q and value[-1] == q:
             value = value[1:-1]
     value = value.rstrip(".,;")
     return value
@@ -191,6 +201,30 @@ def _extract_from_verdict_prefix(text: str) -> str | None:
     return None
 
 
+# Matches lines of the form (case-insensitive, multiline):
+#   Verdict: APPROVE
+#   **Verdict:** REQUEST_CHANGES
+#   ### Verdict — APPROVE
+#   verdict: approve
+# Requires at least one separator char (:, -, —) between "verdict" and the word.
+_BODY_GREP_VERDICT_PATTERN = re.compile(
+    r"(?im)^[*#\s]*verdict[*#\s]*[:\-\u2014][#*\s]*(\w+)"
+)
+
+
+def _extract_from_body_grep(text: str) -> str | None:
+    """Return a verdict captured anywhere in the body, or None.
+
+    Matches "verdict" at the start of a line (after optional markdown heading
+    or bold markers), followed by a separator (``:``/``-``/``—``), then captures
+    the next word. Returns the captured word uppercased, or None on no match.
+    """
+    match = _BODY_GREP_VERDICT_PATTERN.search(text)
+    if match:
+        return match.group(1).upper()
+    return None
+
+
 def extract_verdict_from_text(text: str) -> str:
     """Extract a verdict string from arbitrary review text.
 
@@ -198,8 +232,13 @@ def extract_verdict_from_text(text: str) -> str:
     1. YAML frontmatter ``verdict:`` field
     2. JSON object (optionally fence-wrapped) as the last non-empty line
     3. ``VERDICT:`` prefix line (backward-compat with pre-W1 convention)
+    4. Body-grep: any line starting with ``verdict`` (after optional markdown
+       markers) followed by a separator and a word — case-insensitive.
 
-    Returns ``"UNKNOWN"`` when no recognizable format is present.
+    Returns ``"UNKNOWN"`` when text is empty or whitespace-only.
+    Returns ``"ERROR"`` (``VERDICT_ERROR``) when text is non-empty but no
+    recognizable format is present — signals "text exists but unparseable"
+    rather than "no text at all".
     """
     if not text or not text.strip():
         return "UNKNOWN"
@@ -216,4 +255,8 @@ def extract_verdict_from_text(text: str) -> str:
     if from_prefix:
         return from_prefix
 
-    return "UNKNOWN"
+    from_body = _extract_from_body_grep(text)
+    if from_body:
+        return from_body
+
+    return VERDICT_ERROR

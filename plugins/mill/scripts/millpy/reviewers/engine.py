@@ -208,8 +208,8 @@ def _guard_discussion_bulk(reviewer_name: str, reviewer, phase: str) -> None:
                 f"reviewer {reviewer_name!r} has bulk-mode worker"
             )
     elif isinstance(reviewer, EnsembleReviewer):
-        worker_obj = WORKERS.get(reviewer.ensemble.worker)
-        if worker_obj is not None and worker_obj.dispatch_mode == "bulk":
+        worker_obj = WORKERS[reviewer.ensemble.worker]
+        if worker_obj.dispatch_mode == "bulk":
             raise ConfigError(
                 f"discussion phase does not support bulk dispatch: "
                 f"reviewer {reviewer_name!r} has bulk-mode worker"
@@ -222,38 +222,15 @@ def _guard_plan_whole_bulk(
     phase: str,
     plan_dir_path: Path | None,
 ) -> None:
-    """Raise ConfigError if a bulk-mode worker is used for whole-plan plan review.
+    """No-op after 2026-04-17: plan-review supports bulk workers.
 
-    Whole-plan plan review (plan_dir_path set) requires tool-use dispatch.
-    Bulk workers receive a single prompt with all files inlined; they cannot
-    iterate through the plan directory or call tools to read individual files.
+    Plan artifacts are self-scoped — every card's ``reads:`` field names the
+    files the implementer will touch, so the plan-directory contents fully
+    describe the review surface. Bulk dispatch of the concatenated plan is
+    therefore safe and cheaper than tool-use for holistic plan review.
 
-    Parameters
-    ----------
-    reviewer_name:
-        The reviewer name (for error messages).
-    reviewer:
-        The resolved reviewer instance.
-    phase:
-        The review phase.
-    plan_dir_path:
-        The plan directory path, or None for per-batch / non-plan review.
+    Discussion review still requires tool-use (see ``_guard_discussion_bulk``)
+    because discussion scope is open — the reviewer must decide which files
+    to consult.
     """
-    if phase != "plan" or plan_dir_path is None:
-        return
-
-    if isinstance(reviewer, SingleWorker):
-        if reviewer.worker.dispatch_mode == "bulk":
-            raise ConfigError(
-                f"plan-review whole-plan mode does not support bulk dispatch: "
-                f"reviewer {reviewer_name!r} has bulk-mode worker. "
-                f"Use a tool-use reviewer for whole-plan review."
-            )
-    elif isinstance(reviewer, EnsembleReviewer):
-        worker_obj = WORKERS.get(reviewer.ensemble.worker)
-        if worker_obj is not None and worker_obj.dispatch_mode == "bulk":
-            raise ConfigError(
-                f"plan-review whole-plan mode does not support bulk dispatch: "
-                f"reviewer {reviewer_name!r} has bulk-mode worker. "
-                f"Use a tool-use reviewer for whole-plan review."
-            )
+    return

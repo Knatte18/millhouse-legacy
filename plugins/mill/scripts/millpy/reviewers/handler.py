@@ -8,7 +8,7 @@ to the handler worker's backend. The handler writes its synthesis DIRECTLY to
 the caller-provided output_path via its Write tool — no intermediate files,
 no stdout parsing, no copy operations.
 
-NOT unit-tested — covered by live smoke.
+Unit tests live in tests/reviewers/test_handler.py.
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ def synthesize(
     handler_worker: Worker,
     output_path: Path,
     prep_notes: Path | None = None,
+    files_from: Path | None = None,
 ) -> Path:
     """Synthesize N worker review files into one consolidated review.
 
@@ -53,12 +54,19 @@ def synthesize(
         If the backend failed or the handler did not write to output_path.
     """
     root = repo_root()
-    template_path = root / "plugins" / "mill" / "doc" / "prompts" / "handler.md"
+
+    # Bulk handlers cannot use Read/Write tools; pick consensus-based template.
+    # Tool-use handlers get the Read-verification template.
+    if handler_worker.dispatch_mode == "bulk":
+        template_name = "handler-bulk.md"
+    else:
+        template_name = "handler.md"
+    template_path = root / "plugins" / "mill" / "doc" / "prompts" / template_name
 
     if not template_path.exists():
         raise FileNotFoundError(
             f"Handler synthesis prompt template not found: {template_path}\n"
-            "Create plugins/mill/doc/prompts/handler.md to enable handler synthesis."
+            f"Create plugins/mill/doc/prompts/{template_name} to enable handler synthesis."
         )
 
     template = template_path.read_text(encoding="utf-8", errors="replace")
@@ -84,11 +92,25 @@ def synthesize(
     else:
         prep_notes_text = "(no prep notes)"
 
+    # Build <FILES_PAYLOAD> substitution for bulk handlers so they can
+    # independently verify worker claims against the actual code. Tool-use
+    # handlers read files via Read tool; bulk handlers need inline content.
+    files_payload_text = ""
+    if "<FILES_PAYLOAD>" in template:
+        if files_from is not None and files_from.exists():
+            from millpy.core import bulk_payload as bulk_payload_mod  # noqa: PLC0415
+            raw_paths = files_from.read_text(encoding="utf-8", errors="replace").splitlines()
+            paths = [root / p.strip() for p in raw_paths if p.strip()]
+            files_payload_text = bulk_payload_mod.build_payload(paths, base_dir=root)
+        else:
+            files_payload_text = "(no source files provided — cannot independently verify worker claims)"
+
     prompt = (
         template
         .replace("<WORKER_REPORTS>", worker_reports_text)
         .replace("<PREP_NOTES>", prep_notes_text)
         .replace("<OUTPUT_PATH>", str(output_path))
+        .replace("<FILES_PAYLOAD>", files_payload_text)
     )
 
     # Dispatch to backend. The handler uses its Write tool to save the synthesis

@@ -73,8 +73,7 @@ Invert the `_millhouse/` gitignore so task state (discussion, plan, status, revi
 - When a plan has 30+ cards, per-card bulk review + holistic tool-use review may not catch inter-group issues effectively. Add an optional Planner-grouped review mode where Planner creates ad-hoc review groups (overlapping subsets of cards) and spawns one reviewer per group in parallel. Same card can appear in multiple groups. Pure Planner-side change — no plan format changes needed.
 - Orthogonal to "Plan format + review architecture rewrite" above. Land that first; re-evaluate the grouped approach after.
 
-
-## Gemini backend: replace CLI with google-genai SDK + tool-use
+## [done] Gemini backend: replace CLI with google-genai SDK + tool-use
 
 - tags: [enhancement, reviewer]
 - Consolidates issue #31 (drives) and #32 (concrete repro: Gemini CLI hangs on large-prompt bulk dispatch, observed 2026-04-16).

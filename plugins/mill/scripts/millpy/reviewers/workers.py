@@ -19,24 +19,29 @@ WORKERS: dict[str, Worker] = {
     "haiku": Worker(
         provider="claude",
         model="haiku",
+        max_turns=500,
     ),
     "sonnet": Worker(
         provider="claude",
         model="sonnet",
+        max_turns=500,
     ),
     "sonnetmax": Worker(
         provider="claude",
         model="sonnet",
         effort="max",
+        max_turns=500,
     ),
     "opus": Worker(
         provider="claude",
         model="opus",
+        max_turns=500,
     ),
     "opusmax": Worker(
         provider="claude",
         model="opus",
         effort="max",
+        max_turns=500,
     ),
     "g3flash": Worker(
         provider="gemini",

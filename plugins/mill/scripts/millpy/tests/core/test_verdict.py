@@ -17,6 +17,7 @@ from __future__ import annotations
 import pytest
 
 from millpy.core.verdict import (
+    VERDICT_ERROR,
     VerdictParseError,
     extract_verdict_from_text,
     parse_verdict_line,
@@ -154,9 +155,11 @@ def test_extract_frontmatter_wins_over_json_last_line():
     assert extract_verdict_from_text(text) == "GAPS_FOUND"
 
 
-def test_extract_no_recognizable_format_returns_unknown():
+def test_extract_no_recognizable_format_returns_error():
+    # Non-empty text with no verdict signal → ERROR (not UNKNOWN).
+    # UNKNOWN is reserved for empty/whitespace-only input.
     text = "plain text with no verdict at all"
-    assert extract_verdict_from_text(text) == "UNKNOWN"
+    assert extract_verdict_from_text(text) == VERDICT_ERROR
 
 
 def test_extract_empty_text_returns_unknown():
@@ -170,3 +173,46 @@ def test_extract_whitespace_only_returns_unknown():
 def test_extract_invalid_json_falls_back_to_verdict_prefix():
     text = "body\nVERDICT: APPROVE\n{malformed json last"
     assert extract_verdict_from_text(text) == "APPROVE"
+
+
+# ---------------------------------------------------------------
+# extract_verdict_from_text — body-grep tier (tier 4)
+# ---------------------------------------------------------------
+
+
+def test_body_grep_approve():
+    text = "Some review prose.\n\nVerdict: APPROVE\n\nMore prose."
+    assert extract_verdict_from_text(text) == "APPROVE"
+
+
+def test_body_grep_bold_markdown():
+    text = "Review body.\n\n**Verdict:** REQUEST_CHANGES\n"
+    assert extract_verdict_from_text(text) == "REQUEST_CHANGES"
+
+
+def test_body_grep_heading():
+    text = "## Summary\n\nSome text.\n\n### Verdict — APPROVE\n"
+    assert extract_verdict_from_text(text) == "APPROVE"
+
+
+def test_body_grep_case_insensitive():
+    text = "verdict: approve\n"
+    assert extract_verdict_from_text(text) == "APPROVE"
+
+
+# ---------------------------------------------------------------
+# extract_verdict_from_text — ERROR / UNKNOWN sentinels
+# ---------------------------------------------------------------
+
+
+def test_error_sentinel_on_unparseable_non_empty():
+    text = "This is a review with no verdict declaration anywhere in it."
+    assert extract_verdict_from_text(text) == VERDICT_ERROR
+
+
+def test_unknown_sentinel_on_empty_input():
+    assert extract_verdict_from_text("") == "UNKNOWN"
+
+
+def test_whitespace_returns_unknown():
+    assert extract_verdict_from_text("   \n\n  ") == "UNKNOWN"

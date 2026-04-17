@@ -7,9 +7,15 @@ from millpy.reviewers.definitions import REVIEWERS
 from millpy.reviewers.workers import WORKERS
 
 
-def test_workers_count_and_no_haiku():
-    assert len(WORKERS) == 8
-    assert "haiku" not in WORKERS
+def test_workers_invariants():
+    for name, worker in WORKERS.items():
+        assert worker.provider in {"claude", "gemini", "ollama"}, \
+            f"{name}: unknown provider {worker.provider!r}"
+        assert worker.dispatch_mode in {"tool-use", "bulk"}, \
+            f"{name}: unknown dispatch_mode {worker.dispatch_mode!r}"
+        if worker.provider != "claude":
+            assert worker.effort is None, \
+                f"{name}: effort must be None for non-claude provider, got {worker.effort!r}"
 
 
 def test_workers_dispatch_modes():
@@ -26,15 +32,22 @@ def test_workers_effort_and_extras():
     assert WORKERS["qwenthinker"].extras == {"think": True}
 
 
-def test_reviewers_count_and_keys():
-    assert len(REVIEWERS) == 4
-    assert "g3pro-x2-opus" in REVIEWERS
-    assert REVIEWERS["g3pro-x2-opus"].worker_count == 2
-    assert REVIEWERS["g3pro-x2-opus"].handler == "opus"
-    assert "g3flash-x3-sonnetmax" in REVIEWERS
-    assert REVIEWERS["g3flash-x3-sonnetmax"].worker == "g3flash"
-    assert REVIEWERS["g3flash-x3-sonnetmax"].worker_count == 3
-    assert REVIEWERS["g3flash-x3-sonnetmax"].handler == "sonnetmax"
+def test_reviewers_invariants():
+    for name, ensemble in REVIEWERS.items():
+        assert ensemble.worker in WORKERS, \
+            f"{name}: worker {ensemble.worker!r} not in WORKERS"
+        assert ensemble.handler in WORKERS, \
+            f"{name}: handler {ensemble.handler!r} not in WORKERS"
+        assert ensemble.worker_count >= 1, \
+            f"{name}: worker_count must be >= 1, got {ensemble.worker_count}"
+        assert isinstance(ensemble.handler_prep, bool), \
+            f"{name}: handler_prep must be bool, got {type(ensemble.handler_prep).__name__}"
+        if ensemble.handler_prep:
+            handler_dispatch = WORKERS[ensemble.handler].dispatch_mode
+            assert handler_dispatch == "tool-use", (
+                f"{name}: handler_prep=True requires tool-use handler, "
+                f"got {handler_dispatch!r}"
+            )
 
 
 def test_no_cross_import():

@@ -1,17 +1,35 @@
-# Handler Prep Prompt
+# Handler Prep — Pre-Verification Reading Pass
 
-N reviewer reports on `<SUBJECT>` will arrive shortly. Before they arrive, read `<SUBJECT>` and any source files it references. Build context so that when the reviews land you can verify their citations quickly and accurately.
+N reviewer reports on the source files below will arrive shortly from parallel workers. Before they land, **read the files now and build context** so that when the reports arrive you can verify their citations quickly and accurately.
 
-Save your context notes — key observations, relevant file locations, structural decisions — to `<NOTES_PATH>`. Do not wait for the reviews to arrive before writing your notes.
+## Source files to pre-read
 
-## Placeholders
+<SUBJECT>
 
-- `<SUBJECT>` — the artifact being reviewed (plan, discussion, or code diff).
-- `<NOTES_PATH>` — absolute path where you should write your prep notes file.
+## Your task
 
-## What to include in your notes
+1. Read each file above using the Read tool.
+2. Build working context: purpose, key functions, invariants, cross-file references.
+3. Note which files referenced from the bundle might NOT be in the bundle (so you know what extra Read calls you may need when verifying worker claims later).
+4. Save your prep notes to this exact path using the Write tool:
 
-- A brief summary of the artifact's purpose and scope.
-- Any decisions or constraints you observed that reviewers are likely to flag.
-- File paths and line ranges that are central to the artifact.
-- Questions or ambiguities you would want a reviewer to address.
+```
+<NOTES_PATH>
+```
+
+The notes should include:
+
+- A brief summary of each file's purpose and scope.
+- Key structural decisions, invariants, or conventions you observed.
+- Cross-references: what does file A call in file B? Where are backend implementations (not in the bundle) that future worker claims may refer to?
+- Questions or ambiguities likely to surface as findings.
+
+Keep the notes compact — this is a reference for yourself, not a consumer-facing review.
+
+5. After writing the notes file, output **ONLY** this single line in stdout:
+
+```
+PREP_DONE
+```
+
+No other text. The orchestrator treats `PREP_DONE` as a completion signal and reads the notes from the file you wrote.

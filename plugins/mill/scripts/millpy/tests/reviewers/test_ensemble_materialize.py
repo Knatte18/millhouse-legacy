@@ -145,18 +145,78 @@ class TestBulkPerBatch:
 
 
 # ---------------------------------------------------------------------------
-# Scenario 3: Bulk + plan_dir_path → ConfigError (belt-and-suspenders)
+# Scenario 3: Bulk + plan_dir_path → holistic mode (all plan files inlined)
 # ---------------------------------------------------------------------------
 
-class TestBulkWholeplanGuard:
-    def test_bulk_whole_plan_raises_config_error(self, tmp_path):
+def _write_holistic_template(root: Path) -> Path:
+    template_path = root / "plugins" / "mill" / "doc" / "prompts" / "plan-review-bulk-holistic.md"
+    write_file(
+        template_path,
+        "Plan: <PLAN_CONTENT>\nFiles: <FILES_PAYLOAD>\nConstraints: <CONSTRAINTS_CONTENT>\nRound: <ROUND>",
+    )
+    return template_path
+
+
+class TestBulkHolisticMode:
+    def test_materialize_holistic_bulk_substitutes_plan_content(self, tmp_path, monkeypatch):
+        import millpy.reviewers.ensemble as ens_mod
+        monkeypatch.setattr(ens_mod, "repo_root", lambda: tmp_path)
+        _write_holistic_template(tmp_path)
+
+        plan_dir = tmp_path / "plan"
+        plan_dir.mkdir()
+        write_file(plan_dir / "00-overview.md", "OVERVIEW BODY")
+        write_file(plan_dir / "01-core.md", "BATCH BODY")
+
         prompt_file = write_file(tmp_path / "prompt.md", "x")
         worker = make_bulk_worker()
 
-        with pytest.raises(ConfigError, match="whole-plan"):
+        result = _materialize_prompt(
+            prompt_file, "plan", worker, None,
+            round=1, plan_dir_path=plan_dir,
+        )
+
+        assert "=== 00-overview.md ===" in result
+        assert "OVERVIEW BODY" in result
+        assert "=== 01-core.md ===" in result
+        assert "BATCH BODY" in result
+        assert "Round: 1" in result
+
+    def test_materialize_holistic_bulk_empty_dir_fallback(self, tmp_path, monkeypatch):
+        import millpy.reviewers.ensemble as ens_mod
+        monkeypatch.setattr(ens_mod, "repo_root", lambda: tmp_path)
+        _write_holistic_template(tmp_path)
+
+        plan_dir = tmp_path / "plan"
+        plan_dir.mkdir()
+        # empty dir
+
+        prompt_file = write_file(tmp_path / "prompt.md", "x")
+        worker = make_bulk_worker()
+
+        result = _materialize_prompt(
+            prompt_file, "plan", worker, None,
+            plan_dir_path=plan_dir,
+        )
+
+        assert "(plan directory is empty)" in result
+
+    def test_materialize_holistic_bulk_missing_template_raises_configerror(self, tmp_path, monkeypatch):
+        import millpy.reviewers.ensemble as ens_mod
+        monkeypatch.setattr(ens_mod, "repo_root", lambda: tmp_path)
+        # intentionally do not create the template
+
+        plan_dir = tmp_path / "plan"
+        plan_dir.mkdir()
+        write_file(plan_dir / "00-overview.md", "content")
+
+        prompt_file = write_file(tmp_path / "prompt.md", "x")
+        worker = make_bulk_worker()
+
+        with pytest.raises(ConfigError, match="plan-review-bulk-holistic.md"):
             _materialize_prompt(
                 prompt_file, "plan", worker, None,
-                plan_dir_path=tmp_path / "plan",
+                plan_dir_path=plan_dir,
             )
 
 
