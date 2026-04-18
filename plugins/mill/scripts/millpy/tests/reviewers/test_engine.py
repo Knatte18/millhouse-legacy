@@ -144,3 +144,43 @@ class TestResolutionType:
                          phase="code", round=1, review_file_path=tmp_path / "out.md",
                          plan_start_hash=None, plan_path=None, files_from=None)
         assert created == ["ER"]
+
+
+# ---------------------------------------------------------------------------
+# Card 5: spawn_reviewer CLI no longer accepts --slice-type
+# ---------------------------------------------------------------------------
+
+class TestSpawnReviewerSliceTypeRemoved:
+    def test_slice_type_arg_rejected(self, tmp_path: Path):
+        """Happy: spawn_reviewer CLI errors on --slice-type (unknown argument)."""
+        import sys
+        from millpy.entrypoints.spawn_reviewer import main
+
+        prompt = tmp_path / "prompt.md"
+        prompt.write_text("x\n", encoding="utf-8")
+        # argparse should exit with error code 2 on unknown argument
+        with pytest.raises(SystemExit) as exc_info:
+            main([
+                "--reviewer-name", "sonnet",
+                "--prompt-file", str(prompt),
+                "--phase", "code",
+                "--round", "1",
+                "--slice-type", "holistic",  # this should now be rejected
+            ])
+        assert exc_info.value.code == 2
+
+    def test_slice_id_arg_rejected(self, tmp_path: Path):
+        """Happy: spawn_reviewer CLI errors on --slice-id (removed in Card 5)."""
+        from millpy.entrypoints.spawn_reviewer import main
+
+        prompt = tmp_path / "prompt.md"
+        prompt.write_text("x\n", encoding="utf-8")
+        with pytest.raises(SystemExit) as exc_info:
+            main([
+                "--reviewer-name", "sonnet",
+                "--prompt-file", str(prompt),
+                "--phase", "code",
+                "--round", "1",
+                "--slice-id", "holistic",  # this should now be rejected
+            ])
+        assert exc_info.value.code == 2

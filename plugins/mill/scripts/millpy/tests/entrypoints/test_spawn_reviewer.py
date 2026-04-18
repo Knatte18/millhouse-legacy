@@ -72,8 +72,8 @@ def test_unknown_reviewer_name_error_mentions_list_flag(capsys, tmp_path, monkey
     assert "--list-reviewers" in combined
 
 
-def test_slice_type_holistic_resolves_reviewer_from_config(capsys, tmp_path, monkeypatch):
-    """--slice-type holistic resolves sonnetmax from config when --reviewer-name is absent."""
+def test_reviewer_name_resolved_from_config_default(capsys, tmp_path, monkeypatch):
+    """Reviewer name resolved from pipeline.<phase>-review.default when --reviewer-name absent."""
     import textwrap
     prompt = tmp_path / "prompt.md"
     prompt.write_text("hello\n", encoding="utf-8")
@@ -84,17 +84,12 @@ def test_slice_type_holistic_resolves_reviewer_from_config(capsys, tmp_path, mon
             pipeline:
               plan-review:
                 rounds: 3
-                default: g3flash-x3-sonnetmax
-                holistic: sonnetmax
-                per-card: g3flash
+                default: sonnetmax
         """),
         encoding="utf-8",
     )
     monkeypatch.setattr("millpy.core.paths.project_root", lambda **kwargs: tmp_path)
 
-    # We can only verify it resolves to the right name; actual dispatch will fail
-    # because the reviewer requires a live backend. Check the resolved name via
-    # a monkeypatched run_reviewer that captures the reviewer_name.
     captured_name: list[str] = []
 
     def fake_run_reviewer(*, reviewer_name, **kwargs):
@@ -106,13 +101,12 @@ def test_slice_type_holistic_resolves_reviewer_from_config(capsys, tmp_path, mon
         "--prompt-file", str(prompt),
         "--phase", "plan",
         "--round", "1",
-        "--slice-type", "holistic",
     ])
     assert captured_name == ["sonnetmax"]
 
 
-def test_slice_type_per_card_resolves_reviewer_from_config(capsys, tmp_path, monkeypatch):
-    """--slice-type per-card resolves g3flash from config when --reviewer-name is absent."""
+def test_explicit_reviewer_name_bypasses_config(capsys, tmp_path, monkeypatch):
+    """--reviewer-name bypasses config resolution entirely."""
     import textwrap
     prompt = tmp_path / "prompt.md"
     prompt.write_text("hello\n", encoding="utf-8")
@@ -122,44 +116,7 @@ def test_slice_type_per_card_resolves_reviewer_from_config(capsys, tmp_path, mon
         textwrap.dedent("""\
             pipeline:
               plan-review:
-                rounds: 3
-                default: g3flash-x3-sonnetmax
-                holistic: sonnetmax
-                per-card: g3flash
-        """),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr("millpy.core.paths.project_root", lambda **kwargs: tmp_path)
-
-    captured_name: list[str] = []
-
-    def fake_run_reviewer(*, reviewer_name, **kwargs):
-        captured_name.append(reviewer_name)
-        raise ValueError("fake-stop")
-
-    monkeypatch.setattr("millpy.reviewers.engine.run_reviewer", fake_run_reviewer)
-    spawn_reviewer.main([
-        "--prompt-file", str(prompt),
-        "--phase", "plan",
-        "--round", "1",
-        "--slice-type", "per-card",
-    ])
-    assert captured_name == ["g3flash"]
-
-
-def test_explicit_reviewer_name_overrides_slice_type(capsys, tmp_path, monkeypatch):
-    """--reviewer-name takes precedence over --slice-type."""
-    import textwrap
-    prompt = tmp_path / "prompt.md"
-    prompt.write_text("hello\n", encoding="utf-8")
-    config_dir = tmp_path / "_millhouse"
-    config_dir.mkdir()
-    (config_dir / "config.yaml").write_text(
-        textwrap.dedent("""\
-            pipeline:
-              plan-review:
-                default: g3flash-x3-sonnetmax
-                holistic: sonnetmax
+                default: sonnetmax
         """),
         encoding="utf-8",
     )
@@ -177,6 +134,5 @@ def test_explicit_reviewer_name_overrides_slice_type(capsys, tmp_path, monkeypat
         "--phase", "plan",
         "--round", "1",
         "--reviewer-name", "opus",
-        "--slice-type", "holistic",
     ])
     assert captured_name == ["opus"]

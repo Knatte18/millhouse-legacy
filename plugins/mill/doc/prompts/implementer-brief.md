@@ -1,17 +1,17 @@
 # Implementer Brief — Thread B Prompt Template
 
-This is the prompt template that `mill-go` Phase: Spawn Thread B materializes and passes to `spawn-agent.ps1 -Role implementer`. It is the canonical specification for Thread B's responsibilities, lifecycle, and failure handling. Edit it like a SKILL.md — every line is part of Thread B's runtime instructions.
+This is the prompt template that `mill-go` Phase: Spawn Thread B materializes and passes to `millpy.entrypoints.spawn_agent --role implementer`. It is the canonical specification for Thread B's responsibilities, lifecycle, and failure handling. Edit it like a SKILL.md — every line is part of Thread B's runtime instructions.
 
-The template lives in `plugins/mill/doc/prompts/` (alongside other prompt templates; `handoff-brief.md` now lives under `plugins/mill/doc/formats/`) so that the spawn-time materialization pattern matches the existing brief precedent: `mill-go` reads this template and substitutes runtime values to produce a concrete prompt at `_millhouse/task/implementer-brief-instance.md`, then passes that path as `-PromptFile`.
+The template lives in `plugins/mill/doc/prompts/` (alongside other prompt templates) so that the spawn-time materialization pattern matches the existing brief precedent: `mill-go` reads this template and substitutes runtime values to produce a concrete prompt at `.mill/active/<slug>/implementer-brief-instance.md`, then passes that path as `--prompt-file`.
 
 ## Substitution Tokens
 
-`mill-go` substitutes these tokens before passing the file to `spawn-agent.ps1`:
+`mill-go` substitutes these tokens before passing the file to `millpy.entrypoints.spawn_agent`:
 
 | Token | Replaced with |
 |---|---|
-| `<PLAN_PATH>` | Absolute path to the plan: `_millhouse/task/plan` (v2 directory) or `_millhouse/task/plan.md` (v1 file). Use `plan_io.resolve_plan_path(task_dir)` to read the correct format. |
-| `<STATUS_PATH>` | Absolute path to `_millhouse/task/status.md` |
+| `<PLAN_PATH>` | Absolute path to the plan: `.mill/active/<slug>/plan` (v2/v3 directory) or `.mill/active/<slug>/plan.md` (v1 file). Use `plan_io.resolve_plan_path(task_dir)` to read the correct format. |
+| `<STATUS_PATH>` | Absolute path to `.mill/active/<slug>/status.md` |
 | `<WORK_DIR>` | Absolute path to the worktree (output of `git rev-parse --show-toplevel`) |
 | `<SCRIPTS_DIR>` | `<WORK_DIR>/plugins/mill/scripts`. Used as `PYTHONPATH=<SCRIPTS_DIR>` when spawning millpy entrypoints — replaces the old `(cd plugins/mill/scripts && ...)` pattern which broke relative-path args when called from a child worktree. No `cd` is involved; cwd stays at `<WORK_DIR>`. |
 | `<REPO_ROOT>` | Same as `<WORK_DIR>` (alias kept for clarity in the brief body) |
@@ -29,7 +29,7 @@ Use `git rev-parse --show-toplevel` to anchor relative paths. Your working direc
 
 Never invoke `mill-start`, `mill-go`, or any other "session" skill from inside Thread B. You are a one-shot run that ends when the plan is implemented (or blocked).
 
-Your final response text must be a single JSON line: `{"phase": "complete" | "blocked" | "pr-pending", "status_file": "<STATUS_PATH>", "final_commit": "<sha-or-null>"}`. The wrapping `spawn-agent.ps1` extracts this from the `claude -p` JSON `result` field and writes it to its own stdout. Do not write the JSON to your stdout directly.
+Your final response text must be a single JSON line: `{"phase": "complete" | "blocked" | "pr-pending", "status_file": "<STATUS_PATH>", "final_commit": "<sha-or-null>"}`. The `millpy.entrypoints.spawn_agent` entrypoint extracts this from the `claude -p` JSON `result` field and writes it to its own stdout. Do not write the JSON to your stdout directly.
 ```
 
 ---
@@ -170,7 +170,7 @@ When all plan steps are committed, run full verification:
 
 1. Update `<STATUS_PATH>` `phase: reviewing`. Insert `reviewing  <timestamp>` in the timeline.
 2. **Thread B no longer updates tasks.md at Phase: Review.** The `[active]` marker written at claim time remains in place until merge (by `mill-merge`, writing `[done]`) or abandon (by `mill-abandon`, writing `[abandoned]`).
-3. Ensure `_millhouse/task/reviews/` exists. Initialize `prev_fixer_report_path` to empty.
+3. Ensure `.mill/active/<slug>/reviews/` exists. Initialize `prev_fixer_report_path` to empty.
 
 For each round `N` from 1 to `<MAX_CODE_REVIEW_ROUNDS>`:
 
@@ -203,7 +203,7 @@ h. **On `REQUEST_CHANGES`:**
    3. For each BLOCKING finding, apply the receiving-review decision tree: VERIFY accuracy (cite actual code if inaccurate), then HARM CHECK (breaks functionality / conflicts with documented design decision / destabilizes out-of-scope code). If none apply: FIX IT. If harm found: PUSH BACK with cited evidence.
    4. Apply fixes inline to source files. Stage files individually (never `git add .` or `git add -A`).
    5. Re-run `<VERIFY_CMD>` after fixes. If verification fails: treat as a blocked state (same as Phase: Test failure handling).
-   6. Write a fixer report to `_millhouse/task/reviews/<timestamp>-code-fix-r<N>.md` with `## Fixed` and `## Pushed Back` sections. Format:
+   6. Write a fixer report to `.mill/active/<slug>/reviews/<timestamp>-code-fix-r<N>.md` with `## Fixed` and `## Pushed Back` sections. Format:
 
       ```markdown
       # Code Fix Report — Round <N>

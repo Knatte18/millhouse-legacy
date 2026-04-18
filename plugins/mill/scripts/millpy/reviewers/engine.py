@@ -43,6 +43,7 @@ def run_reviewer(
     plan_batch: Path | None = None,
     plan_dir_path: Path | None = None,
     slice_id: str | None = None,
+    reviews_dir: Path | None = None,
 ) -> ReviewerResult:
     """Resolve reviewer, guard, derive path, mkdir, then dispatch.
 
@@ -58,7 +59,7 @@ def run_reviewer(
         Review round number (1-indexed).
     review_file_path:
         Output path for the review file. When None, the engine derives a
-        timestamp-based default under _millhouse/scratch/reviews/.
+        timestamp-based default under the reviews directory.
     plan_start_hash:
         Git hash of the plan start commit (for diff-based file selection).
     plan_path:
@@ -71,6 +72,10 @@ def run_reviewer(
         Optional path to NN-<slug>.md batch file for v2 per-batch plan review.
     plan_dir_path:
         Optional path to plan/ directory for v2 whole-plan plan review.
+    reviews_dir:
+        Explicit reviews output directory. When None, falls back to
+        ``project_root() / "_millhouse" / "scratch" / "reviews"`` for
+        backward compatibility.
 
     Returns
     -------
@@ -93,8 +98,9 @@ def run_reviewer(
     _guard_plan_whole_bulk(reviewer_name, reviewer, phase, plan_dir_path)
 
     # Step 4: Derive review_file_path if None.
-    root = project_root()
-    reviews_dir = root / "_millhouse" / "scratch" / "reviews"
+    if reviews_dir is None:
+        root = project_root()
+        reviews_dir = root / "_millhouse" / "scratch" / "reviews"
 
     if review_file_path is None:
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -156,10 +162,13 @@ def _make_review_filename(
 def _resolve_reviewer(reviewer_name: str):
     """Resolve a reviewer name to a concrete reviewer instance.
 
-    Resolution order (per the two-level registry decision):
-      1. REVIEWERS[reviewer_name] → EnsembleReviewer
-      2. WORKERS[reviewer_name]   → SingleWorker
+    Resolution order:
+      1. REVIEWERS[reviewer_name] → EnsembleReviewer  (explicit ensemble invocation)
+      2. WORKERS[reviewer_name]   → SingleWorker       (single-model invocation)
       3. Else → ConfigError
+
+    The mill default pipeline uses SingleWorker entries; EnsembleReviewer
+    remains callable via an explicit reviewer name in config or CLI.
 
     Parameters
     ----------

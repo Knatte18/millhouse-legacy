@@ -26,14 +26,16 @@ def test_project_root_walks_up_to_millhouse(layout_name, flat_project_layout, ne
 
 
 @pytest.mark.parametrize("layout_name", ["flat", "nested"])
-def test_millhouse_dir_resolves_inside_project_root(layout_name, flat_project_layout, nested_project_layout):
+def test_millhouse_dir_resolves_inside_project_root(layout_name, flat_project_layout, nested_project_layout, monkeypatch):
     layout = flat_project_layout if layout_name == "flat" else nested_project_layout
-    assert millhouse_dir(start=layout.project_root) == layout.millhouse_dir
+    monkeypatch.chdir(layout.project_root)
+    assert millhouse_dir() == layout.millhouse_dir
 
 
-def test_nested_millhouse_is_not_at_git_root(nested_project_layout):
+def test_nested_millhouse_is_not_at_git_root(nested_project_layout, monkeypatch):
     """Regression: in a nested layout, millhouse_dir() must NOT return the git toplevel's _millhouse."""
-    resolved = millhouse_dir(start=nested_project_layout.project_root)
+    monkeypatch.chdir(nested_project_layout.project_root)
+    resolved = millhouse_dir()
     assert resolved != nested_project_layout.git_root / "_millhouse"
     assert resolved == nested_project_layout.project_root / "_millhouse"
 

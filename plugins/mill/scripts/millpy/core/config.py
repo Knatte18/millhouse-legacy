@@ -8,6 +8,26 @@ deep, quoted and unquoted scalars, block-scalar (|) values, and comments.
 This module is the canonical home for the minimal YAML parser in millpy.
 tasks/status_md.py and worktree/children.py import _parse_yaml_mapping from
 here — do not duplicate the parsing logic elsewhere.
+
+Config schema (new wiki-based system)
+--------------------------------------
+Two sources are merged by ``load_merged()``:
+
+Shared config (``.mill/config.yaml``, tracked in wiki):
+  git:          git workflow settings (auto-merge, branch-prefix, …)
+  repo:         repo metadata (short-name, branch-prefix)
+  pipeline:     review pipeline configuration (reviewer names, rounds)
+  runtime:      runtime settings (implementer model, …)
+  revise:       revise-tasks settings
+
+Local config (``_millhouse/config.local.yaml``, gitignored):
+  notifications:  platform notification settings (slack, desktop)
+  wiki:           wiki override settings
+    clone-path:   (str, optional) absolute path to local wiki clone
+
+Merge rule: deep-merge per top-level key. Local values override shared values
+at any nested depth. Lists are replaced (not concatenated). A missing file is
+treated as empty.
 """
 from __future__ import annotations
 
@@ -227,23 +247,107 @@ def load(path: Path) -> dict:
         raise ConfigError(f"Failed to parse config file {path}: {exc}") from exc
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Deep-merge ``override`` into ``base`` and return a new dict.
+
+    Rules:
+    - If both values for a key are dicts, recurse.
+    - Otherwise, override value wins (lists are replaced, not concatenated).
+    - Keys present only in ``base`` are kept.
+    - Keys present only in ``override`` are added.
+
+    Parameters
+    ----------
+    base:
+        The base dict (e.g. shared config).
+    override:
+        The override dict (e.g. local config).
+
+    Returns
+    -------
+    dict
+        Merged dict. Neither input is mutated.
+    """
+    result = dict(base)
+    for key, val in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(val, dict):
+            result[key] = _deep_merge(result[key], val)
+        else:
+            result[key] = val
+    return result
+
+
+def load_merged(
+    shared_path: Path,
+    local_path: Path,
+    legacy_path: Path | None = None,
+) -> dict:
+    """Load and merge shared + local config files.
+
+    Resolution order:
+    1. **Shared config:** ``shared_path`` (``.mill/config.yaml``).
+       If missing, falls back to ``legacy_path`` (``_millhouse/config.yaml``)
+       when provided — temporary bootstrap until ``mill-setup`` splits the
+       config. Logs a DEBUG message on the legacy path.
+    2. **Local config:** ``local_path`` (``_millhouse/config.local.yaml``).
+       Missing → treated as empty.
+
+    Merge rule: deep-merge per top-level key. Local values override shared
+    values at any nested depth. Lists are replaced (not concatenated).
+
+    Parameters
+    ----------
+    shared_path:
+        Path to the shared config (``.mill/config.yaml``).
+    local_path:
+        Path to the local config (``_millhouse/config.local.yaml``).
+    legacy_path:
+        Optional fallback for the shared config when ``shared_path`` is absent.
+
+    Returns
+    -------
+    dict
+        Merged configuration dict. Empty dict when all sources are absent.
+    """
+    import sys  # local import — log to stderr, no log_util dependency at module level
+
+    # Load shared config (with legacy fallback).
+    shared: dict = {}
+    if shared_path.exists():
+        shared = load(shared_path)
+    elif legacy_path is not None and legacy_path.exists():
+        sys.stderr.write(
+            f"[config] DEBUG: .mill/config.yaml not found; "
+            f"falling back to legacy {legacy_path} (run mill-setup to migrate)\n"
+        )
+        sys.stderr.flush()
+        shared = load(legacy_path)
+
+    # Load local overrides.
+    local: dict = {}
+    if local_path.exists():
+        local = load(local_path)
+
+    if not local:
+        return shared
+
+    return _deep_merge(shared, local)
+
+
 def resolve_reviewer_name(
     cfg: dict,
     phase: str,
     round_number: int,
-    slice_type: str | None = None,
 ) -> str:
     """Resolve the reviewer name for a given phase and round.
 
-    When ``slice_type`` is provided (e.g. ``"holistic"``, ``"per-card"``):
-      Resolution order (first found wins):
-      1. cfg["pipeline"][f"{phase}-review"][slice_type]
-      2. cfg["pipeline"][f"{phase}-review"]["default"]
+    Resolution order (first found wins):
+    1. cfg["pipeline"][f"{phase}-review"][str(round_number)]
+    2. cfg["pipeline"][f"{phase}-review"]["default"]
 
-    When ``slice_type`` is None (backward-compatible path):
-      Resolution order (first found wins):
-      1. cfg["pipeline"][f"{phase}-review"][str(round_number)]
-      2. cfg["pipeline"][f"{phase}-review"]["default"]
+    Per-card/holistic slice_type branching has been removed (Card 5). The
+    resolver is now slice-type-agnostic: every review phase uses a single
+    holistic reviewer per round, with optional per-round integer key overrides.
 
     Parameters
     ----------
@@ -252,10 +356,7 @@ def resolve_reviewer_name(
     phase:
         Review phase: "discussion", "plan", or "code".
     round_number:
-        1-based round index (used only when slice_type is None).
-    slice_type:
-        Optional slice type key (e.g. ``"holistic"``, ``"per-card"``).
-        When provided, overrides round-based resolution.
+        1-based round index.
 
     Returns
     -------
@@ -274,32 +375,22 @@ def resolve_reviewer_name(
     if isinstance(pipeline, dict):
         pipeline_block = pipeline.get(review_key, {})
         if isinstance(pipeline_block, dict):
-            if slice_type is not None:
-                # slice_type resolution: look up slice_type key, fall back to default
-                if slice_type in pipeline_block:
-                    return str(pipeline_block[slice_type])
-                tried.append(f"pipeline.{review_key}.{slice_type}")
-            else:
-                # round-based resolution: look up round number, fall back to default
-                round_str = str(round_number)
-                if round_str in pipeline_block:
-                    return str(pipeline_block[round_str])
-                tried.append(f"pipeline.{review_key}.{round_str}")
+            # round-based resolution: look up round number, fall back to default
+            round_str = str(round_number)
+            if round_str in pipeline_block:
+                return str(pipeline_block[round_str])
+            tried.append(f"pipeline.{review_key}.{round_str}")
 
             if "default" in pipeline_block:
                 return str(pipeline_block["default"])
             tried.append(f"pipeline.{review_key}.default")
         else:
-            if slice_type is not None:
-                tried.append(f"pipeline.{review_key}.{slice_type}")
-            else:
-                tried.append(f"pipeline.{review_key}.{round_number}")
+            tried.append(f"pipeline.{review_key}.{round_number}")
             tried.append(f"pipeline.{review_key}.default")
 
     raise ConfigError(
         f"Cannot resolve reviewer name for phase={phase!r} round={round_number}"
-        + (f" slice_type={slice_type!r}" if slice_type is not None else "")
-        + f". Tried: {', '.join(tried)}"
+        f". Tried: {', '.join(tried)}"
     )
 
 

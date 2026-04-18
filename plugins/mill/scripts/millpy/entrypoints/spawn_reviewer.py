@@ -34,9 +34,9 @@ def main(argv: list[str] | None = None) -> int:
     int
         Exit code (0 = success, non-zero = error).
     """
-    from millpy.core.config import ConfigError, load, resolve_reviewer_name
+    from millpy.core.config import ConfigError, load_merged, resolve_reviewer_name
     from millpy.core.log_util import log
-    from millpy.core.paths import project_root
+    from millpy.core.paths import local_config_path, mill_junction_path, project_root
     from millpy.reviewers.engine import run_reviewer
 
     parser = argparse.ArgumentParser(
@@ -113,22 +113,6 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Path to plan/ directory for v2 whole-plan plan review (tool-use only).",
     )
-    parser.add_argument(
-        "--slice-id",
-        default=None,
-        help="Slice identifier for parallel fan-out (included in auto-derived review filename to prevent collisions).",
-    )
-    parser.add_argument(
-        "--slice-type",
-        default=None,
-        choices=["holistic", "per-card"],
-        help=(
-            "Slice type for holistic/per-card reviewer resolution. "
-            "When set and --reviewer-name is absent, resolves via "
-            "pipeline.<phase>-review.<slice_type> before falling back to default."
-        ),
-    )
-
     args = parser.parse_args(argv)
 
     # --list-reviewers: print registries and exit. No dispatch, no config read.
@@ -148,15 +132,19 @@ def main(argv: list[str] | None = None) -> int:
         log("spawn_reviewer", f"missing required argument(s): {', '.join(missing)}")
         parser.error(f"missing required argument(s): {', '.join(missing)}")
 
+    # Load config (merge .mill/config.yaml + _millhouse/config.local.yaml)
+    root = project_root()
+    cfg = load_merged(
+        shared_path=mill_junction_path(root) / "config.yaml",
+        local_path=local_config_path(root),
+        legacy_path=root / "_millhouse" / "config.yaml",
+    )
+
     # Resolve reviewer name if not provided
     reviewer_name = args.reviewer_name
     if reviewer_name is None:
         try:
-            root = project_root()
-            cfg = load(root / "_millhouse" / "config.yaml")
-            reviewer_name = resolve_reviewer_name(
-                cfg, args.phase, args.round, slice_type=args.slice_type
-            )
+            reviewer_name = resolve_reviewer_name(cfg, args.phase, args.round)
         except (ConfigError, FileNotFoundError, ValueError) as exc:
             log("spawn_reviewer", f"could not resolve reviewer name: {exc} (see --list-reviewers for valid names)")
             print(json.dumps({
@@ -173,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     # plan_validator pre-dispatch gate (plan phase only)
     if args.phase == "plan":
         validation_result = _run_plan_validation(
+            cfg=cfg,
             plan_path=Path(args.plan_path) if args.plan_path else None,
             plan_batch=plan_batch_path,
             plan_dir_path=plan_dir_path,
@@ -185,6 +174,14 @@ def main(argv: list[str] | None = None) -> int:
                 "error": validation_result,
             }))
             return 1
+
+    # Compute canonical reviews directory: active_dir(cfg)/reviews (unified path).
+    # Fall back to legacy scratch/reviews when active_dir is unavailable.
+    from millpy.core.paths import active_dir
+    try:
+        reviews_dir = active_dir(cfg) / "reviews"
+    except Exception:
+        reviews_dir = root / "_millhouse" / "scratch" / "reviews"
 
     # Dispatch
     try:
@@ -200,7 +197,8 @@ def main(argv: list[str] | None = None) -> int:
             plan_overview=plan_overview_path,
             plan_batch=plan_batch_path,
             plan_dir_path=plan_dir_path,
-            slice_id=args.slice_id,
+            slice_id=None,
+            reviews_dir=reviews_dir,
         )
         print(json.dumps({
             "verdict": result.verdict,
@@ -235,15 +233,23 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_plan_validation(
+    cfg: dict,
     plan_path: Path | None,
     plan_batch: Path | None,
     plan_dir_path: Path | None,
 ) -> str | None:
     """Run plan_validator before dispatch. Return error string on failure, None on pass.
 
-    task_dir is always the canonical absolute path project_root()/_millhouse/task —
-    never derived from CLI args, which may be relative.
-    Returns None if no plan path arg was provided (nothing to validate).
+    task_dir is resolved via active_dir(cfg) — the wiki-based active task directory.
+    Falls back to project_root()/_millhouse/task when active_dir is not available
+    (pre-migration). Returns None if no plan path arg was provided (nothing to validate).
+
+    Parameters
+    ----------
+    cfg:
+        Merged config dict (from load_merged).
+    plan_path, plan_batch, plan_dir_path:
+        CLI-provided plan path args (used only to detect whether validation applies).
     """
     from millpy.core.plan_io import resolve_plan_path
     from millpy.core.plan_validator import validate
@@ -251,8 +257,18 @@ def _run_plan_validation(
     if plan_path is None and plan_batch is None and plan_dir_path is None:
         return None
 
-    from millpy.core.paths import project_root
-    task_dir = project_root() / "_millhouse" / "task"
+    from millpy.core.paths import active_dir, project_root
+    try:
+        candidate = active_dir(cfg)
+        # Only use active_dir if it actually contains a plan (post-migration).
+        # Fall back to the legacy _millhouse/task path otherwise.
+        if resolve_plan_path(candidate) is not None:
+            task_dir = candidate
+        else:
+            task_dir = project_root() / "_millhouse" / "task"
+    except Exception:
+        # Fallback for pre-migration layouts where .mill/ junction doesn't exist yet.
+        task_dir = project_root() / "_millhouse" / "task"
 
     loc = resolve_plan_path(task_dir)
     if loc is None:

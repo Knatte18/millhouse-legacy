@@ -6,9 +6,9 @@ The discussion file is the handoff document between `mill-start` (interactive) a
 
 ## File Location
 
-`_millhouse/task/discussion.md`
+`.mill/active/<slug>/discussion.md`
 
-`mill-go` discovers this file via the `discussion:` field in `_millhouse/task/status.md`.
+`mill-go` discovers this file via the `discussion:` field in `.mill/active/<slug>/status.md`.
 
 ## Frontmatter
 
@@ -111,7 +111,7 @@ These values are copied into the plan frontmatter by `mill-go`.
 # Status
 
 ```yaml
-discussion: _millhouse/task/discussion.md
+discussion: .mill/active/<slug>/discussion.md
 phase: discussed
 task: <task-title>
 task_description: |
@@ -134,7 +134,7 @@ discussed               2026-04-08T11:00:00Z
 After `mill-go` Plan Review completes and sets `approved: true` in the plan frontmatter, `mill-go` adds to the YAML code block:
 
 ```yaml
-plan: _millhouse/task/plan.md
+plan: .mill/active/<slug>/plan.md
 ```
 
 The `approved:` field lives in the plan frontmatter, not in `status.md`.

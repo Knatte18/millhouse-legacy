@@ -1,34 +1,34 @@
 # Validation Rules
 
-Post-write validation for `tasks.md`, `_millhouse/task/status.md`, and `_millhouse/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
+Post-write validation for `Home.md` (wiki task list), `.mill/active/<slug>/status.md`, and `_millhouse/config.yaml`. Skills that write to these files must validate after writing. Rules are structural only — they catch broken file format, not invalid metadata values.
 
-## tasks.md (project root)
+## Home.md (wiki task list)
 
 ### File validation
 
-1. **File must exist.** `tasks.md` must exist in the project root (the working directory where `_millhouse/` lives). Created by `mill-setup`. If missing, run `mill-setup`.
+1. **File must exist.** `Home.md` must exist in the wiki clone at `.mill/Home.md`. Created by `mill-setup`. If missing, run `mill-setup`.
 
 ### Structural validation
 
-After writing tasks.md, verify all of the following:
+After writing Home.md, verify all of the following:
 
 1. **Single project heading.** Exactly one `# ` heading, at line 1 (e.g., `# Tasks`).
 2. **Tasks use `## ` headings.** All task entries are `## ` headings (not `###` or deeper).
-3. **Valid phase markers.** If a `## ` heading contains a `[phase]` marker, the phase must be one of: `s`, `active`, `done`, `abandoned`. Format: `## [phase] Title`. Note: the regex keeps the `[>\w]+` character class so any historical `[>]` markers in old git history still parse; `s` is `\w`-compatible so no regex change was needed for the new marker.
+3. **Valid phase markers.** If a `## ` heading contains a `[phase]` marker, the phase must be one of: `s`, `active`, `completed`, `done`. Format: `## [phase] Title`. Note: the regex keeps the `[>\w]+` character class so any historical `[>]` markers in old git history still parse; `s` is `\w`-compatible so no regex change was needed for the new marker.
 4. **No orphaned content.** No non-blank lines before the first `## ` heading (except the `# ` project heading).
 
-## status.md (`_millhouse/task/status.md`)
+## status.md (`.mill/active/<slug>/status.md`)
 
 ### Field validation
 
-After writing status.md, verify fields within the YAML code block (` ```yaml ``` ` fence):
+After writing status.md, verify fields within the YAML code block (` ```yaml ``` ` fence). Note: status.md lives in the wiki at `.mill/active/<slug>/status.md` and is written exclusively via `millpy.tasks.status_md.append_phase`.
 
 1. **`phase:` is valid.** Must be one of: `discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `complete`. Empty/missing `phase:` is allowed only if no task is active.
 2. **`task:` is non-empty when phase is set.** If `phase:` has a value, `task:` must also have a non-empty value.
 
-> **Note:** The `phase:` vocabulary in `status.md` is a separate validation domain from `tasks.md` phase markers. The `status.md` vocabulary retains the full phase lifecycle (`discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `complete`) — `done` is not a valid `phase:` value in `status.md`, only in `tasks.md`. Only the `tasks.md` marker set is trimmed to `['>', 'active', 'done', 'abandoned']`.
+> **Note:** The `phase:` vocabulary in `status.md` is a separate validation domain from `Home.md` phase markers. The `status.md` vocabulary retains the full phase lifecycle (`discussing`, `discussed`, `planned`, `implementing`, `testing`, `reviewing`, `blocked`, `pr-pending`, `complete`) — `done` is not a valid `phase:` value in `status.md`, only in `Home.md`. Only the `Home.md` marker set is trimmed to `['s', 'active', 'completed', 'done']` (no `[abandoned]`).
 
-## Plan validation (`_millhouse/task/plan/` or `_millhouse/task/plan.md`)
+## Plan validation (`.mill/active/<slug>/plan/` or `.mill/active/<slug>/plan.md`)
 
 > **Validation exists in code, not prose.** The authoritative check list lives in
 > `plugins/mill/scripts/millpy/core/plan_validator.py`. Do not add prose rules

@@ -6,12 +6,12 @@ The code reviewer is **review-only**. It evaluates the diff and writes a review 
 
 ## Invocation Pattern
 
-Blind sub-agent via `plugins/mill/scripts/spawn-agent.ps1 -Role reviewer -PromptFile <prompt> -ProviderName <model>`. Synchronous from the caller's perspective. The caller is Thread B, not Thread A.
+Dispatched via `millpy.entrypoints.spawn_reviewer --phase code`. Synchronous from the caller's perspective. The caller is Thread B, not Thread A.
 
-- **Model:** resolved from `models.code-review.<N>` (where `<N>` is the 1-indexed round number) if present, else from `models.code-review.default`. See `overview.md#config-resolution` for the resolution rule. Thread B does the lookup before invoking the script and passes the resolved model name as `-ProviderName`.
+- **Model:** resolved from `review-modules.code.<N>` (where `<N>` is the 1-indexed round number) if present, else from `review-modules.code.default`. See `overview.md#config-resolution` for the resolution rule. Thread B passes the reviewer name to `spawn_reviewer`; the entrypoint resolves the model internally.
 - **Max rounds:** default 3, configurable via `-cr N` argument to `mill-go` (passed through to Thread B via the implementer brief) or via `reviews.code` in `_millhouse/config.yaml`. `-cr 0` skips code review entirely.
 - The orchestrator (Thread B) passes the approved plan content, the codeguide Overview content (if present), `CONSTRAINTS.md` content (if present), the git diff (`git diff <plan_start_hash>..HEAD`), and the list of file paths touched. The reviewer has these inlined in the prompt and reads no other files except the source files referenced in the diff and any files needed for cross-checking patterns.
-- The reviewer's stdout (extracted by `spawn-agent.ps1` from the `claude -p` JSON `result` field) is a single JSON line: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`.
+- The reviewer's stdout is a single JSON line: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`.
 
 ## What the Reviewer Receives
 
@@ -26,11 +26,11 @@ Blind sub-agent via `plugins/mill/scripts/spawn-agent.ps1 -Role reviewer -Prompt
 - Thread B's commit messages or per-step status updates
 - Prior round findings from earlier rounds
 - Conversation history from Thread B
-- The `_millhouse/task/reviews/` directory (the reviewer is forbidden to read it — see CRITICAL banners below)
+- The `.mill/active/<slug>/reviews/` directory (the reviewer is forbidden to read it — see CRITICAL banners below)
 
 ## Reviewer Prompt Template
 
-Thread B materializes this prompt into `_millhouse/scratch/code-review-prompt-r<N>.md`, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>` (the current round number, 1-indexed). The materialized file is then passed to `spawn-agent.ps1` as `-PromptFile`.
+Thread B materializes this prompt into `_millhouse/scratch/code-review-prompt-r<N>.md`, substituting `<DIFF>`, `<PLAN_CONTENT>`, `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>` (the current round number, 1-indexed). The materialized file is then passed to `spawn_reviewer` as `--prompt-file`.
 
 ---
 
@@ -38,7 +38,7 @@ You are an independent code reviewer. You evaluate the diff and produce a review
 
 **CRITICAL: Do NOT commit, push, or run any git commands. You only read files and write the review report.**
 
-**CRITICAL: Do NOT read any files in `_millhouse/task/reviews/`. You must evaluate the diff independently with no knowledge of prior review rounds.**
+**CRITICAL: Do NOT read any files in `.mill/active/<slug>/reviews/`. You must evaluate the diff independently with no knowledge of prior review rounds.**
 
 **CRITICAL: Do NOT edit any source files. The implementer-orchestrator (Thread B) applies fixes based on your review.**
 
@@ -84,11 +84,11 @@ Read `_codeguide/Overview.md` if it exists. Use its module table and routing hin
 
 Generate the timestamp for the filename via shell: `date -u +"%Y%m%d-%H%M%S"` (see `@mill:cli` timestamp rules — never guess timestamps).
 
-Write the full review report to `_millhouse/task/reviews/<timestamp>-code-review-r<N>.md` (using the shell-generated timestamp and the round number `<N>`).
+Write the full review report to `.mill/active/<slug>/reviews/<timestamp>-code-review-r<N>.md` (using the shell-generated timestamp and the round number `<N>`).
 
 For each finding: state the file and line(s), severity (**BLOCKING** or **NIT**), the issue, and a suggested fix. End with per-file observations (one sentence per file changed) and verdict: **APPROVE** or **REQUEST_CHANGES**. APPROVE must include per-file observations — a bare "APPROVE" without per-file analysis is invalid.
 
-Return as the final line of your output a single JSON object: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`. No preamble, no additional content. The wrapping `spawn-agent.ps1` script extracts this JSON line from the `claude -p` result and writes it to its own stdout.
+Return as the final line of your output a single JSON object: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`. No preamble, no additional content. The `spawn_reviewer` entrypoint extracts this JSON line from the `claude -p` result and writes it to its own stdout.
 
 ---
 
@@ -106,11 +106,11 @@ See `plugins/mill/doc/architecture/reviewer-modules.md` for the full reviewer-mo
 
 ## Review Loop
 
-1. Thread B materializes the prompt template into `_millhouse/scratch/code-review-prompt-r<N>.md` and spawns `python plugins/mill/scripts/spawn-reviewer.py --reviewer-name <name> --prompt-file <prompt-path> --phase code --round <N> --plan-start-hash <plan_start_hash>`. The reviewer name is resolved from `review-modules.code.<N>|default` in `_millhouse/config.yaml`.
-2. Reviewer writes findings to `_millhouse/task/reviews/<timestamp>-code-review-r<N>.md`.
+1. Thread B materializes the prompt template into `_millhouse/scratch/code-review-prompt-r<N>.md` and spawns `PYTHONPATH=<scripts-dir> python -m millpy.entrypoints.spawn_reviewer --reviewer-name <name> --prompt-file <prompt-path> --phase code --round <N> --plan-start-hash <plan_start_hash>`. The reviewer name is resolved from `review-modules.code.<N>|default` in `_millhouse/config.yaml`.
+2. Reviewer writes findings to `.mill/active/<slug>/reviews/<timestamp>-code-review-r<N>.md`.
 3. Reviewer returns a JSON line: `{"verdict": ..., "review_file": ...}`. The script writes this to its own stdout. Thread B parses it.
 4. If **APPROVE**: Thread B proceeds to Phase: Finalize. Thread B does **not** read the review file.
-5. If **REQUEST_CHANGES**: Thread B invokes the `mill-receiving-review` skill via the Skill tool — this is mandatory before evaluating any finding. Then Thread B reads the review report, applies fixes inline to the affected source files, re-runs full verification (`verify` command from plan frontmatter), writes a fixer report to `_millhouse/task/reviews/<timestamp>-code-fix-r<N>.md` with `## Fixed` and `## Pushed Back` sections, and re-spawns the reviewer with the **updated diff only**. Do NOT pass prior review findings or fixer reports to the reviewer. The reviewer always starts fresh from the updated diff alone, with no context from prior rounds.
+5. If **REQUEST_CHANGES**: Thread B invokes the `mill-receiving-review` skill via the Skill tool — this is mandatory before evaluating any finding. Then Thread B reads the review report, applies fixes inline to the affected source files, re-runs full verification (`verify` command from plan frontmatter), writes a fixer report to `.mill/active/<slug>/reviews/<timestamp>-code-fix-r<N>.md` with `## Fixed` and `## Pushed Back` sections, and re-spawns the reviewer with the **updated diff only**. Do NOT pass prior review findings or fixer reports to the reviewer. The reviewer always starts fresh from the updated diff alone, with no context from prior rounds.
 6. **Re-verify after fixes.** If full verification fails after the fix phase, treat as a blocked state (same handling as Phase: Test failure).
 7. **Non-progress detection.** Before re-spawning, Thread B compares the current fixer report's `## Pushed Back` section against the previous round's. If the pushed-back findings are identical (same finding numbers and descriptions), non-progress is detected: Thread B blocks immediately rather than spending the remaining rounds.
 8. Repeat until **APPROVE** or `max_code_review_rounds` exhausted.

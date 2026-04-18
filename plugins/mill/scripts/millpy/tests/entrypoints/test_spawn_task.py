@@ -53,16 +53,40 @@ def _init_fake_tasks_worktree(wt_path: Path, initial_content: str) -> None:
 
 
 def _write_millhouse_project(project_root_dir: Path) -> None:
-    """Create a minimal _millhouse/config.yaml and a fake tasks worktree with one [s] task."""
-    fake_wt = project_root_dir.parent / (project_root_dir.name + ".tasks-wt")
-    _init_fake_tasks_worktree(
-        fake_wt,
+    """Create a minimal _millhouse/config.yaml and a fake .mill/ with Home.md."""
+    # Create fake .mill/ directory (simulates the wiki junction) with Home.md
+    mill_dir = project_root_dir / ".mill"
+    mill_dir.mkdir(parents=True, exist_ok=True)
+    (mill_dir / "Home.md").write_text(
         "# Tasks\n\n## [s] Ready Task\nA short description.\n",
+        encoding="utf-8",
+    )
+    # Fake wiki clone: initialise as a proper git repo so write_commit_push succeeds
+    fake_wiki = project_root_dir.parent / (project_root_dir.name + ".wiki")
+    bare = project_root_dir.parent / (project_root_dir.name + ".wiki-bare")
+    # Create bare repo as origin
+    subprocess.run(["git", "init", "--bare", "-q", str(bare)], check=True)
+    # Clone the bare repo so fake_wiki has a properly-configured remote + tracking branch
+    subprocess.run(["git", "clone", "-q", str(bare), str(fake_wiki)], check=True)
+    subprocess.run(["git", "-C", str(fake_wiki), "config", "user.name", "t"], check=True)
+    subprocess.run(["git", "-C", str(fake_wiki), "config", "user.email", "t@t"], check=True)
+    # Initial commit + push to establish the tracking branch
+    subprocess.run(
+        ["git", "-C", str(fake_wiki), "commit", "--allow-empty", "-q", "-m", "init wiki"],
+        check=True,
+        env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+    )
+    subprocess.run(
+        ["git", "-C", str(fake_wiki), "push", "-u", "origin", "HEAD"],
+        check=True,
+        env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
     )
     (project_root_dir / "_millhouse").mkdir(parents=True, exist_ok=True)
     (project_root_dir / "_millhouse" / "config.yaml").write_text(
         f"repo:\n  short-name: \"t\"\n  branch-prefix: ~\n"
-        f"tasks:\n  worktree-path: \"{fake_wt.as_posix()}\"\n",
+        f"wiki:\n  clone-path: \"{fake_wiki.as_posix()}\"\n",
         encoding="utf-8",
     )
 
@@ -259,7 +283,9 @@ class TestWorktreeLayout:
         )
 
         assert project_path.parent == (tmp_path / "myrepo.worktrees").resolve()
-        assert (project_path / "_millhouse" / "task" / "status.md").exists()
+        # status.md is written to the wiki at active/<slug>/status.md (Card 8)
+        fake_wiki = tmp_path / "myrepo.wiki"
+        assert (fake_wiki / "active" / "ready-task" / "status.md").exists()
 
     def test_nested_layout_worktrees_dir_is_sibling_of_git_root(
         self, tmp_path, monkeypatch, capsys
@@ -295,7 +321,9 @@ class TestWorktreeLayout:
             monkeypatch, capsys, cwd=project_dir, repo_dir=git_root
         )
 
-        assert (project_path / "projects" / "sub" / "_millhouse" / "task" / "status.md").exists()
+        # status.md is written to the wiki at active/<slug>/status.md (Card 8)
+        fake_wiki = git_root / "projects" / "sub.wiki"
+        assert (fake_wiki / "active" / "ready-task" / "status.md").exists()
         assert not (project_path / "_millhouse").exists()
 
     def test_nested_layout_vscode_settings_written_at_project_offset(
@@ -326,6 +354,12 @@ class TestWorktreeLayout:
         _write_millhouse_project(git_root)
         subfolder = git_root / "plugins" / "mill" / "scripts"
         subfolder.mkdir(parents=True)
+        # Subfolder needs .mill/ so tasks_md.resolve_path works from cwd=subfolder
+        (subfolder / ".mill").mkdir()
+        (subfolder / ".mill" / "Home.md").write_text(
+            "# Tasks\n\n## [s] Ready Task\nA short description.\n",
+            encoding="utf-8",
+        )
 
         captured_calls: list[list[str]] = []
         real_run = __import__("millpy.core.subprocess_util", fromlist=["run"]).run
@@ -413,3 +447,98 @@ class TestWorktreeLayout:
         assert len(code_calls) == 1
         launch_arg = Path(code_calls[0][1]).resolve()
         assert launch_arg == project_path.resolve()
+
+
+# ---------------------------------------------------------------------------
+# Card 8: handoff removed, children removed, .mill junction, extract_description
+# ---------------------------------------------------------------------------
+
+class TestCard8NoHandoffNoChildren:
+    """spawn_task must not write handoff.md or children/ after card 8."""
+
+    def test_no_handoff_md_written(self, tmp_path, monkeypatch, capsys):
+        """After spawn_task runs, _millhouse/handoff.md must NOT exist."""
+        git_root = tmp_path / "myrepo"
+        git_root.mkdir()
+        _init_repo_with_commit(git_root)
+        _write_millhouse_project(git_root)
+
+        project_path = _run_spawn_and_get_project_path(
+            monkeypatch, capsys, cwd=git_root, repo_dir=git_root
+        )
+
+        # handoff.md must not exist in the PARENT worktree
+        assert not (git_root / "_millhouse" / "handoff.md").exists()
+
+    def test_no_children_md_written(self, tmp_path, monkeypatch, capsys):
+        """After spawn_task runs, _millhouse/children/*.md must NOT exist."""
+        git_root = tmp_path / "myrepo"
+        git_root.mkdir()
+        _init_repo_with_commit(git_root)
+        _write_millhouse_project(git_root)
+
+        _run_spawn_and_get_project_path(
+            monkeypatch, capsys, cwd=git_root, repo_dir=git_root
+        )
+
+        children_dir = git_root / "_millhouse" / "children"
+        child_files = list(children_dir.glob("*.md")) if children_dir.exists() else []
+        assert child_files == [], f"Expected no children/*.md but found: {child_files}"
+
+
+class TestCard8ExtractDescription:
+    """_extract_description must strip trailing Background links."""
+
+    def test_body_with_background_link_strips_link(self):
+        """Description body containing [Background →](...) link is stripped."""
+        body = "A short description. [Background](my-background.md)\n"
+        result = spawn_task._extract_description(body, fallback="fallback")
+        assert "[Background]" not in result
+        assert "A short description." in result
+
+    def test_body_without_background_link_unchanged(self):
+        """Description body without a Background link is returned verbatim (stripped)."""
+        body = "A plain description with no link.\n"
+        result = spawn_task._extract_description(body, fallback="fallback")
+        assert result == "A plain description with no link."
+
+    def test_bullet_body_with_background_link_strips_link(self):
+        """Bullet-list body containing a Background link is stripped."""
+        body = "- First bullet\n- Second bullet\n[Background](track-task-state.md)\n"
+        result = spawn_task._extract_description(body, fallback="fallback")
+        assert "[Background]" not in result
+        assert "First bullet" in result
+
+
+class TestCard8VscodeDisplayName:
+    """window.title must use display_name, not slug."""
+
+    def test_window_title_uses_display_name(self, tmp_path):
+        """window.title in settings.json uses the task display name, not the slug."""
+        repo_root_dir = tmp_path / "repo"
+        (repo_root_dir / "_millhouse").mkdir(parents=True)
+        (repo_root_dir / "_millhouse" / "config.yaml").write_text(
+            'repo:\n  short-name: "proj"\n',
+            encoding="utf-8",
+        )
+        # Create the template file with <DISPLAY_NAME> token
+        templates_dir = repo_root_dir / "plugins" / "mill" / "templates"
+        templates_dir.mkdir(parents=True)
+        (templates_dir / "vscode-settings.json").write_text(
+            '{"window.title": "<SHORT_NAME>: <DISPLAY_NAME>"}\n',
+            encoding="utf-8",
+        )
+        worktree = tmp_path / "worktrees" / "my-task"
+        worktree.mkdir(parents=True)
+
+        spawn_task._write_vscode_settings(
+            worktree,
+            "my-task",
+            repo_root_dir,
+            repo_root_dir / "_millhouse" / "config.yaml",
+            display_name="My Feature Task",
+        )
+
+        data = json.loads((worktree / ".vscode" / "settings.json").read_text(encoding="utf-8"))
+        assert "My Feature Task" in data["window.title"]
+        assert "my-task" not in data["window.title"]

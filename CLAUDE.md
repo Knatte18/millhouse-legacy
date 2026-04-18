@@ -45,11 +45,12 @@ When you need to find a skill for a task, read `SKILLS.md` (repo root) first —
 
 ## Tasks
 
-- Task list: `tasks.md` lives on an orphan branch `tasks` in this repo. Never merges to main. Git-synced across machines (pushed after every write).
-- Local checkout: the `tasks` branch is checked out as a persistent git worktree at `tasks.worktree-path` in `_millhouse/config.yaml` (typically `<parent-of-repo>/<reponame>.worktrees/tasks`). Open a dedicated VS Code window on that worktree to edit tasks directly.
-- Read/write access from any skill: always via `millpy.tasks.tasks_md.resolve_path(cfg)` and `tasks_md.write_commit_push(cfg, content, commit_msg)`. Never run `git` against `tasks.md` in the current worktree.
-- Lifecycle markers: `[s]` (ready) → `[active]` (claimed) → `[completed]` (mill-go finished) → `[done]` (mill-merge landed). `[abandoned]` overwrites any of the above when mill-abandon runs.
-- Phase tracking (per-task internal state): `_millhouse/task/status.md` — `phase:` field is the authoritative source. `## Timeline` section records chronological phase history.
-- `_millhouse/` is gitignored (scoped to each worktree). On child-worktree spawn, it is copied (excluding `task/`, `scratch/`, and `children/`) from parent to new worktree.
-- Run `mill-setup` to initialize after a fresh clone (safe to re-run; creates the tasks branch + worktree if missing).
-- Format reference: `plugins/mill/doc/formats/tasksmd.md`.
+- Task list lives in the GitHub Wiki (`<repo>.wiki.git`), cloned locally at `<worktree-parent>/<repo>.wiki/`.
+- Each worktree has a `.mill/` junction pointing at the wiki clone. Per-task runtime state lives in `.mill/active/<slug>/` (status.md, discussion.md, plan/, reviews/).
+- The slug for a task equals the branch name (minus any configured `repo.branch-prefix/` prefix). Derive via `millpy.core.paths.slug_from_branch(cfg)`.
+- Read/write access to Home.md: always via `millpy.tasks.tasks_md.resolve_path(cfg)` + `tasks_md.parse/render/write_commit_push`. Never run `git` against Home.md directly.
+- Every orchestrator entry point calls `millpy.tasks.wiki.sync_pull(cfg)` before reading wiki state.
+- Status.md writes go through `millpy.tasks.status_md.append_phase(path, phase, cfg=cfg)`. Free-form Edit of status.md is banned.
+- Lifecycle markers: `[s]` (ready) → `[active]` (claimed) → `[completed]` (mill-go finished) → `[done]` (mill-merge landed). mill-abandon clears the marker (no permanent `[abandoned]` state).
+- Run `mill-setup` to initialize after a fresh clone. It is idempotent (safe to re-run; handles migration from the old orphan-branch layout).
+- Format reference: `plugins/mill/doc/formats/tasksmd.md` (Home.md entry format).

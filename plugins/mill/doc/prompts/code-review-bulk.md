@@ -4,14 +4,14 @@ This is the **bulk-dispatch variant** of `code-review.md`. It is used by worker 
 
 ## Invocation Pattern
 
-Bulk workers receive this file as their prompt via stdin from `spawn-agent.ps1 -DispatchMode bulk`. The engine (`spawn-reviewer.py`) substitutes the tokens below before spawning. Workers are spawned in parallel; all results are synthesized by the handler (Opus, tool-use mode) per `review-handler/SKILL.md`.
+Bulk workers receive this file as their prompt via `millpy.entrypoints.spawn_reviewer` in bulk dispatch mode. The engine substitutes the tokens below before spawning. Workers are spawned in parallel; all results are synthesized by the handler (Opus, tool-use mode) per `review-handler/SKILL.md`.
 
 ## Substitution Tokens
 
 The following tokens are substituted by the reviewer engine before the prompt reaches the worker:
 
 - `<ROUND>` — 1-indexed review round number
-- `<PLAN_CONTENT>` — contents of `_millhouse/task/plan.md`
+- `<PLAN_CONTENT>` — contents of the plan (from `plan_io.read_plan_content`)
 - `<CONSTRAINTS_CONTENT>` — contents of `CONSTRAINTS.md`, or the literal `(no CONSTRAINTS.md)`
 - `<FILES_PAYLOAD>` — all files in scope, each prefixed with `=== <relative-path> ===` headers and `cat -n`-style line numbers (from `millpy.core.bulk_payload.build_payload`)
 
@@ -33,7 +33,7 @@ You are an independent code reviewer in review round <ROUND>.
 
 **CRITICAL: You are review-only. Do NOT suggest, imply, or request modifications to source files.**
 
-**CRITICAL: Do NOT read any files in `_millhouse/task/reviews/`. You see only the materials provided below.**
+**CRITICAL: Do NOT read any files in `.mill/active/<slug>/reviews/`. You see only the materials provided below.**
 
 **CRITICAL: Do NOT edit any source files. The implementer-orchestrator applies fixes based on the synthesized review.**
 

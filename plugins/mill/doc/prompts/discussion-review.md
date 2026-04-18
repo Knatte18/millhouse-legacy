@@ -4,12 +4,12 @@ The discussion reviewer validates that the discussion file is complete enough fo
 
 ## Invocation Pattern
 
-Blind sub-agent via `plugins/mill/scripts/spawn-agent.ps1 -Role reviewer`. Synchronous from the caller's perspective.
+Dispatched via `millpy.entrypoints.spawn_reviewer --phase discussion`. Synchronous from the caller's perspective.
 
-- **Model:** `models.discussion-review` from `_millhouse/config.yaml` (resolved per round via the rule in `overview.md#config-resolution`). The orchestrator (`mill-start`) does the lookup before invoking the script and passes the resolved model name as `-ProviderName`.
+- **Model:** `review-modules.discussion.default` from config (resolved per round via the rule in `overview.md#config-resolution`). The orchestrator (`mill-start`) passes a reviewer name to `spawn_reviewer`; the entrypoint resolves the model internally.
 - **Max rounds:** default 2, configurable via `-dr N` argument in `mill-start`. `-dr 0` skips discussion review entirely.
 - The orchestrator passes only the discussion file path and task title in the prompt. The reviewer reads the discussion file and any codebase files independently — no pre-read content is injected by the orchestrator. This prevents context bleed from `mill-start`'s interpretation.
-- The reviewer's stdout (extracted by `spawn-agent.ps1` from the `claude -p` JSON `result` field) is a single JSON line: `{"verdict": "APPROVE" | "GAPS_FOUND", "review_file": "<absolute-path>"}`. The discussion-reviewer's verdict vocabulary uses `GAPS_FOUND` instead of `REQUEST_CHANGES` (the verb used by plan and code reviewers).
+- The reviewer's stdout is a single JSON line: `{"verdict": "APPROVE" | "GAPS_FOUND", "review_file": "<absolute-path>"}`. The discussion-reviewer's verdict vocabulary uses `GAPS_FOUND` instead of `REQUEST_CHANGES` (the verb used by plan and code reviewers).
 
 ## What the Reviewer Receives
 
@@ -33,7 +33,7 @@ You are an independent discussion reviewer. Evaluate the discussion file for com
 
 **CRITICAL: Do NOT commit, push, or run any git commands. You only read files and write your review report. The orchestrator handles all git operations.**
 
-**CRITICAL: Do NOT read any files in `_millhouse/task/reviews/`. You must evaluate the discussion independently with no knowledge of prior review rounds.**
+**CRITICAL: Do NOT read any files in `.mill/active/<slug>/reviews/`. You must evaluate the discussion independently with no knowledge of prior review rounds.**
 
 **FIRST ACTION — mandatory before anything else:**
 Read `_codeguide/Overview.md` if it exists. Use its module table and routing hints to navigate to relevant source files. If it does not exist, proceed without it.
@@ -74,14 +74,14 @@ End with an overall verdict: **APPROVE** or **GAPS_FOUND**.
 
 Generate the timestamp for the filename via shell: `date -u +"%Y%m%d-%H%M%S"` (see `@mill:cli` timestamp rules — never guess timestamps).
 
-Write your full review report to `_millhouse/task/reviews/<timestamp>-discussion-review-r<N>.md` (using the shell-generated timestamp and the current round number for `<N>`, 1-indexed). Return as the final line of your output a single JSON object: `{"verdict": "APPROVE" | "GAPS_FOUND", "review_file": "<absolute-path>"}`. No preamble, no additional content. The wrapping `spawn-agent.ps1` script extracts this JSON line from the `claude -p` result and writes it to its own stdout.
+Write your full review report to `.mill/active/<slug>/reviews/<timestamp>-discussion-review-r<N>.md` (using the shell-generated timestamp and the current round number for `<N>`, 1-indexed). Return as the final line of your output a single JSON object: `{"verdict": "APPROVE" | "GAPS_FOUND", "review_file": "<absolute-path>"}`. No preamble, no additional content. The `spawn_reviewer` entrypoint extracts this JSON line from the `claude -p` result and writes it to its own stdout.
 
 ---
 
 ## Review Loop
 
 1. `mill-start` spawns the reviewer after writing the discussion file.
-2. Reviewer writes findings to `_millhouse/task/reviews/<timestamp>-discussion-review-r<N>.md`.
+2. Reviewer writes findings to `.mill/active/<slug>/reviews/<timestamp>-discussion-review-r<N>.md`.
 3. Reviewer returns: verdict (APPROVE or GAPS_FOUND) + file path.
 4. If **APPROVE**: proceed to Phase: Handoff.
 5. If **GAPS_FOUND**: `mill-start` reads the findings file and asks the user follow-up questions to resolve the gaps. This is safe — the user (not an agent) provides the answers.

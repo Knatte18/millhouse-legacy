@@ -6,12 +6,12 @@ The pure helper that decides between fast-path ([s]) and numbered-fallback
 from __future__ import annotations
 
 from millpy.entrypoints.spawn_task import pick_task
-from millpy.tasks.tasks_md import Task
+from millpy.tasks.tasks_md import TaskEntry, slugify
 
 
-def _t(title: str, phase: str | None) -> Task:
-    """Shorthand Task constructor for tests (body and line_number irrelevant here)."""
-    return Task(title=title, phase=phase, body="", line_number=1)
+def _t(title: str, phase: str | None) -> TaskEntry:
+    """Shorthand TaskEntry constructor for tests (description and slugs irrelevant here)."""
+    return TaskEntry(display_name=title, slug=slugify(title), phase=phase, description="", background_slug=None)
 
 
 class TestPickTaskFastPath:
@@ -44,13 +44,13 @@ class TestPickTaskNumbered:
         mode, picked, candidates = pick_task(tasks)
         assert mode == "numbered"
         assert picked is None
-        assert [t.title for t in candidates] == ["A", "B"]
+        assert [t.display_name for t in candidates] == ["A", "B"]
 
     def test_done_and_abandoned_are_filtered_out(self):
         tasks = [_t("Keep", None), _t("Done", "done"), _t("Abn", "abandoned")]
         mode, picked, candidates = pick_task(tasks)
         assert mode == "numbered"
-        assert [t.title for t in candidates] == ["Keep"]
+        assert [t.display_name for t in candidates] == ["Keep"]
 
 
 class TestPickTaskEmpty:

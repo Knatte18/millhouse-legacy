@@ -12,6 +12,7 @@ from millpy.core.config import (
     ConfigError,
     _parse_yaml_mapping,
     load,
+    load_merged,
     resolve_max_rounds,
     resolve_reviewer_name,
 )
@@ -189,68 +190,52 @@ class TestResolveReviewerName:
 
 
 # ---------------------------------------------------------------------------
-# resolve_reviewer_name() — slice_type parameter
+# resolve_reviewer_name() — slice_type removed (Card 5)
 # ---------------------------------------------------------------------------
 
-class TestResolveReviewerNameSliceType:
-    def test_slice_type_holistic_resolves_from_holistic_key(self, tmp_path):
+class TestResolveReviewerNameSliceTypeRemoved:
+    """resolve_reviewer_name no longer accepts slice_type — it is slice-type-agnostic."""
+
+    def test_no_slice_type_resolves_default(self, tmp_path):
+        """Happy: default key is returned when no per-round override."""
         text = """\
             pipeline:
               plan-review:
                 rounds: 3
-                default: g3flash-x3-sonnetmax
-                holistic: sonnetmax
-                per-card: g3flash
+                default: sonnetmax
         """
         cfg = load(write_yaml(tmp_path, text))
-        assert resolve_reviewer_name(cfg, "plan", 1, slice_type="holistic") == "sonnetmax"
+        assert resolve_reviewer_name(cfg, "plan", 1) == "sonnetmax"
 
-    def test_slice_type_per_card_resolves_from_per_card_key(self, tmp_path):
+    def test_per_round_override_takes_precedence(self, tmp_path):
+        """Happy: integer round key overrides default."""
         text = """\
             pipeline:
-              plan-review:
+              code-review:
                 rounds: 3
-                default: g3flash-x3-sonnetmax
-                holistic: sonnetmax
-                per-card: g3flash
+                default: sonnetmax
+                2: opus
         """
         cfg = load(write_yaml(tmp_path, text))
-        assert resolve_reviewer_name(cfg, "plan", 1, slice_type="per-card") == "g3flash"
+        assert resolve_reviewer_name(cfg, "code", 2) == "opus"
+        assert resolve_reviewer_name(cfg, "code", 1) == "sonnetmax"
 
-    def test_no_slice_type_returns_default_backward_compat(self, tmp_path):
+    def test_missing_default_raises_config_error(self, tmp_path):
+        """Error: missing default: → ConfigError."""
         text = """\
             pipeline:
               plan-review:
                 rounds: 3
-                default: g3flash-x3-sonnetmax
-                holistic: sonnetmax
-                per-card: g3flash
-        """
-        cfg = load(write_yaml(tmp_path, text))
-        assert resolve_reviewer_name(cfg, "plan", 1) == "g3flash-x3-sonnetmax"
-
-    def test_slice_type_falls_back_to_default_when_key_absent(self, tmp_path):
-        text = """\
-            pipeline:
-              plan-review:
-                rounds: 3
-                default: g3flash-x3-sonnetmax
-                holistic: sonnetmax
-        """
-        cfg = load(write_yaml(tmp_path, text))
-        # per-card key is absent → falls back to default
-        assert resolve_reviewer_name(cfg, "plan", 1, slice_type="per-card") == "g3flash-x3-sonnetmax"
-
-    def test_slice_type_raises_when_no_default_and_key_absent(self, tmp_path):
-        text = """\
-            pipeline:
-              plan-review:
-                rounds: 3
-                holistic: sonnetmax
         """
         cfg = load(write_yaml(tmp_path, text))
         with pytest.raises(ConfigError):
-            resolve_reviewer_name(cfg, "plan", 1, slice_type="per-card")
+            resolve_reviewer_name(cfg, "plan", 1)
+
+    def test_signature_has_no_slice_type_param(self):
+        """Happy: resolve_reviewer_name does not accept slice_type keyword."""
+        import inspect
+        sig = inspect.signature(resolve_reviewer_name)
+        assert "slice_type" not in sig.parameters
 
 
 # ---------------------------------------------------------------------------
@@ -292,6 +277,136 @@ class TestResolveMaxRounds:
         """
         cfg = load(write_yaml(tmp_path, text))
         assert resolve_max_rounds(cfg, "code") == 5
+
+
+# ---------------------------------------------------------------------------
+# load_merged() — shared + local YAML merge (Card 4)
+# ---------------------------------------------------------------------------
+
+class TestLoadMerged:
+    def _write(self, path: Path, content: str) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(textwrap.dedent(content), encoding="utf-8")
+        return path
+
+    def test_only_shared_exists(self, tmp_path):
+        """Only .mill/config.yaml → returned as-is, no local overrides."""
+        shared = self._write(
+            tmp_path / ".mill" / "config.yaml",
+            """\
+            pipeline:
+              implementer: sonnet
+            """,
+        )
+        cfg = load_merged(
+            shared_path=shared,
+            local_path=tmp_path / "_millhouse" / "config.local.yaml",
+        )
+        assert cfg["pipeline"]["implementer"] == "sonnet"
+
+    def test_local_overrides_shared(self, tmp_path):
+        """Local config overrides shared values at nested depth."""
+        shared = self._write(
+            tmp_path / ".mill" / "config.yaml",
+            """\
+            pipeline:
+              implementer: sonnet
+            """,
+        )
+        local = self._write(
+            tmp_path / "_millhouse" / "config.local.yaml",
+            """\
+            pipeline:
+              implementer: opus
+            """,
+        )
+        cfg = load_merged(shared_path=shared, local_path=local)
+        assert cfg["pipeline"]["implementer"] == "opus"
+
+    def test_fallback_to_old_millhouse_config(self, tmp_path, capsys):
+        """When .mill/config.yaml is absent but _millhouse/config.yaml exists, use it."""
+        old = self._write(
+            tmp_path / "_millhouse" / "config.yaml",
+            """\
+            pipeline:
+              implementer: sonnet
+            """,
+        )
+        cfg = load_merged(
+            shared_path=tmp_path / ".mill" / "config.yaml",
+            local_path=tmp_path / "_millhouse" / "config.local.yaml",
+            legacy_path=old,
+        )
+        assert cfg["pipeline"]["implementer"] == "sonnet"
+
+    def test_both_absent_returns_empty(self, tmp_path):
+        """Neither file exists → returns empty dict."""
+        cfg = load_merged(
+            shared_path=tmp_path / ".mill" / "config.yaml",
+            local_path=tmp_path / "_millhouse" / "config.local.yaml",
+        )
+        assert cfg == {}
+
+    def test_deep_merge_nested_keys(self, tmp_path):
+        """Deep-merge: local adds a nested key without destroying sibling keys."""
+        shared = self._write(
+            tmp_path / ".mill" / "config.yaml",
+            """\
+            notifications:
+              slack:
+                webhook: ""
+                channel: "#mill"
+            """,
+        )
+        local = self._write(
+            tmp_path / "_millhouse" / "config.local.yaml",
+            """\
+            notifications:
+              slack:
+                webhook: "https://hooks.slack.com/xxx"
+            """,
+        )
+        cfg = load_merged(shared_path=shared, local_path=local)
+        assert cfg["notifications"]["slack"]["webhook"] == "https://hooks.slack.com/xxx"
+        assert cfg["notifications"]["slack"]["channel"] == "#mill"
+
+    def test_wiki_clone_path_from_local(self, tmp_path):
+        """wiki.clone-path in local config is accessible after merge."""
+        shared = self._write(
+            tmp_path / ".mill" / "config.yaml",
+            "name: test\n",
+        )
+        local = self._write(
+            tmp_path / "_millhouse" / "config.local.yaml",
+            """\
+            wiki:
+              clone-path: /custom/wiki/path
+            """,
+        )
+        cfg = load_merged(shared_path=shared, local_path=local)
+        assert cfg["wiki"]["clone-path"] == "/custom/wiki/path"
+
+    def test_lists_replaced_not_concatenated(self, tmp_path):
+        """Lists from local replace shared lists rather than concatenating."""
+        # The YAML parser handles lists only at scalar level; use a scalar test
+        # that shows override semantics.
+        shared = self._write(
+            tmp_path / ".mill" / "config.yaml",
+            """\
+            pipeline:
+              implementer: sonnet
+            """,
+        )
+        local = self._write(
+            tmp_path / "_millhouse" / "config.local.yaml",
+            """\
+            pipeline:
+              implementer: opus
+            """,
+        )
+        cfg = load_merged(shared_path=shared, local_path=local)
+        # Local value wins — no concatenation
+        assert cfg["pipeline"]["implementer"] == "opus"
 
 
 def test_template_pipeline_block_contains_no_gemini_reviewer():

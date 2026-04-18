@@ -19,7 +19,7 @@ Mill executes a task across two threads with a hard handoff at plan approval:
                    ─ plan reviewed
                    ─ approved
                    │
-                   │ spawn via spawn-agent.ps1
+                   │ spawn via millpy.entrypoints.spawn_agent
                    │ (Bash run_in_background: true + Monitor)
                    ▼
                                           ──→  Phase 3: Implement
@@ -51,55 +51,67 @@ Mill executes a task across two threads with a hard handoff at plan approval:
 
 | Phase | Skill | Thread | Model slot | Output artifacts |
 |---|---|---|---|---|
-| **1. Discussion** | `mill-start` | Thread A | `models.session` | `_millhouse/task/discussion.md`, `status.md` `phase: discussed` |
-| **2. Plan** | `mill-go` (Phase 2) | Thread A | `models.session` (writer), `models.plan-review.<N>` (reviewer) | `_millhouse/task/plan.md` (`approved: true`), `status.md` `phase: planned` |
-| **3. Implement** | `mill-go` spawns Thread B via `spawn-agent.ps1 -Role implementer` | Thread B | `models.implementer` (Thread B), `models.code-review.<N>` (reviewer) | All step commits, `status.md` `phase: testing/reviewing/complete` |
-| **4. Merge** | Thread B invokes `mill-merge` skill | Thread B | `models.implementer` | Merge commit on parent, `status.md` `phase: complete`, `tasks.md` `[done]` marker (set by `mill-merge`) |
+| **1. Discussion** | `mill-start` | Thread A | `models.session` | `.mill/active/<slug>/discussion.md`, `status.md` `phase: discussed` |
+| **2. Plan** | `mill-go` (Phase 2) | Thread A | `models.session` (writer), `models.plan-review.<N>` (reviewer) | `.mill/active/<slug>/plan/` (`approved: true`), `status.md` `phase: planned` |
+| **3. Implement** | `mill-go` spawns Thread B via `millpy.entrypoints.spawn_agent` | Thread B | `models.implementer` (Thread B), `models.code-review.<N>` (reviewer) | All step commits, `status.md` `phase: testing/reviewing/complete` |
+| **4. Merge** | Thread B invokes `mill-merge` skill | Thread B | `models.implementer` | Merge commit on parent, `status.md` `phase: complete`, `Home.md` `[done]` marker (set by `mill-merge`) |
 
 Phases 1+2 share Thread A's conversation context. Phase 1 ends when the user types `/mill-go` in the same conversation; Phase 2 begins immediately in that thread. Phase 3 begins when Phase 2 spawns Thread B as a backgrounded subprocess.
 
 ## Spawn Mechanism
 
-All sub-agent spawns in mill go through two layers:
+All sub-agent spawns in mill go through two Python entrypoints:
 
-1. **Model layer — `plugins/mill/scripts/spawn-agent.ps1`**: The single backend swap point. Supports `claude` (`opus`, `sonnet`, `haiku`) and `gemini` (`gemini-3-pro`, `gemini-flash`) backends. Accepts `-DispatchMode tool-use|bulk` for Gemini workers.
+1. **Agent spawner — `millpy.entrypoints.spawn_agent`**: The single backend swap point for implementer and ad-hoc agent spawns. Invoked as `PYTHONPATH=<scripts-dir> python -m millpy.entrypoints.spawn_agent --role <role> --prompt-file <path> --provider <model>`. Supports `claude` (`opus`, `sonnet`, `haiku`) backends.
 
-2. **Reviewer-module layer — `plugins/mill/scripts/spawn-reviewer.py`**: Resolves named reviewer recipes from config, gathers file scope for bulk reviews, spawns N parallel workers, routes through an Opus handler, and emits a single JSON line. Orchestrators call `spawn-reviewer.py`; it calls `spawn-agent.ps1` internally. See `plugins/mill/doc/architecture/reviewer-modules.md` for the full dispatch mode guide.
+2. **Reviewer spawner — `millpy.entrypoints.spawn_reviewer`**: Resolves named reviewer recipes from config, gathers file scope for bulk reviews, spawns N parallel workers, routes through a handler model, and emits a single JSON line. Orchestrators call `spawn_reviewer`; it calls `spawn_agent` internally. See `plugins/mill/doc/architecture/reviewer-modules.md` for the full dispatch mode guide.
 
-### Script signature
+### Entrypoint signatures
 
+**`spawn_agent`:**
+
+```bash
+PYTHONPATH=<scripts-dir> python -m millpy.entrypoints.spawn_agent \
+  --role <reviewer|implementer> \
+  --prompt-file <path-to-prompt> \
+  --provider <model-name> \
+  [--max-turns <int>] \
+  [--work-dir <path>]
 ```
-spawn-agent.ps1 -Role <reviewer|implementer>
-                -PromptFile <path-to-prompt>
-                -ProviderName <model-name>
-                [-MaxTurns <int>]
-                [-WorkDir <path>]
-```
 
-- `-Role` — required. `reviewer` or `implementer`. Determines max-turns default and the JSON return shape contract the script validates against.
-- `-PromptFile` — required. Path to a materialized prompt file. Callers materialize their prompt template (e.g. `discussion-review.md`, `plan-review.md`, `code-review.md`, `implementer-brief.md`) into a concrete file under `_millhouse/scratch/` and pass the path here.
-- `-ProviderName` — required. The model to invoke. In this task: `opus`, `sonnet`, `haiku` are routed to the `claude` backend. Other names (`ollama-*`, `gemini-*`, `qwen*`, `vllm*`, anything else) exit with code 3 and the message "[spawn-agent] Provider '<name>' not implemented in this task. See plugins/mill/doc/overview.md#config-migration for follow-up."
-- `-MaxTurns` — optional. Defaults by role: reviewer = 20, implementer = 200. Override only when a specific run needs a different cap.
-- `-WorkDir` — optional. Defaults to `$PWD`.
+- `--role` — required. `reviewer` or `implementer`. Determines max-turns default and the JSON return shape contract validated on exit.
+- `--prompt-file` — required. Path to a materialized prompt file. Callers materialize their prompt template (e.g. `discussion-review.md`, `plan-review.md`, `code-review.md`, `implementer-brief.md`) into a concrete file under `.mill/active/<slug>/scratch/` and pass the path here.
+- `--provider` — required. The model to invoke. `opus`, `sonnet`, `haiku` are routed to the `claude` backend. Unrecognized names exit with code 3.
+- `--max-turns` — optional. Defaults by role: reviewer = 20, implementer = 200.
+- `--work-dir` — optional. Defaults to cwd.
+
+**`spawn_reviewer`:**
+
+```bash
+PYTHONPATH=<scripts-dir> python -m millpy.entrypoints.spawn_reviewer \
+  --reviewer-name <name> \
+  --prompt-file <path> \
+  --phase <discussion|plan|code> \
+  --round <N> \
+  --plan-start-hash <sha>
+```
 
 ### Synchronicity
 
-The script is **synchronous from its own perspective**. It pipes the prompt file via stdin to `claude -p --model <model> --max-turns <max> --output-format json`, waits for it to exit, parses the JSON output, validates the role-specific return shape, and writes a single JSON line to its own stdout.
+Both entrypoints are **synchronous from their own perspective**. They invoke `claude -p --model <model> --max-turns <max> --output-format json`, wait for it to exit, parse the JSON output, validate the role-specific return shape, and write a single JSON line to stdout.
 
-For long-running implementer runs, **the Bash tool handles backgrounding**. `mill-go` invokes the script via `Bash(run_in_background: true)` and monitors the resulting background shell with the `Monitor` tool. The script does **not** detach itself with `Start-Process` or `Start-Job`. Backgrounding lives at the harness layer, not the script layer.
+For long-running implementer runs, **the Bash tool handles backgrounding**. `mill-go` invokes `spawn_agent` via `Bash(run_in_background: true)` and monitors with the `Monitor` tool. Backgrounding lives at the harness layer, not the entrypoint layer.
 
 ### Return contract per role
 
-- **Reviewer:** stdout is one JSON line `{"verdict": "APPROVE" | "REQUEST_CHANGES" | "GAPS_FOUND", "review_file": "<absolute-path>"}`. (Discussion review uses `GAPS_FOUND`; plan and code review use `REQUEST_CHANGES`. The script does not enforce which verdict word — that is the prompt template's responsibility. The script only validates that the JSON has `verdict` and `review_file` keys.)
-- **Implementer:** stdout is one JSON line `{"phase": "complete" | "blocked" | "pr-pending", "status_file": "<path>", "final_commit": "<sha-or-null>"}`. The script extracts this from the `result` field of `claude -p`'s JSON wrapper. Thread B writes the JSON as its final response text; the script mediates the pipe to its own stdout. Thread B does not write to the script's stdout directly.
+- **Reviewer:** stdout is one JSON line `{"verdict": "APPROVE" | "REQUEST_CHANGES" | "GAPS_FOUND", "review_file": "<absolute-path>"}`. (Discussion review uses `GAPS_FOUND`; plan and code review use `REQUEST_CHANGES`. The entrypoint validates that the JSON has `verdict` and `review_file` keys.)
+- **Implementer:** stdout is one JSON line `{"phase": "complete" | "blocked" | "pr-pending", "status_file": "<path>", "final_commit": "<sha-or-null>"}`. The entrypoint extracts this from the `result` field of `claude -p`'s JSON wrapper. Thread B writes the JSON as its final response text; the entrypoint mediates the pipe to its own stdout.
 
 ### Exit codes
 
 - `0` — success, JSON line on stdout
 - `1` — infrastructure error (claude backend failure, JSON parse error, missing prompt file, validation failure)
-- `3` — not-implemented backend (`-ProviderName` is not a recognized Claude model name in this task)
-
-There is no exit code 2 (the historical 0d15316 script used 2 for "fallback to Agent tool"; that fallback is removed because this script is the unified spawn point).
+- `3` — not-implemented backend (`--provider` is not a recognized model name)
 
 ## Reviewer/Fixer Separation
 
@@ -107,9 +119,9 @@ The principle, stated as one rule: **The thread that produced the artifact fixes
 
 | Artifact | Reviewer (cold, read-only) | Fixer |
 |---|---|---|
-| `discussion.md` | discussion-reviewer (`spawn-reviewer.py --phase discussion`) | `mill-start` (Thread A), with user consultation for gaps |
-| `plan.md` | plan-reviewer (`spawn-reviewer.py --phase plan`) | `mill-go` (Thread A), via `mill-receiving-review` skill |
-| Code diff | code-reviewer (`spawn-reviewer.py --phase code`) | Thread B (the implementer-orchestrator), via `mill-receiving-review` skill |
+| `discussion.md` | discussion-reviewer (`spawn_reviewer --phase discussion`) | `mill-start` (Thread A), with user consultation for gaps |
+| `plan/` | plan-reviewer (`spawn_reviewer --phase plan`) | `mill-go` (Thread A), via `mill-receiving-review` skill |
+| Code diff | code-reviewer (`spawn_reviewer --phase code`) | Thread B (the implementer-orchestrator), via `mill-receiving-review` skill |
 
 This decouples reviewer model choice from fix capability. Reviewers can be swapped to cheap or non-Claude models later (a follow-up task) without losing fix quality, because the fixer is the thread that holds the freshest context for the artifact.
 
@@ -154,28 +166,50 @@ See `plugins/mill/doc/architecture/reviewer-modules.md` for the full registry sc
    ```
    Validation runs every time, not just after migration. It catches edge cases the auto-migration cannot handle (e.g. a hand-edited config that introduces a malformed shape).
 
-In-flight `_millhouse/task/discussion.md` or `plan.md` files written before this task landed are a clean break — single-user repo. Any mid-flow task must be re-run.
+In-flight `.mill/active/<slug>/discussion.md` or `plan/` files written before this task landed are a clean break — single-user repo. Any mid-flow task must be re-run.
 
 ## Documentation Map
 
 | Document | What it covers |
 |---|---|
-| `plugins/mill/doc/formats/discussion.md` | Schema for `_millhouse/task/discussion.md` (mill-start's output) |
+| `plugins/mill/doc/formats/discussion.md` | Schema for `.mill/active/<slug>/discussion.md` (mill-start's output) |
 | `plugins/mill/doc/prompts/discussion-review.md` | Discussion-reviewer protocol (read-only sub-agent invoked by mill-start) |
-| `plugins/mill/doc/formats/plan.md` | Schema for `_millhouse/task/plan.md`, including the atomic step-card invariant |
+| `plugins/mill/doc/formats/plan.md` | Schema for `.mill/active/<slug>/plan/`, including the atomic step-card invariant |
 | `plugins/mill/doc/prompts/plan-review.md` | Plan-reviewer protocol (read-only sub-agent invoked by mill-go) |
 | `plugins/mill/doc/prompts/code-review.md` | Code-reviewer protocol (`tool-use` dispatch — Claude reviewers) |
 | `plugins/mill/doc/prompts/code-review-bulk.md` | Code-reviewer prompt template for `bulk` dispatch (Gemini workers) |
 | `plugins/mill/doc/architecture/reviewer-modules.md` | Reviewer-module architecture guide: recipe schema, dispatch modes, failure modes, adding ensembles |
 | `plugins/mill/doc/prompts/implementer-brief.md` | Thread B's prompt template — the runtime spec for Phase 3+4 |
-| `plugins/mill/doc/formats/handoff-brief.md` | `_millhouse/handoff.md` format (mill-spawn → mill-start handoff) |
-| `plugins/mill/doc/formats/tasksmd.md` | `tasks.md` format reference (the git-tracked task list) |
-| `plugins/mill/doc/formats/validation.md` | Structural validation rules for `tasks.md`, `status.md`, `config.yaml`, and `plan.md` |
+| `plugins/mill/doc/formats/handoff-brief.md` | Deprecated — handoff briefs are no longer used |
+| `plugins/mill/doc/formats/tasksmd.md` | `Home.md` format reference (the wiki-based task list) |
+| `plugins/mill/doc/formats/validation.md` | Structural validation rules for `Home.md`, `status.md`, `config.yaml`, and `plan/` |
 | `plugins/mill/doc/formats/markdown.md` | Markdown formatting conventions for mill-generated files |
+
+## Task System — Wiki-Based Layout
+
+Per-task runtime state lives in the GitHub Wiki (`<repo>.wiki.git`), cloned locally at `<worktree-parent>/<repo>.wiki/`. Each worktree accesses the wiki via a `.mill/` junction at its root:
+
+```
+.mill/                          ← junction → <worktree-parent>/<repo>.wiki/
+  Home.md                       ← task list (shared; read/write via tasks_md)
+  _Sidebar.md                   ← generated wiki sidebar
+  active/
+    <slug>/
+      status.md                 ← per-task phase tracking (IPC channel)
+      discussion.md             ← mill-start output
+      plan/                     ← mill-plan output (v3 flat-card layout)
+      reviews/                  ← reviewer reports and fixer reports
+```
+
+The wiki is the source of truth for task state across machines. Every orchestrator entry point calls `millpy.tasks.wiki.sync_pull(cfg)` before reading wiki state. Every wiki write uses `wiki.write_commit_push` (for shared files like `Home.md`) or direct path writes followed by `wiki.write_commit_push` (for per-task files).
+
+The `.mill/` junction is gitignored and NOT committed to the main repo. `mill-setup` creates it. `mill-resume` recreates it on a new machine.
 
 ## Status File Channel
 
-`_millhouse/task/status.md` is the only IPC channel between Thread A and Thread B. Thread B writes per-step updates to status.md after every phase transition, every step boundary, and every retry. Thread A reads status.md via `Monitor` (which streams the background subprocess's output) and a final read after the background process exits.
+`.mill/active/<slug>/status.md` is the only IPC channel between Thread A and Thread B. Thread B writes per-step updates to status.md after every phase transition, every step boundary, and every retry. Thread A reads status.md via `Monitor` (which streams the background subprocess's output) and a final read after the background process exits.
+
+Status.md writes go exclusively through `millpy.tasks.status_md.append_phase(path, phase, cfg=cfg)`. Free-form editing of status.md is banned — use `append_phase`.
 
 User visibility relies on VS Code live-updating the status.md file in the editor. There is no socket, no queue, no fancy IPC. The status file is the truth — if its `phase:` value disagrees with the script's exit JSON, mill-go trusts status.md and reports the discrepancy.
 

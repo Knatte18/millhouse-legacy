@@ -5,5 +5,5 @@
         "titleBar.inactiveBackground": "<COLOR_HEX>",
         "titleBar.inactiveForeground": "#ffffffaa"
     },
-    "window.title": "<SHORT_NAME>: <SLUG>"
+    "window.title": "<SHORT_NAME>: <DISPLAY_NAME>"
 }

@@ -10,12 +10,19 @@ import pytest
 
 from millpy.core.paths import (
     RepoRootNotFound,
+    active_dir,
+    active_status_path,
     cwd_offset,
+    local_config_path,
+    mill_junction_path,
     millhouse_dir,
     plugin_root,
+    project_dir,
     project_offset,
     project_root,
     repo_root,
+    slug_from_branch,
+    wiki_clone_path,
 )
 
 
@@ -126,18 +133,18 @@ def test_project_offset_unrelated_paths_raises(tmp_path):
         project_offset(git, unrelated)
 
 
-def test_millhouse_dir_uses_project_root_in_nested_layout(temp_git_repo):
-    """millhouse_dir() routes through project_root(), not repo_root()."""
-    project = temp_git_repo / "projects" / "sub"
-    (project / "_millhouse").mkdir(parents=True)
-    (project / "src").mkdir()
-    assert millhouse_dir(start=project / "src") == project / "_millhouse"
+def test_millhouse_dir_returns_cwd_millhouse(tmp_path, monkeypatch):
+    """millhouse_dir() returns cwd / '_millhouse' (project_dir()-anchored)."""
+    monkeypatch.chdir(tmp_path)
+    assert millhouse_dir() == tmp_path / "_millhouse"
 
 
-def test_millhouse_dir_flat_layout_unchanged(temp_git_repo):
-    """In flat layout, millhouse_dir() == repo_root() / '_millhouse' (same as before)."""
-    (temp_git_repo / "_millhouse").mkdir()
-    assert millhouse_dir(start=temp_git_repo) == temp_git_repo / "_millhouse"
+def test_millhouse_dir_subfolder_follows_cwd(tmp_path, monkeypatch):
+    """millhouse_dir() from a subfolder returns that subfolder / '_millhouse'."""
+    sub = tmp_path / "projects" / "sub"
+    sub.mkdir(parents=True)
+    monkeypatch.chdir(sub)
+    assert millhouse_dir() == sub / "_millhouse"
 
 
 # -------------------------------------------------------------------
@@ -180,3 +187,221 @@ def test_cwd_offset_defaults_to_cwd(temp_git_repo, monkeypatch):
     sub.mkdir()
     monkeypatch.chdir(sub)
     assert cwd_offset() == PurePosixPath("sub")
+
+
+# -------------------------------------------------------------------
+# slug_from_branch (Card 2 — new helpers)
+# -------------------------------------------------------------------
+
+
+def test_slug_from_branch_strips_prefix(monkeypatch):
+    """slug_from_branch with branch-prefix 'mh' on 'mh/foo' returns 'foo'."""
+    from millpy.core import subprocess_util
+
+    cfg: dict = {"repo": {"branch-prefix": "mh"}}
+
+    def fake_run(argv, **kwargs):
+        import subprocess
+
+        if argv == ["git", "branch", "--show-current"]:
+            r = subprocess.CompletedProcess(argv, 0)
+            r.stdout = "mh/foo"
+            r.stderr = ""
+            return r
+        raise AssertionError(f"unexpected call: {argv}")
+
+    monkeypatch.setattr(subprocess_util, "run", fake_run)
+    assert slug_from_branch(cfg) == "foo"
+
+
+def test_slug_from_branch_no_prefix(monkeypatch):
+    """slug_from_branch with empty branch-prefix on 'foo' returns 'foo'."""
+    from millpy.core import subprocess_util
+
+    cfg: dict = {}
+
+    def fake_run(argv, **kwargs):
+        import subprocess
+
+        if argv == ["git", "branch", "--show-current"]:
+            r = subprocess.CompletedProcess(argv, 0)
+            r.stdout = "foo"
+            r.stderr = ""
+            return r
+        raise AssertionError(f"unexpected call: {argv}")
+
+    monkeypatch.setattr(subprocess_util, "run", fake_run)
+    assert slug_from_branch(cfg) == "foo"
+
+
+def test_slug_from_branch_no_match_returns_full(monkeypatch):
+    """slug_from_branch with prefix 'mh' on 'hotfix/bar' returns 'hotfix/bar' (no strip)."""
+    from millpy.core import subprocess_util
+
+    cfg: dict = {"repo": {"branch-prefix": "mh"}}
+
+    def fake_run(argv, **kwargs):
+        import subprocess
+
+        if argv == ["git", "branch", "--show-current"]:
+            r = subprocess.CompletedProcess(argv, 0)
+            r.stdout = "hotfix/bar"
+            r.stderr = ""
+            return r
+        raise AssertionError(f"unexpected call: {argv}")
+
+    monkeypatch.setattr(subprocess_util, "run", fake_run)
+    assert slug_from_branch(cfg) == "hotfix/bar"
+
+
+# -------------------------------------------------------------------
+# mill_junction_path
+# -------------------------------------------------------------------
+
+
+def test_mill_junction_path_defaults_to_cwd(tmp_path, monkeypatch):
+    """mill_junction_path() returns cwd / '.mill' when cwd is used."""
+    monkeypatch.chdir(tmp_path)
+    assert mill_junction_path() == tmp_path / ".mill"
+
+
+def test_mill_junction_path_explicit_cwd(tmp_path):
+    """mill_junction_path(cwd=<path>) returns <path>/.mill."""
+    assert mill_junction_path(cwd=tmp_path) == tmp_path / ".mill"
+
+
+# -------------------------------------------------------------------
+# active_dir
+# -------------------------------------------------------------------
+
+
+def test_active_dir_with_explicit_slug(tmp_path, monkeypatch):
+    """active_dir(cfg, 'my-task') returns <cwd>/.mill/active/my-task."""
+    monkeypatch.chdir(tmp_path)
+    cfg: dict = {}
+    result = active_dir(cfg, "my-task")
+    assert result == tmp_path / ".mill" / "active" / "my-task"
+
+
+def test_active_dir_no_slug_reads_git(monkeypatch, tmp_path):
+    """active_dir(cfg) with no slug reads from git branch via slug_from_branch."""
+    from millpy.core import subprocess_util
+
+    monkeypatch.chdir(tmp_path)
+    cfg: dict = {}
+
+    def fake_run(argv, **kwargs):
+        import subprocess
+
+        if argv == ["git", "branch", "--show-current"]:
+            r = subprocess.CompletedProcess(argv, 0)
+            r.stdout = "my-feature"
+            r.stderr = ""
+            return r
+        raise AssertionError(f"unexpected call: {argv}")
+
+    monkeypatch.setattr(subprocess_util, "run", fake_run)
+    result = active_dir(cfg)
+    assert result == tmp_path / ".mill" / "active" / "my-feature"
+
+
+# -------------------------------------------------------------------
+# active_status_path
+# -------------------------------------------------------------------
+
+
+def test_active_status_path(monkeypatch, tmp_path):
+    """active_status_path(cfg) returns active_dir(cfg) / 'status.md'."""
+    from millpy.core import subprocess_util
+
+    monkeypatch.chdir(tmp_path)
+    cfg: dict = {}
+
+    def fake_run(argv, **kwargs):
+        import subprocess
+
+        if argv == ["git", "branch", "--show-current"]:
+            r = subprocess.CompletedProcess(argv, 0)
+            r.stdout = "some-task"
+            r.stderr = ""
+            return r
+        raise AssertionError(f"unexpected call: {argv}")
+
+    monkeypatch.setattr(subprocess_util, "run", fake_run)
+    result = active_status_path(cfg)
+    assert result == tmp_path / ".mill" / "active" / "some-task" / "status.md"
+
+
+# -------------------------------------------------------------------
+# local_config_path
+# -------------------------------------------------------------------
+
+
+def test_local_config_path_defaults_to_cwd(tmp_path, monkeypatch):
+    """local_config_path() returns cwd / '_millhouse' / 'config.local.yaml'."""
+    monkeypatch.chdir(tmp_path)
+    assert local_config_path() == tmp_path / "_millhouse" / "config.local.yaml"
+
+
+def test_local_config_path_explicit_cwd(tmp_path):
+    """local_config_path(cwd=<path>) returns <path>/_millhouse/config.local.yaml."""
+    assert local_config_path(cwd=tmp_path) == tmp_path / "_millhouse" / "config.local.yaml"
+
+
+# -------------------------------------------------------------------
+# project_dir
+# -------------------------------------------------------------------
+
+
+def test_project_dir_returns_cwd(tmp_path, monkeypatch):
+    """project_dir() returns Path.cwd()."""
+    monkeypatch.chdir(tmp_path)
+    assert project_dir() == tmp_path
+
+
+def test_project_dir_subfolder(tmp_path, monkeypatch):
+    """project_dir() when cwd is a subfolder returns that subfolder (not git root)."""
+    sub = tmp_path / "repo" / "sub" / "project"
+    sub.mkdir(parents=True)
+    monkeypatch.chdir(sub)
+    assert project_dir() == sub
+
+
+# -------------------------------------------------------------------
+# wiki_clone_path
+# -------------------------------------------------------------------
+
+
+def test_wiki_clone_path_explicit_config(tmp_path):
+    """wiki_clone_path returns wiki.clone-path from config when set."""
+    cfg: dict = {"wiki": {"clone-path": str(tmp_path / "mywiki")}}
+    result = wiki_clone_path(cfg)
+    assert result == tmp_path / "mywiki"
+
+
+def test_wiki_clone_path_derived_from_short_name(monkeypatch, tmp_path):
+    """wiki_clone_path derives <parent>/<repo-name>.wiki/ when no clone-path set."""
+    from millpy.core import subprocess_util
+
+    monkeypatch.chdir(tmp_path)
+    # Simulate git remote URL
+    def fake_run(argv, **kwargs):
+        import subprocess
+
+        if argv == ["git", "remote", "get-url", "origin"]:
+            r = subprocess.CompletedProcess(argv, 0)
+            r.stdout = "https://github.com/org/myrepo.git"
+            r.stderr = ""
+            return r
+        if argv == ["git", "rev-parse", "--show-toplevel"]:
+            r = subprocess.CompletedProcess(argv, 0)
+            r.stdout = str(tmp_path)
+            r.stderr = ""
+            return r
+        raise AssertionError(f"unexpected call: {argv}")
+
+    monkeypatch.setattr(subprocess_util, "run", fake_run)
+    cfg: dict = {"repo": {"short-name": "Myrepo"}}
+    result = wiki_clone_path(cfg)
+    # parent of cwd is tmp_path's parent; repo-name is short-name lowercased
+    assert result == tmp_path.parent / "myrepo.wiki"

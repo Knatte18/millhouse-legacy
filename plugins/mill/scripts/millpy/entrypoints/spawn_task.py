@@ -137,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     if mode == "numbered":
         print("Pick a task:")
         for i, t in enumerate(candidates, start=1):
-            print(f"  {i}) {t.title}")
+            print(f"  {i}) {t.display_name}")
         try:
             raw = input("Pick a task number: ")
         except EOFError:
@@ -156,15 +156,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         spawn_task = candidates[choice - 1]
 
-    task_title = spawn_task.title
-    task_body = spawn_task.body
+    task_title = spawn_task.display_name
+    task_description = spawn_task.description or task_title
 
-    # Extract task description from body (prose or bullets)
-    task_description = _extract_description(task_body, task_title)
-
-    # Generate slug
-    slug = re.sub(r"\s+", "-", task_title.lower())
-    slug = re.sub(r"[^a-z0-9\-]", "", slug)
+    # Generate slug (use TaskEntry.slug, truncated for branch-name length)
+    slug = spawn_task.slug
     if len(slug) > 20:
         slug = slug[:20]
     slug = slug.rstrip("-")
@@ -180,9 +176,9 @@ def main(argv: list[str] | None = None) -> int:
     log("spawn_task", f"Branch: {branch_name}")
 
     if args.dry_run:
-        print(f"[DryRun] Would write handoff to _millhouse/handoff.md")
         print(f"[DryRun] Would claim (set to [active]) task '{task_title}' in tasks.md.")
         print(f"[DryRun] Would create worktree (branch: {branch_name})")
+        print(f"[DryRun] Would create .mill/ junction in new worktree")
         print(f"[DryRun] Would copy _millhouse/ (excluding task/, scratch/, children/) to new worktree")
         print(f"[DryRun] Would write status.md in new worktree")
         return 0
@@ -214,15 +210,12 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         parent_branch = "unknown"
 
-    # Write handoff to parent _millhouse/handoff.md
-    handoff_path = root / "_millhouse" / "handoff.md"
-    _write_handoff(handoff_path, task_title, task_description, parent_branch, root, config_path)
-
-    # Write updated tasks.md to the orphan tasks worktree, commit, and push
+    # Write updated Home.md to wiki, commit, and push
+    from millpy.tasks.wiki import LockBusy, WikiMergeConflict
     try:
         tasks_md.write_commit_push(cfg, updated_tasks, f"task: claim {task_title}")
-    except (tasks_md.GitPushError, tasks_md.TasksLockError) as exc:
-        log("spawn_task", f"tasks.md write/push failed: {exc}")
+    except (LockBusy, WikiMergeConflict, RuntimeError) as exc:
+        log("spawn_task", f"Home.md write/push failed: {exc}")
 
     # Create worktree via git worktree add. worktrees_dir is the sibling of
     # the git toplevel (not the mill project root) — `git worktree add` only
@@ -253,9 +246,15 @@ def main(argv: list[str] | None = None) -> int:
 
     # Write .vscode/settings.json with a unique worktree color. Pass the
     # explicit git-level worktrees_dir so sibling-color scanning sees all
-    # sibling worktrees regardless of layout.
+    # sibling worktrees regardless of layout. Pass display_name so the
+    # window title shows the human-readable task name, not the slug.
     _write_vscode_settings(
-        project_in_worktree, slug, root, config_path, worktrees_dir=worktrees_dir
+        project_in_worktree,
+        slug,
+        root,
+        config_path,
+        worktrees_dir=worktrees_dir,
+        display_name=task_title,
     )
 
     # Copy _millhouse/ (excluding task/, scratch/, children/) to the mill
@@ -280,41 +279,51 @@ def main(argv: list[str] | None = None) -> int:
     (project_in_worktree / "_millhouse" / "scratch" / "reviews").mkdir(parents=True, exist_ok=True)
     (project_in_worktree / "_millhouse" / "task" / "reviews").mkdir(parents=True, exist_ok=True)
 
-    # Write status.md
-    status_path = project_in_worktree / "_millhouse" / "task" / "status.md"
-    _write_status(status_path, task_title, task_description, parent_branch)
+    # Create .mill/ junction in the new worktree pointing at the wiki clone.
+    from millpy.core import junction
+    from millpy.core.paths import wiki_clone_path as _wiki_clone_path
+    from millpy.tasks import wiki as _wiki
+    try:
+        wcp = _wiki_clone_path(cfg)
+        junction.create(wcp, project_in_worktree / ".mill")
+        log("spawn_task", f".mill/ junction created → {wcp}")
+    except Exception as exc:
+        log("spawn_task", f".mill/ junction creation failed (non-fatal): {exc}")
 
-    # Write child registry entry in parent _millhouse/children/
-    children_dir = root / "_millhouse" / "children"
-    children_dir.mkdir(parents=True, exist_ok=True)
-
-    ts_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    ts_file = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
-    child_filename = f"{ts_file}-{slug}.md"
-    child_path = children_dir / child_filename
-
-    # Collision handling
-    if child_path.exists():
-        suffix = 2
-        while (children_dir / f"{ts_file}-{slug}-{suffix}.md").exists():
-            suffix += 1
-        child_filename = f"{ts_file}-{slug}-{suffix}.md"
-        child_path = children_dir / child_filename
-
-    child_content = (
-        f"---\n"
-        f"task: {task_title}\n"
-        f"branch: {branch_name}\n"
-        f"worktree: {project_path.as_posix()}\n"
-        f"status: active\n"
-        f"spawned: {ts_iso}\n"
-        f"---\n"
-        f"\n"
-        f"## Summary\n"
-        f"{task_description}\n"
+    # Write initial status.md to wiki at active/<slug>/status.md and commit.
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    status_template_path = git_root / "plugins" / "mill" / "templates" / "status-discussing.md"
+    try:
+        status_template = status_template_path.read_text(encoding="utf-8")
+        # Strip the HTML comment header before the # Status line
+        if status_template.startswith("<!--"):
+            close = status_template.index("-->")
+            status_template = status_template[close + 3:].lstrip("\n")
+    except Exception:
+        status_template = (
+            "# Status\n\n```yaml\nphase: discussing\ntask: <TASK_TITLE>\n"
+            "task_description: |\n  <TASK_DESCRIPTION>\n```\n\n"
+            "## Timeline\n\n```text\ndiscussing  <TIMESTAMP>\n```\n"
+        )
+    desc_indented = task_description.replace("\n", "\n  ")
+    status_content = (
+        status_template
+        .replace("<TASK_TITLE>", task_title)
+        .replace("<TASK_DESCRIPTION>", desc_indented)
+        .replace("<TIMESTAMP>", ts)
     )
-    child_path.write_text(child_content, encoding="utf-8", newline="\n")
-    log("spawn_task", f"Child registry: {child_filename}")
+    try:
+        wcp = _wiki_clone_path(cfg)
+        active_slug_dir = wcp / "active" / slug
+        active_slug_dir.mkdir(parents=True, exist_ok=True)
+        (active_slug_dir / "status.md").write_text(status_content, encoding="utf-8", newline="\n")
+        _wiki.write_commit_push(cfg, [f"active/{slug}/status.md"], f"task: init {slug}")
+        log("spawn_task", f"wiki status.md written at active/{slug}/status.md")
+    except Exception as exc:
+        log("spawn_task", f"wiki status.md write failed (non-fatal): {exc}")
+        # Fallback: write to legacy path so the task is not left without status
+        status_path = project_in_worktree / "_millhouse" / "task" / "status.md"
+        _write_status(status_path, task_title, task_description, parent_branch)
 
     # Open VS Code if requested. Apply the cwd-offset rule so VS Code opens
     # the subfolder matching the orchestrator's current cwd. cwd_offset
@@ -358,7 +367,17 @@ def _extract_description(body: str, fallback: str) -> str:
     Handles both bullet-list and prose-paragraph forms (Fix C).
     For bullets, joins the bullet content lines.
     For prose, uses the body verbatim (stripped).
+
+    Trailing ``[Background →](...)`` markdown links are stripped before
+    returning — they are wiki navigation aids, not part of the description.
     """
+    if not body:
+        return fallback
+
+    # Strip Background links (e.g. [Background](foo.md)) from the body
+    # before further processing.
+    body = re.sub(r"\[Background[^\]]*\]\([^)]*\)", "", body).strip()
+
     if not body:
         return fallback
 
@@ -396,52 +415,6 @@ def _read_branch_prefix(config_path: Path) -> str:
     except Exception:
         pass
     return ""
-
-
-def _write_handoff(
-    handoff_path: Path,
-    task_title: str,
-    task_description: str,
-    parent_branch: str,
-    root: Path,
-    config_path: Path,
-) -> None:
-    """Write _millhouse/handoff.md."""
-    verify_cmd = "N/A"
-    dev_server_cmd = "N/A"
-    try:
-        text = config_path.read_text(encoding="utf-8")
-        for line in text.splitlines():
-            m = re.match(r"^\s*verify:\s*(.+)$", line)
-            if m:
-                verify_cmd = m.group(1).strip()
-            m = re.match(r"^\s*dev-server:\s*(.+)$", line)
-            if m:
-                dev_server_cmd = m.group(1).strip()
-    except Exception:
-        pass
-
-    discussion_summary = "\n    ".join(task_description.splitlines())
-
-    content = (
-        f"# Handoff: {task_title}\n"
-        f"\n"
-        f"## Issue\n"
-        f"{task_title}\n"
-        f"\n"
-        f"## Parent\n"
-        f"Branch: {parent_branch}\n"
-        f"Worktree: {root}\n"
-        f"\n"
-        f"## Discussion Summary\n"
-        f"{discussion_summary}\n"
-        f"\n"
-        f"## Config\n"
-        f"- Verify: {verify_cmd}\n"
-        f"- Dev server: {dev_server_cmd}\n"
-    )
-    handoff_path.parent.mkdir(parents=True, exist_ok=True)
-    handoff_path.write_text(content, encoding="utf-8", newline="\n")
 
 
 def _write_status(
@@ -563,6 +536,7 @@ def _write_vscode_settings(
     repo_root: Path,
     config_path: Path,
     worktrees_dir: Path | None = None,
+    display_name: str | None = None,
 ) -> None:
     """Write .vscode/settings.json under ``project_in_worktree`` with a unique color.
 
@@ -572,6 +546,10 @@ def _write_vscode_settings(
     sibling worktrees — used for color-scanning. If omitted, falls back to
     ``project_in_worktree.parent`` for backwards compatibility with existing
     callers/tests exercising the helper in a flat-layout temp directory.
+
+    ``display_name`` is the human-readable task name used in the
+    ``<DISPLAY_NAME>`` token of the window title template. When omitted,
+    falls back to ``slug``.
 
     Idempotent — skips if .vscode/settings.json already exists.
     """
@@ -610,7 +588,7 @@ def _write_vscode_settings(
                 "titleBar.inactiveBackground": "<COLOR_HEX>",
                 "titleBar.inactiveForeground": "#ffffffaa",
             },
-            "window.title": "<SHORT_NAME>: <SLUG>",
+            "window.title": "<SHORT_NAME>: <DISPLAY_NAME>",
         }, indent=4) + "\n"
 
     # Pick a color — scan siblings in the explicit git-level worktrees_dir
@@ -619,9 +597,11 @@ def _write_vscode_settings(
     color = _pick_worktree_color(_worktrees_dir)
 
     # Substitute tokens
+    _display_name = display_name if display_name is not None else slug
     content = template_text
     content = content.replace("<COLOR_HEX>", color)
     content = content.replace("<SHORT_NAME>", short_name)
+    content = content.replace("<DISPLAY_NAME>", _display_name)
     content = content.replace("<SLUG>", slug)
 
     vscode_dir.mkdir(parents=True, exist_ok=True)

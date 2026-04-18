@@ -5,36 +5,38 @@ description: Mark a worktree task as abandoned. Captures abandon protocol and up
 
 # mill-abandon
 
-Mark a worktree's task as abandoned and capture a short protocol explaining why. Updates `status.md`, the parent's child registry, and the parent's `tasks.md` marker (via a merge-lock). **Does not remove the worktree, branch, or any git state** — those are handled by `mill-cleanup` after the user has closed terminals and VS Code in this worktree.
+Release a task without marking it `[abandoned]`. The marker is cleared entirely, returning the task
+to the pickable pool. If you want to permanently remove the task from Home.md, delete the entry
+manually.
 
-The rationale: deleting a worktree while VS Code or a terminal still holds file handles causes lock errors and orphaned processes. Splitting the work into two commands — mark-abandoned now, cleanup later from the parent — avoids this entirely.
+**Abandon does NOT mark the task `[abandoned]`. The `[active]` marker is removed so the task
+becomes pickable again. We no longer use `[abandoned]` as a phase marker.**
+
+The rationale: deleting a worktree while VS Code or a terminal still holds file handles causes lock
+errors. Splitting into two commands (mark-released now, cleanup later from parent) avoids this.
 
 ---
 
 ## Entry
 
-Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
+Invoke `wiki.sync_pull(cfg)` on entry before reading any wiki state.
 
-Verify this is a worktree (not the main repo):
-```bash
-git rev-parse --show-toplevel
-git worktree list --porcelain
-```
-If the current directory is the main worktree, stop: "mill-abandon must be run from a worktree, not the main repo."
+Load config via `millpy.core.config.load_merged(shared_path, local_path)`.
 
-Verify this is a mill-managed worktree:
-- Read the YAML code block in `_millhouse/task/status.md`. If the file does not exist, or does not contain both a `task:` and a `phase:` field in the YAML code block, stop: "This worktree is not managed by mill (no status.md with task/phase). Use `git worktree remove` to clean up manually-created worktrees."
+Derive slug via `paths.slug_from_branch(cfg)`.
 
-Read the current branch name:
+Verify this is a worktree (not the main repo). If the current directory is the main worktree:
+stop: "mill-abandon must be run from a worktree, not the main repo."
+
+Verify mill management: read `.mill/active/<slug>/status.md`. If absent or missing `task:`/`phase:`,
+stop: "This worktree is not managed by mill (no status.md). Use `git worktree remove` manually."
+
+Read current branch:
 ```bash
 git branch --show-current
 ```
 
-Read the YAML code block in `_millhouse/task/status.md` to identify the task title, current phase, and (if present) `current_step_name`.
-
-Read `_millhouse/config.yaml`; extract `git.parent-branch`. If not found, fall back to `parent:` from the YAML code block in `_millhouse/task/status.md`. If neither exists, ask the user which branch is the parent.
-
-Resolve the parent worktree path: run `git worktree list --porcelain` and find the entry whose `branch` field matches the parent branch name. Extract its `worktree` path and store it. This path is used in Steps 5 and 7.
+Read parent branch from config (`git.parent-branch`) or status.md `parent:` field.
 
 ---
 
@@ -46,10 +48,8 @@ Resolve the parent worktree path: run `git worktree list --porcelain` and find t
 git status --porcelain
 ```
 
-If there are uncommitted changes (staged or unstaged), warn the user:
-> "This worktree has uncommitted changes. Abandon anyway? (They will be preserved until you run mill-cleanup, but the task will be marked abandoned.)"
-
-List the changed files so the user can see what will be preserved.
+If uncommitted changes exist, warn:
+> "This worktree has uncommitted changes. Abandon anyway?"
 
 ### 2. Check for unmerged commits
 
@@ -57,65 +57,87 @@ List the changed files so the user can see what will be preserved.
 git log <parent-branch>..HEAD --oneline
 ```
 
-If there are commits that haven't been merged to the parent, warn the user:
-> "This worktree has N commit(s) not merged to `<parent-branch>`. These will be preserved on the worktree's branch until mill-cleanup deletes the branch."
-
-Show the commit list.
+If unmerged commits exist, warn:
+> "This worktree has N commit(s) not merged to `<parent-branch>`."
 
 ### 3. Require confirmation
 
-Present all warnings together, then ask:
 > "Type 'abandon' to confirm, or anything else to cancel."
 
-Never auto-abandon. Never skip confirmation, even if there are no warnings.
+Never auto-abandon. Never skip confirmation.
 
-### 4. Capture task info from status.md
+### 4. Acquire wiki lock
 
-Read `task:` and `task_description:` from the YAML code block in the child worktree's `_millhouse/task/status.md`. Store the task title for Step 7.
+```python
+wiki.acquire_lock(cfg, slug)
+```
 
-### 5. Update parent's child registry
+### 5. Clear `[active]` marker in Home.md
 
-If `<parent-path>/_millhouse/children/` exists, find the child registry file whose YAML frontmatter contains `branch: <BRANCH_NAME>` (the branch name captured at Entry). If found:
-- Update `status: active` (or whatever current status) to `status: abandoned`
-- Add `abandoned: <UTC ISO 8601 timestamp>` field to the frontmatter
+1. Read `Home.md` via `tasks_md.resolve_path(cfg)` + `tasks_md.parse`.
+2. Find the entry whose `slugify(display_name)` matches the current slug.
+3. Verify the entry's `phase` is `active`. If it is anything else, halt:
+   `mill-abandon only applies to [active] tasks. This entry has phase: <phase>.`
+4. Remove the phase marker entirely (set `phase = None`). The task becomes unmarked — pickable.
+5. Render via `tasks_md.render`. Call `tasks_md.write_commit_push(cfg, rendered, f"task: abandon {slug}")`.
 
-If `_millhouse/children/` does not exist in the parent, skip silently (backward compatibility). If no matching file is found, skip silently.
+### 6. Delete active task directory from wiki
 
-### 6. Capture abandon reason and write protocol
+1. Remove `<wiki-clone>/active/<slug>/` via `rm -rf`.
+2. Commit via `wiki.write_commit_push(cfg, [f"active/{slug}/"], f"task: abandon {slug} (delete state)")`.
 
-**Capture the reason:**
-- If the user invoked `mill-abandon "<reason>"` with a positional argument, use that string as the reason (single line, trimmed).
-- Otherwise, prompt: "Why are you abandoning this task? (one line)" and read a single line from stdin.
+### 7. Regenerate sidebar
 
-**Auto-generate the context summary (2-3 lines):**
-- Read the last 3 timeline entries from the `## Timeline` section of `_millhouse/task/status.md`.
-- Read the task description (`task_description:`) from the YAML code block.
-- Compose a 2-3 line summary: what the task was, what phase it reached, and (if applicable) what was the last completed step. Example: "Task: design cleanup skill. Reached implementing phase. Completed step 2 of 6 (mill-cleanup skill created); stopped before mill-abandon rewrite."
+```bash
+PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.regenerate_sidebar
+```
 
-**Write the `## Abandon` section to the child's `_millhouse/task/status.md`:**
+### 8. Release wiki lock
 
-Read `plugins/mill/templates/status-abandoned.md`, strip the leading HTML comment, and substitute:
-- `<ABANDON_REASON>` — user-provided reason.
-- `<LAST_PHASE>` — `phase` field from the status.md YAML block.
-- `<LAST_STEP>` — `current_step` field from the YAML block, or `N/A` if unset.
-- `<CONTEXT_SUMMARY>` — the 2–3 line auto-generated summary.
+```python
+wiki.release_lock(cfg)
+```
 
-Use the Edit tool to insert the substituted section after the closing ``` of the YAML code block and before the `## Timeline` section. If a `## Abandon` section already exists from a prior abandon, overwrite it (latest-only).
+Release happens in `finally` — runs on both success and error paths after Step 4.
 
-**Update the phase in the YAML code block** of `_millhouse/task/status.md` from its current value to `abandoned`. Insert a timeline entry `abandoned  <UTC ISO 8601 timestamp>` before the closing ``` of the `## Timeline` text block using the Edit tool.
+### 9. Remove .mill/ junction
 
-### 7. Update tasks.md with `[abandoned]` marker
+```python
+from millpy.core.junction import remove
+from millpy.core.paths import project_dir
+remove(project_dir() / ".mill")
+```
 
-Load `_millhouse/config.yaml` via `millpy.core.config.load` in the child worktree (the child's own config.yaml, which contains the same `tasks.worktree-path` because mill-spawn copies config from parent). Resolve `tasks_md_path` via `millpy.tasks.tasks_md.resolve_path(cfg)`. Parse with `tasks_md.parse`, find the task by title (captured in Step 4). Replace its phase marker with `abandoned` — `[abandoned]` overwrites any prior marker including `[active]`, `[completed]`, or a missing marker; the abandon decision wins regardless of the work's prior state. Render the updated task list. Call `millpy.tasks.tasks_md.write_commit_push(cfg, rendered, f"task: mark {task_title} [abandoned]")`. The helper handles lock + commit + push + retries.
+### 10. Optional worktree cleanup
 
-### 8. Report
+If the user did NOT pass `--keep-worktree` (default: clean up):
 
-> "Task marked [abandoned]. Abandon protocol captured in _millhouse/task/status.md. Run mill-cleanup from the parent worktree (after closing terminals and VS Code in this worktree) to complete cleanup."
+Resolve the parent worktree path from `git worktree list --porcelain`.
+
+```bash
+git -C <parent-path> worktree remove --force <child-worktree-path>
+git -C <parent-path> branch -d <child-branch>
+```
+
+If removal fails (locked directory): surface platform-aware hint (see mill-cleanup for
+`handle.exe`/`lsof` diagnostic). Tell user to close the directory and re-run.
+
+With `--keep-worktree`: skip Steps 9 and 10. The worktree remains with no `.mill/` junction.
+
+### 11. Report
+
+> "Task released. The `[active]` marker has been cleared — the task is pickable again.
+> If you want to permanently remove it, delete the entry from Home.md."
 
 ---
 
 ## Board Updates
 
-- Abandon → task's `[phase]` marker is replaced with `[abandoned]` on the tasks branch via `millpy.tasks.tasks_md.write_commit_push`. No parent-worktree merge-lock is used for this write. `[abandoned]` overwrites any prior marker including `[completed]`.
-- Worktree, branch, and children registry entry removal are deferred to `mill-cleanup`, which runs from the parent worktree in a separate invocation.
-- The child's `_millhouse/task/status.md` gets a new `## Abandon` section capturing reason and context for carry-forward into the next claim of this task.
+Home.md changes via `tasks_md.write_commit_push` (with wiki lock held).
+
+`[active]` marker is removed entirely (not changed to `[abandoned]`). No `[abandoned]` phase.
+
+Active task directory deleted from wiki at Step 6.
+
+Phase transitions via `status_md.append_phase` are NOT called at abandon — the active directory
+is deleted entirely, so there is no status.md to update after Step 6.

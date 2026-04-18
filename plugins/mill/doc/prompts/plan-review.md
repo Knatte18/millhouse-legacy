@@ -4,28 +4,27 @@ The plan reviewer validates that the implementation plan written by `mill-go` Ph
 
 The plan reviewer is **review-only**. It evaluates the plan and writes a review report. It never modifies the plan file. The orchestrator (Thread A / `mill-go`) reads the review and applies fixes itself per the principle: *the thread that produced the artifact fixes the artifact*.
 
-## Four Dispatch Modes
+## Dispatch Modes
 
-Plan review operates in one of four modes, selected by the orchestrator based on the plan format and reviewer type:
+Plan review operates in one of three modes, selected by the orchestrator based on the plan format:
 
-| Mode | When used | Reviewer type | mill-go passes |
-|------|-----------|---------------|----------------|
-| **holistic** | v3 plan directory + tool-use reviewer | tool-use only | `--plan-dir-path <plan/>` |
-| **per-card** | v3 plan directory + bulk reviewer | bulk | `--plan-overview <00-overview.md> --plan-batch <NN-card.md> --slice-type per-card` |
-| **per-batch** | v2 plan directory + bulk reviewer | bulk or tool-use | `--plan-overview <00-overview.md> --plan-batch <NN-slug.md>` |
-| **v1-single** | v1 `plan.md` (legacy) | any | `--plan-path <plan.md>` |
+| Mode | When used | mill-go passes |
+|------|-----------|----------------|
+| **holistic** | v3 plan directory (current default) | `--plan-dir-path <plan/>` |
+| **per-batch** | v2 plan directory | `--plan-overview <00-overview.md> --plan-batch <NN-slug.md>` |
+| **v1-single** | v1 `plan.md` (legacy) | `--plan-path <plan.md>` |
 
-Bulk reviewers (`dispatch_mode == "bulk"`) are forbidden from holistic mode — `engine._guard_plan_whole_bulk` raises `ConfigError` before dispatch. The `plan-review-bulk.md` template handles per-batch and per-card modes for bulk workers.
+All plan review modes use a single holistic reviewer (sonnetmax tool-use). Per-card bulk review mode has been removed — bulk reviewers are no longer used for plan review.
 
 ## Invocation Pattern
 
-Dispatched via `spawn_reviewer.py` (Python entrypoint) or `spawn-agent.ps1` (legacy shim). Synchronous from the caller's perspective.
+Dispatched via `millpy.entrypoints.spawn_reviewer --phase plan`. Synchronous from the caller's perspective.
 
-- **Model:** resolved from `models.plan-review.<N>` (where `<N>` is the 1-indexed round number) if present, else from `models.plan-review.default`. See `overview.md#config-resolution` for the resolution rule.
-- **Max rounds:** default 3, configurable via `-pr N` argument to `mill-go` or via `reviews.plan` in `_millhouse/config.yaml`. `-pr 0` skips plan review entirely.
-- **v3 per-card:** The orchestrator fans out one per-card reviewer (bulk, g3flash) per card + one holistic reviewer (tool-use, sonnetmax). Per-card reviewers receive the card file and its `reads:` files inlined via `<FILES_PAYLOAD>`. The holistic reviewer sees the whole plan directory.
+- **Model:** resolved from `review-modules.plan.<N>` (where `<N>` is the 1-indexed round number) if present, else from `review-modules.plan.default`. See `overview.md#config-resolution` for the resolution rule.
+- **Max rounds:** default 3, configurable via `-pr N` argument to `mill-go` or via `reviews.plan` in config. `-pr 0` skips plan review entirely.
+- **v3 holistic:** The orchestrator spawns a single holistic reviewer (tool-use, sonnetmax) that sees the whole plan directory.
 - **v2 per-batch:** The orchestrator fans out one review per batch, running all batches in parallel (one per round). Each reviewer sees only its batch file and the shared overview. See Phase: Plan Review in SKILL.md.
-- **Validation gate:** `spawn_reviewer.py` runs `plan_validator.validate()` before dispatch. If BLOCKING errors are found, it emits `{"verdict": "ERROR", ...}` and exits 1 — no reviewer is spawned.
+- **Validation gate:** `spawn_reviewer` runs `plan_validator.validate()` before dispatch. If BLOCKING errors are found, it emits `{"verdict": "ERROR", ...}` and exits 1 — no reviewer is spawned.
 - The reviewer's output is a single JSON line: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`.
 
 ## What the Reviewer Receives (per mode)
@@ -35,12 +34,7 @@ Dispatched via `spawn_reviewer.py` (Python entrypoint) or `spawn-agent.ps1` (leg
 - Task title
 - `CONSTRAINTS.md` content (if exists)
 
-**Per-card mode (v3):**
-- One card file content + its `reads:` files inlined via `<FILES_PAYLOAD>`
-- Card number (`<CARD_NUMBER>`) and card file path (`<PLAN_CARD_PATH>`)
-- Task title, `CONSTRAINTS.md` content
-
-**Per-batch mode (tool-use, v2):**
+**Per-batch mode (v2):**
 - Path to `plan/00-overview.md`
 - Path to the batch file (`plan/NN-<slug>.md`)
 - Task title, `CONSTRAINTS.md` content
@@ -54,7 +48,7 @@ Dispatched via `spawn_reviewer.py` (Python entrypoint) or `spawn-agent.ps1` (leg
 - The orchestrator's interpretation or commentary on the plan
 - Prior round findings from earlier rounds
 - Conversation history from `mill-go`
-- The `_millhouse/task/reviews/` directory (the reviewer is forbidden to read it — see CRITICAL banners below)
+- The `.mill/active/<slug>/reviews/` directory (the reviewer is forbidden to read it — see CRITICAL banners below)
 
 ---
 
@@ -70,7 +64,7 @@ You are an independent plan reviewer. You evaluate the plan and produce a review
 
 **CRITICAL: Do NOT commit, push, or run any git commands. You only read files and write the review report.**
 
-**CRITICAL: Do NOT read any files in `_millhouse/task/reviews/`. You must evaluate the plan independently with no knowledge of prior review rounds.**
+**CRITICAL: Do NOT read any files in `.mill/active/<slug>/reviews/`. You must evaluate the plan independently with no knowledge of prior review rounds.**
 
 **CRITICAL: Do NOT edit the plan file or any source files. The orchestrator applies fixes based on your review.**
 
@@ -114,7 +108,7 @@ Read `_codeguide/Overview.md` if it exists. Use its module table and routing hin
 
 Generate the timestamp via shell: `date -u +"%Y%m%d-%H%M%S"`.
 
-Write the full review report to `_millhouse/task/reviews/<timestamp>-plan-review-r<N>.md`.
+Write the full review report to `.mill/active/<slug>/reviews/<timestamp>-plan-review-r<N>.md`.
 
 For each finding: state the batch file and step or section, severity (**BLOCKING** or **NIT**), the issue, and a suggested fix. End with verdict: **APPROVE** or **REQUEST_CHANGES**.
 
@@ -134,7 +128,7 @@ You are an independent plan reviewer. You evaluate a single batch of a v2 plan a
 
 **CRITICAL: Do NOT commit, push, or run any git commands. You only read files and write the review report.**
 
-**CRITICAL: Do NOT read any files in `_millhouse/task/reviews/`.**
+**CRITICAL: Do NOT read any files in `.mill/active/<slug>/reviews/`.**
 
 **CRITICAL: Do NOT edit the plan file or any source files.**
 
@@ -163,62 +157,9 @@ Apply all criteria from the whole-plan template above, scoped to this batch. Add
 - **Batch isolation:** Does this batch's work stand on its own given its `batch-depends` prerequisites? Are there hidden dependencies on batches not listed in `batch-depends`?
 - **Interface contracts:** If this batch exposes APIs consumed by other batches, are the contracts clear and stable enough that parallel implementation won't cause merge conflicts?
 
-**Output format:** Same as whole-plan mode, but scope findings to this batch. Write report to `_millhouse/task/reviews/<timestamp>-plan-review-<BATCH_NAME>-r<N>.md`.
+**Output format:** Same as whole-plan mode, but scope findings to this batch. Write report to `.mill/active/<slug>/reviews/<timestamp>-plan-review-<BATCH_NAME>-r<N>.md`.
 
 Return: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`.
-
----
-
-## Reviewer Prompt Template — Per-Card Mode
-
-`mill-go` materializes this template for each card in a v3 plan fan-out, substituting `<PLAN_CARD_PATH>`, `<CARD_NUMBER>`, `<FILES_PAYLOAD>`, `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, and `<N>`.
-
-*Used for v3 plans with a bulk reviewer (g3flash). Each per-card reviewer receives one card file plus its `reads:` files inlined.*
-
----
-
-You are an independent plan reviewer. You evaluate a single card of a v3 plan and produce a review report. You do **not** modify any plan file. You have no shared context with the planning conversation.
-
-**CRITICAL: Do NOT commit, push, or run any git commands. You only read the provided content and write the review report.**
-
-**CRITICAL: Do NOT read any files in `_millhouse/task/reviews/`.**
-
-**CRITICAL: Do NOT edit the plan file or any source files.**
-
----
-
-1. Task: \<TASK_TITLE>
-
-2. Card number: `<CARD_NUMBER>`
-
-3. Card file path: `<PLAN_CARD_PATH>`
-
-4. Repository constraints (if available):
-   \<CONSTRAINTS_CONTENT>
-
-5. Card content and its `reads:` files are inlined below:
-
-\<FILES_PAYLOAD>
-
-**Evaluate this card against these criteria:**
-
-- **Atomicity invariant:** Does this card pass the extraction test? A card that requires reading another card's decisions for context fails the test.
-- **Requirements testability:** Are Requirements precise enough that an implementer can write a failing test from them alone?
-- **Reads completeness:** Does `Reads:` list every file the implementer must read to execute this card? An empty or clearly wrong `Reads:` field is a planning oversight.
-- **depends-on correctness:** Are all prerequisite card numbers listed? Does this card silently depend on output from a card not in `depends-on`?
-- **Explore ⊆ Reads:** Every path listed under `Explore:` must also appear in `Reads:`. A path in `Explore:` not in `Reads:` indicates a missing read declaration.
-- **Step granularity:** Does the card touch a reviewable scope (one module or one concern)?
-- **Over-engineering:** Does the card introduce unnecessary abstractions or features not requested?
-
-**Output format:**
-
-Generate the timestamp via shell: `date -u +"%Y%m%d-%H%M%S"`.
-
-Write the full review report to `_millhouse/task/reviews/<timestamp>-plan-review-card-<CARD_NUMBER>-r<N>.md`.
-
-For each finding: state severity (**BLOCKING** or **NIT**), the issue, and a suggested fix. End with verdict: **APPROVE** or **REQUEST_CHANGES**.
-
-Return as the final line of your output a single JSON object: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`. No preamble, no additional content.
 
 ---
 
@@ -232,7 +173,7 @@ You are an independent plan reviewer. You evaluate the plan and produce a review
 
 **CRITICAL: Do NOT commit, push, or run any git commands.**
 
-**CRITICAL: Do NOT read any files in `_millhouse/task/reviews/`.**
+**CRITICAL: Do NOT read any files in `.mill/active/<slug>/reviews/`.**
 
 **CRITICAL: Do NOT edit the plan file or any source files.**
 
@@ -253,17 +194,17 @@ You are an independent plan reviewer. You evaluate the plan and produce a review
 
 **Evaluate against these criteria** (same set as whole-plan mode above, adapted for v1 structure — `## Files` instead of `## All Files Touched`, no batch graph, no `Reads:` field requirement).
 
-**Output format:** Write report to `_millhouse/task/reviews/<timestamp>-plan-review-r<N>.md`. Return: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`.
+**Output format:** Write report to `.mill/active/<slug>/reviews/<timestamp>-plan-review-r<N>.md`. Return: `{"verdict": "APPROVE" | "REQUEST_CHANGES", "review_file": "<absolute-path>"}`.
 
 ---
 
 ## Review Loop
 
-1. `mill-go` materializes the appropriate prompt template and dispatches via `spawn_reviewer.py`.
-2. Reviewer writes findings to `_millhouse/task/reviews/<timestamp>-plan-review[-<batch>]-r<N>.md`.
+1. `mill-go` materializes the appropriate prompt template and dispatches via `millpy.entrypoints.spawn_reviewer --phase plan`.
+2. Reviewer writes findings to `.mill/active/<slug>/reviews/<timestamp>-plan-review[-<batch>]-r<N>.md`.
 3. Reviewer returns: `{"verdict": ..., "review_file": ...}`.
 4. If **APPROVE**: mill-go sets `approved: true` in the plan, updates `status.md`, proceeds to Phase: Setup.
-5. If **REQUEST_CHANGES**: mill-go reads the review report, invokes `mill-receiving-review`, applies fixes, writes a fixer report to `_millhouse/task/reviews/<timestamp>-plan-fix-r<N>.md`, then re-spawns with the updated plan only.
+5. If **REQUEST_CHANGES**: mill-go reads the review report, invokes `mill-receiving-review`, applies fixes, writes a fixer report to `.mill/active/<slug>/reviews/<timestamp>-plan-fix-r<N>.md`, then re-spawns with the updated plan only.
 6. **Non-progress detection.** If pushed-back findings are identical across rounds, mill-go blocks immediately.
 7. Repeat until **APPROVE** or `max_plan_review_rounds` exhausted.
 8. If unresolved BLOCKING issues remain: mill-go blocks with `Plan review dispute after <max> rounds`.

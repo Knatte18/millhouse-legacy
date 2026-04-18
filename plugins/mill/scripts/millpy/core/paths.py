@@ -17,9 +17,24 @@ Two resolvers exist with different responsibilities:
 ``millhouse_dir()`` routes through ``project_root()`` so every caller of
 the _millhouse directory helper automatically benefits from nested-project
 semantics without individual migration.
+
+New wiki-based helpers (Card 2)
+---------------------------------
+- ``project_dir()``       — canonical project root = ``Path.cwd()``. Replaces
+                            ``project_root()`` for ``.mill/`` / ``_millhouse/``
+                            path building. ``project_root()`` is NOT removed —
+                            external callers still use it until their own cards
+                            migrate them.
+- ``slug_from_branch()``  — derive task slug from current git branch.
+- ``wiki_clone_path()``   — resolve wiki clone directory from config or remote URL.
+- ``mill_junction_path()``— ``<cwd>/.mill`` junction path.
+- ``active_dir()``        — ``<cwd>/.mill/active/<slug>`` directory.
+- ``active_status_path()``— ``active_dir() / 'status.md'``.
+- ``local_config_path()`` — ``<cwd>/_millhouse/config.local.yaml``.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path, PurePosixPath
 
 from millpy.core import subprocess_util
@@ -142,13 +157,13 @@ def cwd_offset(start: Path | None = None) -> PurePosixPath:
     return PurePosixPath(*parts)
 
 
-def millhouse_dir(start: Path | None = None) -> Path:
-    """Return the _millhouse directory at the mill project root.
+def millhouse_dir() -> Path:
+    """Return the _millhouse directory at the current project root.
 
-    Routes through ``project_root()`` so nested-project layouts resolve
-    correctly. Propagates ``RepoRootNotFound`` when not inside a git repo.
+    Routes through ``project_dir()`` (cwd-anchored) so the result is
+    consistent with ``.mill/`` path resolution.
     """
-    return project_root(start=start) / "_millhouse"
+    return project_dir() / "_millhouse"
 
 
 def plugin_root() -> Path:
@@ -161,3 +176,167 @@ def plugin_root() -> Path:
         parents[2] = scripts/   ← returned
     """
     return Path(__file__).resolve().parents[2]
+
+
+# ---------------------------------------------------------------------------
+# Wiki-based helpers (new task system — Card 2)
+# ---------------------------------------------------------------------------
+
+
+def project_dir() -> Path:
+    """Return the canonical project root as ``Path.cwd()``.
+
+    This is the cwd-anchored complement to ``project_root()``.  Use this
+    (not ``project_root()``) when building ``.mill/`` or ``_millhouse/``
+    paths for the new wiki-based task system.  It deliberately does NOT walk
+    up or call git — the project boundary is wherever the user (or mill-setup)
+    placed it, which is always cwd for a properly-entered worktree.
+
+    ``project_root()`` is kept intact for external callers that have not yet
+    been migrated.
+    """
+    return Path.cwd()
+
+
+def slug_from_branch(cfg: dict) -> str:
+    """Derive the task slug from the current git branch name.
+
+    Strips the optional ``repo.branch-prefix`` (e.g. ``"mh"``) from the
+    branch name.  The prefix must be followed by ``/`` to match — a prefix
+    of ``"mh"`` strips ``"mh/"`` from the front of ``"mh/foo"`` but leaves
+    ``"hotfix/bar"`` unchanged.
+
+    Parameters
+    ----------
+    cfg:
+        Parsed config dict (from ``millpy.core.config.load``).
+
+    Returns
+    -------
+    str
+        The slug: branch name with leading ``<prefix>/`` removed if present.
+    """
+    result = subprocess_util.run(["git", "branch", "--show-current"])
+    branch = result.stdout.strip()
+
+    repo = cfg.get("repo") or {}
+    prefix = str(repo.get("branch-prefix") or "").strip()
+    if prefix and branch.startswith(prefix + "/"):
+        return branch[len(prefix) + 1:]
+    return branch
+
+
+def wiki_clone_path(cfg: dict) -> Path:
+    """Resolve the wiki clone directory.
+
+    Resolution order:
+    1. ``wiki.clone-path`` in config (explicit override).
+    2. Derived: ``<parent-of-cwd>/<repo-name>.wiki/``, where ``repo-name``
+       is ``repo.short-name`` lowercased, falling back to the basename of
+       ``git remote get-url origin`` (with ``.git`` stripped).
+
+    Parameters
+    ----------
+    cfg:
+        Parsed config dict.
+
+    Returns
+    -------
+    Path
+        Absolute path to the wiki clone directory (not required to exist yet).
+    """
+    wiki_cfg = cfg.get("wiki") or {}
+    explicit = wiki_cfg.get("clone-path")
+    if explicit:
+        return Path(explicit)
+
+    # Derive from repo short-name or git remote URL.
+    repo_cfg = cfg.get("repo") or {}
+    short_name = repo_cfg.get("short-name")
+    if short_name:
+        repo_name = str(short_name).lower()
+    else:
+        # Fall back to remote URL basename.
+        result = subprocess_util.run(["git", "remote", "get-url", "origin"])
+        url = result.stdout.strip()
+        basename = url.rstrip("/").rsplit("/", 1)[-1]
+        # Strip .git / .wiki.git suffixes.
+        basename = re.sub(r"\.wiki\.git$", "", basename)
+        basename = re.sub(r"\.git$", "", basename)
+        repo_name = basename.lower()
+
+    parent = Path.cwd().parent
+    return parent / f"{repo_name}.wiki"
+
+
+def mill_junction_path(cwd: Path | None = None) -> Path:
+    """Return the ``.mill`` junction path at the project root.
+
+    Parameters
+    ----------
+    cwd:
+        Explicit base directory. Defaults to ``Path.cwd()``.
+
+    Returns
+    -------
+    Path
+        ``<cwd>/.mill``
+    """
+    base = cwd if cwd is not None else Path.cwd()
+    return base / ".mill"
+
+
+def active_dir(cfg: dict, slug: str | None = None) -> Path:
+    """Return the active task directory inside the wiki junction.
+
+    Parameters
+    ----------
+    cfg:
+        Parsed config dict (passed to ``slug_from_branch`` when slug is None).
+    slug:
+        Explicit slug override.  If ``None``, derives from the current git
+        branch via ``slug_from_branch(cfg)``.
+
+    Returns
+    -------
+    Path
+        ``<cwd>/.mill/active/<slug>``
+    """
+    if slug is None:
+        slug = slug_from_branch(cfg)
+    return mill_junction_path() / "active" / slug
+
+
+def active_status_path(cfg: dict) -> Path:
+    """Return the status.md path for the current task.
+
+    Equivalent to ``active_dir(cfg) / 'status.md'``.
+
+    Parameters
+    ----------
+    cfg:
+        Parsed config dict.
+
+    Returns
+    -------
+    Path
+        ``<cwd>/.mill/active/<slug>/status.md``
+    """
+    return active_dir(cfg) / "status.md"
+
+
+def local_config_path(cwd: Path | None = None) -> Path:
+    """Return the local (machine-only) config override path.
+
+    Parameters
+    ----------
+    cwd:
+        Explicit base directory. Defaults to ``Path.cwd()``.
+
+    Returns
+    -------
+    Path
+        ``<cwd>/_millhouse/config.local.yaml``
+    """
+    base = cwd if cwd is not None else Path.cwd()
+    return base / "_millhouse" / "config.local.yaml"

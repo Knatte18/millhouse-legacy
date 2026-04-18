@@ -5,25 +5,36 @@ description: Merge a completed worktree back to its parent branch.
 
 # mill-merge
 
-You are an integration engineer. Your job is to merge a feature branch back to its parent branch safely. You never force-merge, never pass a defect downstream, and never lose work. If something goes wrong, you roll back to the checkpoint and escalate.
+You are an integration engineer. Your job is to merge a feature branch back to its parent branch safely. You never force-merge, never pass a defect downstream, and never lose work.
+
+**Cross-worktree invariants:**
+- mill-merge runs from the child worktree.
+- `cd <parent-worktree>` is forbidden — it corrupts the shell cwd for the rest of the session.
+- Use `git -C <parent-path>` exclusively for all parent-branch git operations.
 
 ---
 
 ## Entry
 
-Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
+Invoke `wiki.sync_pull(cfg)` on entry before reading any wiki state.
+
+Load config via `millpy.core.config.load_merged(shared_path, local_path)`:
+- `shared_path` = `.mill/config.yaml`
+- `local_path`  = `_millhouse/config.local.yaml`
+
+Derive slug via `paths.slug_from_branch(cfg)`.
 
 Verify this is a worktree (not the main repo):
 ```bash
 git rev-parse --show-toplevel
 git worktree list --porcelain
 ```
-If the current directory is the main worktree (the repo root), stop: "mill-merge must be run from a worktree, not the main repo."
+If the current directory is the main worktree, stop: "mill-merge must be run from a worktree."
 
-Verify this is a mill-managed worktree:
-- Read the YAML code block in `_millhouse/task/status.md`. If the file does not exist, or does not contain both a `task:` and a `phase:` field in the YAML code block, stop: "This worktree is not managed by mill (no status.md with task/phase). Use `git worktree remove` to clean up manually-created worktrees."
+Verify mill management: read `.mill/active/<slug>/status.md`. If absent or missing `task:`/`phase:`,
+stop: "This worktree is not managed by mill (no status.md). Use `git worktree remove` manually."
 
-Read `_millhouse/config.yaml` if it exists; extract `git.parent-branch`, `git.base-branch`, and `git.require-pr-to-base` (default `false` if missing). If `parent-branch` is not found, fall back to `parent:` from the YAML code block in `_millhouse/task/status.md`. If neither exists, ask the user which branch to merge into.
+Read `git.parent-branch` from config, or fall back to `parent:` field in status.md, or ask user.
 
 ---
 
@@ -31,140 +42,138 @@ Read `_millhouse/config.yaml` if it exists; extract `git.parent-branch`, `git.ba
 
 ### 1. Acquire merge lock
 
-Resolve the parent worktree path:
-- Run `git worktree list --porcelain`. Find the entry whose `branch` matches the parent branch name. Extract its `worktree` path.
-- If no worktree entry matches (parent is the repo root), use the main worktree path.
+Resolve the parent worktree path from `git worktree list --porcelain`.
 
-Write `<parent-path>/_millhouse/scratch/merge.lock` with content:
+Write `<parent-path>/_millhouse/scratch/merge.lock` with pid, timestamp, branch.
+
+If lock already exists: check PID liveness. If stale: remove and acquire. If active: wait up to 5 min.
+
+### 2. Verify status
+
+Read `.mill/active/<slug>/status.md`. Verify `phase: complete` (or equivalent approved state).
+If not, halt: "Status is <phase>, not complete. Cannot merge."
+
+### 3. Write final phase update
+
+```python
+status_md.append_phase(active_status_path(cfg), "complete", cfg=cfg)
 ```
-pid: <current process PID>
-timestamp: <UTC ISO 8601>
-branch: <current branch name>
-```
+Guarantees the wiki has the final state committed and pushed before the merge proceeds.
 
-Create `_millhouse/scratch/` in the parent if it doesn't exist.
+### 4. Sync with parent
 
-If the lock file already exists:
-- Read the PID from the lock.
-- Check if the process is alive (`kill -0 <PID> 2>/dev/null`).
-- If stale (process dead): remove and acquire.
-- If active: report "Another merge is in progress (<branch>). Waiting..." Retry every 10 seconds, max 5 minutes. If timeout: stop and tell the user.
+Invoke `mill-merge-in` via the Skill tool (handles checkpoint, merge, conflict resolution, verify).
 
-### 2. Sync with parent
+If mill-merge-in fails: release merge lock (Step 10), report failure. Do NOT proceed.
 
-Invoke `mill-merge-in` via the Skill tool. This handles:
-- No-op detection (already up to date)
-- Checkpoint creation
-- Merging parent into worktree
-- Conflict resolution
-- Verification
-- Codeguide update
+Capture the checkpoint branch name for potential rollback.
 
-If mill-merge-in succeeds, capture the checkpoint branch name it reports (needed for rollback if steps 3–7 fail).
+### 5. Merge into parent
 
-If mill-merge-in fails (reports rollback or unresolvable conflicts): release the merge lock (step 7) and report the failure to the user. Do not proceed.
-
-### 4. Merge into parent
-
-**Idempotency check.** Do NOT use `git branch --contains <child-branch> <parent-branch>` for squash-merge detection — that command checks commit ancestry, which `git merge --squash` does not preserve (the squash commit is new; the child's original commits are absent from the parent's history). Instead, run `git -C <parent-path> merge --squash <child-branch>` and detect idempotency from the output: if git reports "Already up to date" or if the subsequent `git commit` returns "nothing to commit", the squash was already applied in a prior run. When either signal is detected at the merge/commit step, skip the push and proceed directly to Step 4.5 (write `[done]`). This correctly handles the recovery scenario where the squash succeeded but the tasks.md write (Step 4.5) failed.
-
-**Important:** Capture the child branch name before switching context — it is needed in Step 5:
+**Capture child branch before switching context:**
 ```bash
 CHILD_BRANCH=$(git branch --show-current)
 ```
 
-Determine the merge method:
+**If `require-pr-to-base` is `true` AND `parent-branch` equals `base-branch`:** create PR via `gh`.
+Use `task:` field from status.md as the PR title. Update status.md:
+```python
+status_md.append_phase(active_status_path(cfg), "pr-pending", cfg=cfg)
+```
+Skip to Step 10.
 
-**If `require-pr-to-base` is `true` AND `parent-branch` equals `base-branch`:** create a pull request instead of squash-merging.
-
-1. Verify `gh` is available and authenticated:
-   ```bash
-   gh --version
-   gh auth status
-   ```
-   If either command fails, stop: "gh CLI is required for PR creation but is not available or not authenticated. Install gh and run `gh auth login`."
-
-2. Push the branch if not already pushed:
-   ```bash
-   git push
-   ```
-
-3. Create the PR. Use the `task:` field from the YAML code block in `_millhouse/task/status.md` as the PR title:
-   ```bash
-   gh pr create --title "<task title>" --body "Merging branch \`$CHILD_BRANCH\` to \`<base-branch>\`."
-   ```
-
-4. Update the YAML code block in `_millhouse/task/status.md` with `phase: pr-pending` and add a `pr_url:` field containing the PR URL returned by `gh pr create`.
-
-5. Update parent's child registry (same as Step 5 of the normal path): if `<parent-path>/_millhouse/children/` exists, find the child registry file for `$CHILD_BRANCH` and update `status: active` to `status: pr-pending`. Add a `pr_url:` field with the PR URL. Skip silently if the registry or file is not found.
-
-6. Skip Step 6 (Notify). Jump to Step 7 (release merge lock). Report the PR URL to the user.
-
-**Note:** The `[done]` helper write (Step 4.5) is SKIPPED on this path. tasks.md keeps the `[completed]` marker written by mill-go at Phase: Completion. A future enhancement may add PR-landed detection; for now, `[done]` is not written for PR-path merges.
-
-If `gh pr create` fails, treat as a Step 4 failure: roll back to the checkpoint (same rollback procedure as below), release merge lock (Step 7), and report error.
-
-**Otherwise (default):** direct squash merge. Use `git -C <parent-path>` for every git command so the shell cwd stays inside the child worktree (worktree isolation rule — see `conversation/SKILL.md`).
-
+**Otherwise (default) — direct squash merge:**
 ```bash
 git -C <parent-path> merge --squash <worktree-branch>
 git -C <parent-path> commit -m "<task title>"
 git -C <parent-path> push
 ```
-Squash merge collapses all worktree commits into a single commit on the parent branch.
 
-### 4.5. Write `[done]` to tasks.md
+**Idempotency check:** if `git merge --squash` or `git commit` reports "nothing to commit" /
+"Already up to date", skip the push and proceed to Step 6.
 
-**This step runs ONLY on the direct-merge path (not PR-path).** After Step 4's squash merge succeeds (or after the idempotency check identifies the merge as already done), call the helper to mark the task `[done]` on the tasks branch.
+### 6. Update Home.md — mark `[done]`
 
-1. Load `_millhouse/config.yaml` via `millpy.core.config.load`.
-2. Resolve tasks.md path via `millpy.tasks.tasks_md.resolve_path(cfg)`.
-3. Parse with `tasks_md.parse`, find the task by title (from the `task:` field in `_millhouse/task/status.md`), replace its phase marker with `done` (overwriting `[active]`, `[completed]`, or a missing marker).
-4. Call `millpy.tasks.tasks_md.write_commit_push(cfg, rendered, f"task: mark {task_title} [done]")`.
+This step runs ONLY on the direct-merge path.
 
-If `write_commit_push` raises (network failure, rebase conflict, lock contention): DO NOT roll back the merge (it's already committed on the parent). Report the error to the user with the message "Merge succeeded but tasks.md write failed: <err>. Re-run `mill-merge` to retry the tasks.md write — Step 4's idempotency check will skip the merge and proceed directly to this step." Release the merge lock (Step 7) and exit with error.
+After squash merge succeeds (or idempotency check passes):
 
-### 5. Update parent's child registry
+1. Call `wiki.acquire_lock(cfg, slug)`.
+2. Read `Home.md` via `tasks_md.resolve_path(cfg)` + `tasks_md.parse`.
+3. Find the entry with matching slug. Replace phase marker `[active]` → `[done]`.
+4. Render via `tasks_md.render`. Call `tasks_md.write_commit_push(cfg, rendered, f"task: complete and merge {slug}")`.
+5. Release wiki lock.
 
-If `<parent-path>/_millhouse/children/` exists, find the child registry file whose YAML frontmatter contains `branch: <CHILD_BRANCH>` (search all `.md` files in the folder). If found:
-- Update `status: active` to `status: merged`
-- Add `merged: <UTC ISO 8601 timestamp>` field to the frontmatter
+If `write_commit_push` raises: DO NOT roll back the merge. Report the error. Release merge lock.
+"Merge succeeded but Home.md write failed: <err>. Re-run `mill-merge` to retry — Step 5's
+idempotency check will skip the merge."
 
-If `_millhouse/children/` does not exist in the parent, skip silently (backward compatibility with pre-change worktrees). If no matching file is found, skip silently.
+### 7. Delete active task directory from wiki
 
-### 6. Notify
+1. Remove `<wiki-clone>/active/<slug>/` via `rm -rf`.
+2. Commit via `wiki.write_commit_push(cfg, [f"active/{slug}/"], f"task: complete and merge {slug}")`.
 
-Run the **Notification Procedure** (same as mill-go — see below) with `COMPLETE: Merge successful for <branch>` (info-level — toast + status only, skip Slack).
+The lock from Step 6 covers both Home.md and the active/ deletion. Release only after both writes.
 
-### 7. Release merge lock
+### 8. Regenerate sidebar
+
+Run:
+```bash
+PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.regenerate_sidebar
+```
+
+### 9. Remove .mill/ junction
+
+```python
+from millpy.core.junction import remove
+from millpy.core.paths import project_dir
+remove(project_dir() / ".mill")
+```
+
+### 10. Release merge lock
 
 Delete `<parent-path>/_millhouse/scratch/merge.lock`.
 
-This step runs in ALL exit paths — success, failure, or rollback. Use trap/finally pattern.
+This step runs in ALL exit paths. Use trap/finally pattern.
 
-### 8. Report
+### 11. Git cleanup
 
-> "Merge complete. Run mill-cleanup from the parent worktree to remove the merged worktree and branch."
+```bash
+git -C <parent-path> worktree remove --force <child-worktree-path>
+git -C <parent-path> branch -d <child-branch>
+```
+
+Worktree removal and branch deletion are handled here (not deferred to mill-cleanup, since the wiki
+cleanup already happened). If removal fails (directory locked): surface platform-aware hint (see
+mill-cleanup for `handle.exe`/`lsof` diagnostic), advise user to close the directory and re-run.
+
+### 12. Notify and report
+
+Run Notification Procedure with `COMPLETE: Merge successful for <branch>` (info-level).
+
+> "Merge complete for <slug>."
 
 ---
 
 ## Rollback
 
-If any step fails after step 2 (sync with parent) has succeeded, use the checkpoint branch name captured from mill-merge-in's output in step 2:
+If any step fails after Step 4 (sync with parent):
 
 ```bash
-git reset --hard mill-checkpoint-<name>
+git -C <parent-path> reset --hard mill-checkpoint-<name>
 ```
 
-Then release the merge lock. Run the **Notification Procedure** with `BLOCKED: Merge failed for <branch> — rolled back to checkpoint`. Report the failure to the user. Do NOT delete the checkpoint branch on failure — preserve it for investigation.
+Release merge lock. Run Notification Procedure with
+`BLOCKED: Merge failed for <branch> — rolled back to checkpoint`. Preserve checkpoint branch.
 
 ---
 
 ## Notification Procedure
 
-### Step 1: Update status file (always)
+### Step 1: Update status file
 
-Write the event to the YAML code block in `_millhouse/task/status.md`. For blocking events, ensure `blocked: true` and `blocked_reason:` are set. For completion events, ensure `phase: complete`. Status file updates are the calling skill's responsibility, not the script's.
+Call `status_md.append_phase(active_status_path(cfg), phase, cfg=cfg)` for phase transitions.
+For `blocked_reason:`, use a targeted Edit on the YAML block.
 
 ### Step 2: Send notification
 
@@ -176,13 +185,17 @@ PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.notify \
   --urgency "<info|high>"
 ```
 
-Urgency per event:
-- Merge successful -> `--urgency info` (toast + status only, skip Slack)
-- Merge failed / rolled back -> `--urgency high` (all channels)
+- Merge successful → `--urgency info`
+- Merge failed / rolled back → `--urgency high`
 
 ---
 
 ## Board Updates
 
-- Merge complete (direct-merge path) -> task marked `[done]` on the tasks branch via `millpy.tasks.tasks_md.write_commit_push`. PR path leaves tasks.md at `[completed]` (from mill-go) — no `[done]` write until a future enhancement adds PR-landed detection.
-- Worktree, branch, and children registry removal are deferred to `mill-cleanup`, which runs from the parent worktree in a separate invocation.
+Home.md changes via `tasks_md.write_commit_push` (with wiki lock held).
+
+Per-task deletions via `wiki.write_commit_push` after `rm -rf <wiki-clone>/active/<slug>/`.
+
+Phase transitions via `status_md.append_phase(active_status_path(cfg), phase, cfg=cfg)`.
+
+`[active]` → `[done]` written at Step 6. Active task directory deleted at Step 7.

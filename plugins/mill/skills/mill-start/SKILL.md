@@ -14,12 +14,22 @@ Interactive. Pick a task and design the solution.
 
 ## Entry
 
-Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
+Invoke `wiki.sync_pull(cfg)` on entry before reading any wiki state.
 
-**Entry-time validation.** After the config-existence check, validate `_millhouse/config.yaml`. Required slots under the `pipeline:` block:
-- `pipeline.implementer` (string) — the subagent model for `millpy.entrypoints.spawn_agent` dispatch
+Load config via `millpy.core.config.load_merged(shared_path, local_path)`:
+- `shared_path` = `.mill/config.yaml` (shared, tracked in wiki)
+- `local_path`  = `_millhouse/config.local.yaml` (local overrides, gitignored)
+
+Both files are optional individually. If both are absent, halt with:
+```
+Neither .mill/config.yaml nor _millhouse/config.local.yaml found.
+Run mill-setup to initialize.
+```
+
+**Entry-time validation.** After loading config, validate. Required slots:
+- `pipeline.implementer` (string)
 - `pipeline.discussion-review.default` (string) and `pipeline.discussion-review.rounds` (int)
-- `pipeline.plan-review.holistic` (string) and `pipeline.plan-review.per-card` (string) and `pipeline.plan-review.rounds` (int)
+- `pipeline.plan-review.default` (string) and `pipeline.plan-review.rounds` (int)
 - `pipeline.code-review.default` (string) and `pipeline.code-review.rounds` (int)
 
 If any required slot is missing, stop with:
@@ -27,9 +37,11 @@ If any required slot is missing, stop with:
 Config schema out of date. Expected pipeline.<slot>. Run 'mill-setup' to auto-migrate.
 ```
 
-Legacy slots (`models.session`, `models.explore`, `models.<phase>-review`, `review-modules:`, `reviews:`) are not accepted. The `pipeline:` block is the only config schema.
+Legacy slots (`models.session`, `models.explore`, `models.<phase>-review`, `review-modules:`,
+`reviews:`, `pipeline.plan-review.holistic`, `pipeline.plan-review.per-card`) are not accepted.
 
-Resolve tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)` after loading `_millhouse/config.yaml`. If resolution raises `ConfigError` or `FileNotFoundError`, stop and tell the user to run `mill-setup` first.
+Resolve `Home.md` via `millpy.tasks.tasks_md.resolve_path(cfg)`. If resolution raises `ConfigError`
+or `FileNotFoundError`, halt and tell the user to run `mill-setup` first.
 
 ---
 
@@ -37,9 +49,11 @@ Resolve tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)` after loading `_m
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `-dr N` | `2` | Maximum number of discussion review rounds. `-dr 0` skips discussion review entirely (Phase: Discussion Review is not executed). |
+| `-dr N` | `2` | Maximum number of discussion review rounds. `-dr 0` skips Phase: Discussion Review. |
 
-Parse the `-dr` value from the skill invocation arguments. If not provided via CLI, read `pipeline.discussion-review.rounds` from `_millhouse/config.yaml` as the default. CLI arg overrides config. If neither is set, default to `2`. Store the value as `max_review_rounds` for use in Phase: Discussion Review.
+Parse the `-dr` value from the skill invocation arguments. If not provided via CLI, read
+`pipeline.discussion-review.rounds` from config as the default. CLI arg overrides config.
+If neither is set, default to `2`. Store the value as `max_review_rounds`.
 
 ---
 
@@ -49,7 +63,8 @@ mill-start proceeds through named phases. Report the current phase to the user a
 
 ### Phase: Color
 
-Read `.vscode/settings.json` in the current worktree. If it exists, extract the `titleBar.activeBackground` hex value. Map it to the closest Claude Code color name using this lookup:
+Read `.vscode/settings.json` in the current worktree. If it exists, extract the
+`titleBar.activeBackground` hex value. Map it to the closest Claude Code color name:
 
 | Hex | CC Color |
 |-----|----------|
@@ -64,177 +79,189 @@ Read `.vscode/settings.json` in the current worktree. If it exists, extract the 
 
 If a match is found, print: "Run `/color <name>` to match this worktree's theme."
 
-If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, or the hex value does not match any entry in the table: skip silently (no error). This is a best-effort visual cue, not a blocking requirement.
+If `.vscode/settings.json` does not exist, has no `titleBar.activeBackground`, or the hex does not
+match: skip silently.
 
 ### Phase: Select
 
-0. **Check for handoff brief.** Use the Read tool (not bash) to read `_millhouse/handoff.md`. If it exists, the brief's `## Issue` identifies the task --- select it directly (skip step 1). Read the `task:` and `task_description:` fields from the YAML code block in `_millhouse/task/status.md` for the task details (written by mill-spawn before spawning). The brief's `## Discussion Summary` is prior context --- incorporate it, but still run your own Explore and Discuss phases. The brief informs but does not constrain. After extracting task info from the handoff brief, delete `_millhouse/handoff.md`. This prevents stale handoff detection on subsequent in-place mill-start runs.
+1. **Call `wiki.sync_pull(cfg)`.** Fetch the latest wiki state before reading Home.md.
 
-1. **Guard: active task check.** This guard applies only to paths 2/3/4 below — path 0 (handoff brief) short-circuits to Explore and skips the guard. Before claiming a task, read the YAML code block in `_millhouse/task/status.md` if it exists. If the `phase:` field is set and is not `complete`, report "An active task is already in progress (phase: `<phase>`). Run mill-go or mill-abandon first." and stop.
+2. **Derive slug** via `paths.slug_from_branch(cfg)`. The slug identifies this worktree's task.
 
-2. **Select task.** Read tasks.md via the helper-resolved path (`tasks_md.parse(tasks_md.resolve_path(cfg))`).
+3. **Read Home.md** via `tasks_md.resolve_path(cfg)` + `tasks_md.parse`.
 
-   a. Find all `## ` headings. Filter as follows:
-      - **Skip** any heading whose phase marker is `[active]`, `[completed]`, `[done]`, or `[abandoned]` (these are claimed elsewhere or terminal — never pickable).
-      - **Fast-path candidates:** headings with phase marker `[s]`.
-      - **Numbered-list candidates:** unmarked headings (no `[phase]` marker).
+4. **Find the matching TaskEntry** — the entry whose `slugify(display_name)` equals the current slug.
+   If not found, halt:
+   ```
+   Branch <slug> has no matching entry in Home.md.
+   Either this worktree was spawned outside mill, or the entry was deleted.
+   ```
 
-   b. **Fast-path:** if any `[s]` candidates exist, auto-select the FIRST `[s]` task. Print "Auto-picking the next ready task: `<title>`" and proceed to claim it. Do NOT show a numbered list. Do NOT ask about other tasks.
+5. **Sanity check:** the entry's `phase` must be `active`. If it is any other value, report the
+   discrepancy and halt.
 
-   c. **Numbered-list path:** if no `[s]` candidates exist, look at the unmarked candidates:
-      - Zero unmarked: report "No pickable tasks in tasks.md (all are `[active]`, `[completed]`, `[done]`, or `[abandoned]`). Run `mill-add` to create one, or describe what you want to work on." If the user provides a description, compose the final tasks.md content (new task appended + `[active]` marker on it) in one render, then call `write_commit_push` once with commit message `task: add and claim {title}`.
-      - One unmarked: select it. Show the title and ask the user to confirm.
-      - Two or more unmarked: print a numbered list (per `mill:conversation` skill rules — no `AskUserQuestion`). User types the number.
+6. The selected task is identified. Proceed to Phase: Active.
 
-   d. **Never prompt the user about `[active]`, `[completed]`, `[done]`, or `[abandoned]` tasks** — these are filtered out at step a.
+### Phase: Active
 
-3. **Move to Active.** Render the updated task list with the `[active]` marker applied to the selected task. Call `millpy.tasks.tasks_md.write_commit_push(cfg, rendered, f"task: claim {task_title}")` to write, commit, and push atomically to the tasks branch. The `[active]` marker stays in place through the entire discuss/plan/implement/test/review window until merge or abandon.
+1. Acquire the wiki lock for any Home.md write via `wiki.acquire_lock(cfg, slug)`.
 
-   Validate tasks.md per `plugins/mill/doc/formats/validation.md` (tasks.md structural rules).
+2. The initial `status.md` at `active/<slug>/status.md` was already written by `mill-spawn`.
+   Update the YAML block: ensure `task:` matches `entry.display_name`, `parent:` is set to the
+   parent branch (from `git worktree list --porcelain` or `main`).
 
-   Write `_millhouse/task/status.md` by reading `plugins/mill/templates/status-discussing.md`, stripping the leading HTML comment, and substituting:
-   - `<TASK_TITLE>` — the selected task's heading text from `tasks.md`.
-   - `<TASK_DESCRIPTION>` — the task description bullets from `tasks.md` (indent-preserved; fit the `task_description: |` block).
-   - `<TIMESTAMP>` — fresh shell timestamp: `date -u +"%Y-%m-%dT%H:%M:%SZ"`.
+3. Call `status_md.append_phase(active_status_path(cfg), "discussing", cfg=cfg)` to record the
+   phase transition and commit it to the wiki.
 
-   The Timeline text block must be present in the initial write so subsequent Edit-tool timeline appends have a closing fence to insert before.
+4. Release the wiki lock via `wiki.release_lock(cfg)`.
 
 ### Phase: Explore
 
 4. Before asking a single question, explore the relevant parts of the codebase.
 
-   - If `_codeguide/Overview.md` exists: use the codeguide navigation pattern. Read Overview, identify relevant module docs, read them, follow Source links to code.
+   - If `_codeguide/Overview.md` exists: use the codeguide navigation pattern. Read Overview,
+     identify relevant module docs, read them, follow Source links to code.
    - Otherwise: explore using file structure, git log, and grep.
    - Check recent commits related to the task.
    - Don't ask questions you can answer from the codebase.
 
 ### Phase: Discuss
 
-5. **Structured questioning.** Interview the user relentlessly about every aspect of the task until you reach a shared understanding. Walk down each branch of the decision tree, resolving dependencies between decisions one-by-one.
+5. **Structured questioning.** Interview the user relentlessly about every aspect of the task until
+   you reach a shared understanding. Walk down each branch of the decision tree, resolving
+   dependencies between decisions one-by-one.
 
-   Ask questions in **focused batches**. Questions that don't depend on each other's answers can be asked together in a single message. Keep questions sequential when an answer informs the next question. For each question, provide your **recommended answer** where you have enough codebase context to suggest one. Prefer **multiple choice** (A/B/C with trade-offs) when there are distinct options.
+   Ask questions in **focused batches**. Questions that don't depend on each other's answers can be
+   asked together in a single message. For each question, provide your **recommended answer**.
+   Prefer **multiple choice** (A/B/C with trade-offs) when there are distinct options.
 
-   **Question categories.** You must cover all of these. For each category, explore the codebase first — only ask the user about what you cannot determine from the code.
+   **Question categories.** Cover all of these:
+   - **Scope** — What's in, what's out?
+   - **Constraints** — Performance, compatibility, existing patterns?
+   - **Architecture** — Module design, interfaces, dependencies?
+   - **Edge cases** — Failures, concurrency, empty state, invalid input?
+   - **Security** — Trust boundaries, input validation? Only if relevant.
+   - **Testing** — Approach per module, TDD candidates, key scenarios?
 
-   - **Scope** --- What's in, what's out? Define explicit boundaries. Hammer out the exact scope: what you plan to change and what you plan not to change.
-   - **Constraints** --- Performance requirements? Compatibility with existing systems? Existing patterns to follow? Check `CONSTRAINTS.md` at the repo root (resolve via `git rev-parse --show-toplevel`) if it exists.
-   - **Architecture** --- Module design, interfaces, dependencies. Which modules will be built or modified? Look for opportunities to follow existing deep module patterns (small interface, large implementation). Check for existing utilities before proposing new ones.
-   - **Edge cases** --- What happens when it fails? Concurrent access? Empty state? Invalid input? Partial failures?
-   - **Security** --- Trust boundaries, input validation, auth implications? Only if relevant to the task.
-   - **Testing** --- What approach per module? Which modules are TDD candidates? What are the key test scenarios (happy path, error paths, edge cases)?
-
-   Don't ask questions you already answered from the codebase. Don't ask about things that are obvious from the code.
-
-6. **Propose approaches.** When the problem is understood:
-   - Present **2-3 approaches** with explicit trade-offs (complexity, maintenance, performance, security).
-   - Lead with your recommended approach and explain why.
-   - Wait for user approval before proceeding.
-   - If only one reasonable approach exists, say so --- don't invent alternatives for the sake of it.
+6. **Propose approaches.** Present 2–3 approaches with explicit trade-offs. Lead with your
+   recommendation. Wait for user approval.
 
 ### Phase: Discussion File
 
-7. **Write the discussion file.** After the user approves the approach, write the structured discussion file per `plugins/mill/doc/formats/discussion.md` to `_millhouse/task/discussion.md`.
+7. **Write the discussion file** per `plugins/mill/doc/formats/discussion.md` to
+   `.mill/active/<slug>/discussion.md`.
 
-   Include everything from the conversation:
-   - The evolved problem statement (not the original task description)
+   Include:
+   - The evolved problem statement
    - The selected approach with rationale and rejected alternatives
    - Every design decision with rationale
    - Explicit scope boundaries
-   - All constraints (from CONSTRAINTS.md + discovered)
+   - All constraints (from `CONSTRAINTS.md` + discovered)
    - Technical context from codebase exploration
    - Testing strategy
-   - Complete Q&A log (all questions and answers)
-   - Config (verify command, dev server). **Verify must not be `N/A` when the project has a test suite.** Detect the verify command from the codebase: check `pyproject.toml`, `*.csproj`, `package.json`, `Makefile`, test directories (`tests/`, `test/`, `*Tests/`), etc. Only write `N/A` if the project genuinely has no build or test infrastructure.
+   - Complete Q&A log
 
-   The discussion file must be self-contained — a fresh `mill-plan` session with no conversation history must be able to write a complete implementation plan from this file alone.
+   The discussion file must be self-contained — a fresh `mill-plan` session with no conversation
+   history must be able to write a complete implementation plan from this file alone.
+
+   After writing, commit+push via:
+   ```python
+   wiki.write_commit_push(cfg, [f"active/{slug}/discussion.md", f"active/{slug}/status.md"],
+                          f"task: phase discussed (write discussion.md)")
+   ```
 
 ### Phase: Discussion Review (round N/max_review_rounds)
 
-**If `max_review_rounds` is `0`:** skip Phase: Discussion Review entirely. Proceed directly to Phase: Handoff.
+**If `max_review_rounds` is `0`:** skip Phase: Discussion Review. Proceed to Phase: Handoff.
 
-8. **Discussion review loop:**
+8. **Discussion review loop:** operates against `.mill/active/<slug>/reviews/`.
 
-   **Setup:** Ensure `_millhouse/task/reviews/` directory exists (`mkdir -p` if not).
+   a. Report: **"Discussion Review --- round N/<max_review_rounds>"**
 
-   a. Report to user: **"Discussion Review --- round N/&lt;max_review_rounds&gt;"**
+   b. Read `CONSTRAINTS.md` from repo root if it exists.
 
-   b. Read `CONSTRAINTS.md` from repo root (via `git rev-parse --show-toplevel`) if it exists (pass content to reviewer).
+   c. **Resolve the reviewer name for round N.** Prefer `pipeline.discussion-review.<N>` from
+      config; fall back to `pipeline.discussion-review.default`.
 
-   c. **Resolve the reviewer name for round N.** Prefer `pipeline.discussion-review.<N>` from `_millhouse/config.yaml`; if absent, fall back to `pipeline.discussion-review.default`. The integer key is compared as a string.
+   d. **Materialize the prompt.** Read `plugins/mill/doc/prompts/discussion-review.md`. Substitute
+      `<DISCUSSION_FILE_PATH>`, `<TASK_TITLE>`, and `<CONSTRAINTS_CONTENT>`. Write materialized
+      prompt to `_millhouse/scratch/discussion-review-prompt-r<N>.md`.
 
-   d. **Materialize the prompt.** Read the prompt template from `plugins/mill/doc/prompts/discussion-review.md`. Substitute `<DISCUSSION_FILE_PATH>` (absolute path to `_millhouse/task/discussion.md`), `<TASK_TITLE>` (from `tasks.md`), and `<CONSTRAINTS_CONTENT>` (the contents of `CONSTRAINTS.md` from the repo root if it exists, or the literal string `(no CONSTRAINTS.md)` if not). Write the materialized prompt to `_millhouse/scratch/discussion-review-prompt-r<N>.md`.
-
-   Note: discussion-review rejects bulk dispatch at the engine level. If `pipeline.discussion-review.*` points at a bulk recipe, `millpy.entrypoints.spawn_reviewer` exits with a ConfigError and mill-start surfaces the error to the user.
-
-   e. **Spawn the discussion-reviewer in the background.** Invoke Bash with `run_in_background: true` so the assistant can converse with the user while the reviewer runs:
+   e. **Spawn the discussion-reviewer in the background:**
       ```bash
       PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
         --reviewer-name <reviewer-name> \
-        --prompt-file <WORK_DIR>/_millhouse/scratch/discussion-review-prompt-r<N>.md \
+        --prompt-file _millhouse/scratch/discussion-review-prompt-r<N>.md \
         --phase discussion \
         --round <N>
       ```
-      Capture the returned background task ID, then use the `Monitor` tool to wait for completion. Discussion reviewers typically run 1–5 minutes — long enough that synchronous foreground spawns block user dialogue. While Monitoring, the skill may respond to user messages, but MUST NOT advance to the next phase until Monitor reports completion. Once complete, read the JSON line from the captured stdout.
+      Use `Monitor` to wait for completion. While monitoring, the skill may respond to user
+      messages, but MUST NOT advance to the next phase until Monitor reports completion.
 
-   f. **Parse the JSON line** from the script's stdout: `{"verdict": "APPROVE" | "GAPS_FOUND" | "UNKNOWN", "review_file": "<absolute-path>"}`.
+   f. **Parse the JSON line** from stdout:
+      `{"verdict": "APPROVE" | "GAPS_FOUND" | "UNKNOWN", "review_file": "<absolute-path>"}`.
 
-   g. If verdict is **APPROVE**: proceed to Phase: Handoff.
+   g. If **APPROVE**: proceed to Phase: Handoff.
 
-   **UNKNOWN verdict fallback (C.2).** If verdict is `UNKNOWN`, the reviewer pipeline failed to recover a recognizable verdict from the worker's output even though the review file at `review_file` was written correctly. Do not halt — read the review file and parse its YAML frontmatter `verdict:` field (case-insensitive). If the frontmatter reports `APPROVE`, continue as if the pipeline had returned APPROVE. If the frontmatter reports `GAPS_FOUND` (or `REQUEST_CHANGES`), continue as if the pipeline had returned GAPS_FOUND and proceed to the GAPS_FOUND branch below. If the frontmatter `verdict:` field is absent, unparseable, or itself says `UNKNOWN`, halt with a clear message: `Reviewer verdict is UNKNOWN and the review file frontmatter is also unparseable. Review file: <path>. Halting; manual intervention required.` This fallback exists because of a known bug class where fence-wrapped JSON or multi-format worker output causes `millpy.entrypoints.spawn_reviewer` to return UNKNOWN despite the review file being written correctly. Post-W1 this should be rare — `millpy.core.verdict.extract_verdict_from_text` handles the multi-format extraction — but the fallback stays as a defensive belt-and-suspenders.
+   **UNKNOWN verdict fallback.** Read the review file's YAML frontmatter `verdict:`. If APPROVE →
+   continue. If GAPS_FOUND → continue as GAPS_FOUND. If absent/UNKNOWN → halt with a clear message.
 
-   h. If verdict is **GAPS_FOUND**: read the review file at `review_file`.
+   h. If **GAPS_FOUND**: read the review file.
 
-      **MANDATORY: You MUST NOT update the discussion file based on review findings without asking the user questions first. Every GAP requires the user's answer before it can be closed.** Do not auto-fix gaps, do not infer answers, do not fill in gaps from codebase context alone. Present each gap to the user and wait for their response.
+      **MANDATORY: Present each gap to the user and wait for their response before updating the
+      discussion file.** Do not auto-fix gaps. After the user answers, update the discussion file
+      and re-spawn the reviewer with the updated file only.
 
-      Ask the user follow-up questions to resolve the gaps. Update the discussion file with the new information only after the user has answered. Re-spawn the reviewer with the **updated discussion file only**. Do NOT pass prior review findings to the reviewer. The reviewer always starts fresh from the updated discussion alone, with no context from prior rounds.
-
-   i. Max `max_review_rounds` rounds. If unresolved gaps remain after all rounds: present the remaining gaps to the user for decision. The user may override (proceed anyway) or provide more information.
+   i. Max `max_review_rounds` rounds. If unresolved gaps remain after all rounds: present to the
+      user for decision (override or provide more info).
 
 ### Phase: Handoff
 
-9. **Lock and hand off:**
+9. Update `status.md` via `status_md.append_phase(active_status_path(cfg), "discussed", cfg=cfg)`.
+   This updates `phase: discussed` in the YAML block, appends the timeline entry, and commits+pushes
+   to the wiki automatically.
 
-   a. Update `_millhouse/task/status.md` — use the Edit tool to update fields within the existing YAML code block:
+   Also ensure `discussion:` field points to `active/<slug>/discussion.md` in the YAML block
+   (use Edit tool for this one field — only free-form Edit allowed is for adding the `discussion:`
+   pointer field, not for the phase/timeline update).
 
-   - Add `discussion: _millhouse/task/discussion.md` as a new field in the YAML code block.
-   - Update `phase:` to `discussed`.
-   - Add `parent: <parent-branch>` if not already present.
-   - Preserve `task:` and `task_description:` from Phase: Select (do not remove them).
+10. **Report completion:** "Discussion complete. Run `mill-plan` to start autonomous plan writing,
+    then `mill-go` to start implementation."
 
-   Resolve `<parent-branch>` from `_millhouse/config.yaml` (`git.parent-branch` key) if it exists, otherwise from the branch that the worktree was created from (detect via `git worktree list --porcelain`), otherwise default to `main`.
-
-   b. Use the Edit tool to insert `discussed  <timestamp>` on a new line before the closing ` ``` ` of the timeline text block in status.md (generate timestamp via shell: `date -u +"%Y-%m-%dT%H:%M:%SZ"`).
-
-   c. **Report completion.** Print: "Discussion complete. Run `mill-plan` to start autonomous plan writing, then `mill-go` to start implementation."
-
-      **Do NOT invoke `mill-plan` from mill-start.** Handoff to the next phase is always the user's decision — they invoke `mill-plan` (and later `mill-go`) manually. mill-start's responsibility ends after status.md is finalized.
+    **Do NOT invoke `mill-plan` from mill-start.** Handoff to the next phase is always the user's
+    decision.
 
 ---
 
 ## Todo Scope
 
-If you use TodoWrite to track your own progress, only include mill-start phases: Color, Select, Explore, Discuss, Discussion File, Discussion Review, Handoff. Never add implementation steps (creating files, modifying files, writing code, running tests) --- those belong to mill-plan and mill-go.
+If you use TodoWrite to track progress, only include mill-start phases: Color, Select, Active,
+Explore, Discuss, Discussion File, Discussion Review, Handoff. Never add implementation steps.
 
 ---
 
 ## Discussion Principles
 
-- **Design the full scope.** Never suggest MVP phases, scope cuts, or "we can add this later." If the user asked for it, design it.
+- **Design the full scope.** Never suggest MVP phases, scope cuts, or "we can add this later."
 - **YAGNI ruthlessly.** Don't design for hypothetical requirements the user didn't ask for.
-- **Batch independent questions.** Questions that don't depend on each other's answers can be asked together. Keep questions sequential when an answer informs the next question.
+- **Batch independent questions.** Questions that don't depend on each other's answers can be asked together.
 - **Explore before asking.** Don't ask "what framework do you use?" when you can read `package.json`.
-- **Challenge the problem, not just the solution.** "Is this actually the right thing to build?" is a valid question.
-- **Recommend answers.** For each question, provide your recommended answer based on codebase context. The user can accept, reject, or modify.
-- **Hammer out scope.** Explicitly define what changes and what doesn't. Ambiguous scope is the #1 cause of plan review failures.
-- **In existing codebases:** follow existing patterns. Where existing code has problems that affect the task (file too large, tangled responsibilities), include targeted improvements --- the way a good developer improves code they're working in. Don't propose unrelated refactoring.
+- **Challenge the problem, not just the solution.** "Is this actually the right thing to build?" is valid.
+- **Recommend answers.** Provide your recommended answer based on codebase context.
+- **Hammer out scope.** Explicitly define what changes and what doesn't.
+- **In existing codebases:** follow existing patterns. Improve code you're working in where appropriate.
 
 ---
 
 ## Board Updates
 
-tasks.md changes go through `millpy.tasks.tasks_md.write_commit_push` against the tasks worktree (resolved via `tasks.worktree-path` in `_millhouse/config.yaml`). No direct `git` invocations against the current worktree for tasks.md writes.
+Home.md changes go through `millpy.tasks.tasks_md.write_commit_push` with the wiki lock held.
 
-Phase transitions are tracked via `phase:` in the YAML code block of `_millhouse/task/status.md` and the `## Timeline` section (entries inserted before the closing ` ``` ` of the text fence).
+Per-task writes (`active/<slug>/*`) go through `wiki.write_commit_push` WITHOUT the shared lock.
 
-- Task claimed from tasks.md -> `[active]` marker written via `write_commit_push`, write fenced `_millhouse/task/status.md` with `phase: discussing` + `task_description:` in YAML code block
-- Discussion complete -> update `phase: discussed` in YAML code block, insert timeline entry before closing fence
+Phase transitions are recorded via `status_md.append_phase(active_status_path(cfg), phase, cfg=cfg)`.
+Free-form Edit of status.md YAML block is banned (except adding the `discussion:` pointer field).
+
+- Task claimed → `[active]` marker in Home.md written by `mill-spawn`; status.md initialized.
+- Phase: Active → `append_phase(..., "discussing")` updates YAML + timeline + wiki commit.
+- Discussion complete → `append_phase(..., "discussed")` + `discussion:` field added.
