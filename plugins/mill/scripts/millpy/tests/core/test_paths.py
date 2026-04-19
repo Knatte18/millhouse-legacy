@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-import sys
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -379,12 +378,12 @@ def test_wiki_clone_path_explicit_config(tmp_path):
     assert result == tmp_path / "mywiki"
 
 
-def test_wiki_clone_path_derived_from_short_name(monkeypatch, tmp_path):
-    """wiki_clone_path derives <parent>/<repo-name>.wiki/ when no clone-path set."""
+def test_wiki_clone_path_derived_from_remote_url(monkeypatch, tmp_path):
+    """wiki_clone_path derives <parent>/<repo-name>.wiki/ from git remote URL."""
     from millpy.core import subprocess_util
 
     monkeypatch.chdir(tmp_path)
-    # Simulate git remote URL
+
     def fake_run(argv, **kwargs):
         import subprocess
 
@@ -403,5 +402,5 @@ def test_wiki_clone_path_derived_from_short_name(monkeypatch, tmp_path):
     monkeypatch.setattr(subprocess_util, "run", fake_run)
     cfg: dict = {"repo": {"short-name": "Myrepo"}}
     result = wiki_clone_path(cfg)
-    # parent of cwd is tmp_path's parent; repo-name is short-name lowercased
+    # repo-name comes from remote URL basename, not short-name
     assert result == tmp_path.parent / "myrepo.wiki"

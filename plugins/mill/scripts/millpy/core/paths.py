@@ -232,8 +232,7 @@ def wiki_clone_path(cfg: dict) -> Path:
     Resolution order:
     1. ``wiki.clone-path`` in config (explicit override).
     2. Derived: ``<parent-of-cwd>/<repo-name>.wiki/``, where ``repo-name``
-       is ``repo.short-name`` lowercased, falling back to the basename of
-       ``git remote get-url origin`` (with ``.git`` stripped).
+       is the basename of ``git remote get-url origin`` (with ``.git`` stripped).
 
     Parameters
     ----------
@@ -250,20 +249,12 @@ def wiki_clone_path(cfg: dict) -> Path:
     if explicit:
         return Path(explicit)
 
-    # Derive from repo short-name or git remote URL.
-    repo_cfg = cfg.get("repo") or {}
-    short_name = repo_cfg.get("short-name")
-    if short_name:
-        repo_name = str(short_name).lower()
-    else:
-        # Fall back to remote URL basename.
-        result = subprocess_util.run(["git", "remote", "get-url", "origin"])
-        url = result.stdout.strip()
-        basename = url.rstrip("/").rsplit("/", 1)[-1]
-        # Strip .git / .wiki.git suffixes.
-        basename = re.sub(r"\.wiki\.git$", "", basename)
-        basename = re.sub(r"\.git$", "", basename)
-        repo_name = basename.lower()
+    result = subprocess_util.run(["git", "remote", "get-url", "origin"])
+    url = result.stdout.strip()
+    basename = url.rstrip("/").rsplit("/", 1)[-1]
+    basename = re.sub(r"\.wiki\.git$", "", basename)
+    basename = re.sub(r"\.git$", "", basename)
+    repo_name = basename.lower()
 
     parent = Path.cwd().parent
     return parent / f"{repo_name}.wiki"
