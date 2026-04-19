@@ -15,7 +15,6 @@ A junction (Windows) or symlink (Unix) pointing at the local wiki clone (`<proje
   Home.md                       ← task list (tasks_md API — never edit directly)
   _Sidebar.md                   ← wiki sidebar
   config.yaml                   ← shared mill config (committed to wiki)
-  reviewers.yaml                ← reviewer recipes (committed to wiki)
   proposals/                    ← design documents
   <background-slug>.md          ← per-task background reference docs
   active/

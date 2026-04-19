@@ -69,12 +69,11 @@ Run each phase in order. Stop on the first hard error and report it. Each phase 
 
 1. **Backup first.** Copy `_millhouse/config.yaml` to `_millhouse/config.yaml.bak` BEFORE any write. Skip the backup if `.bak` already exists (a prior interrupted migration).
 
-2. **Split into three files:**
-   - `<wiki-clone>/config.yaml` — shared settings: `git`, `repo`, `pipeline` (strip `holistic:` and `per-card:` keys — replaced by single holistic reviewer per card 5), `runtime`, `revise` blocks.
-   - `<wiki-clone>/reviewers.yaml` — the `reviewers:` block (recipe definitions).
+2. **Split into two files:**
+   - `<wiki-clone>/config.yaml` — shared settings: `git`, `repo`, `pipeline` (strip `holistic:` and `per-card:` keys — replaced by single holistic reviewer per card 5), `runtime`, `revise` blocks. Drop any `reviewers:` block — reviewer recipes live in Python (`reviewers/definitions.py` + `workers.py`).
    - `_millhouse/config.local.yaml` — machine-specific settings: `notifications`, and `wiki:` (only if `clone-path` was non-default).
 
-3. **Commit and push both wiki files** via `millpy.tasks.wiki.write_commit_push(cfg, ["config.yaml", "reviewers.yaml"], "chore: mill-setup config split")`.
+3. **Commit and push wiki file** via `millpy.tasks.wiki.write_commit_push(cfg, ["config.yaml"], "chore: mill-setup config split")`.
 
 4. **Only after the push succeeds:** delete `_millhouse/config.yaml`.
 
@@ -83,7 +82,7 @@ Run each phase in order. Stop on the first hard error and report it. Each phase 
    Config split aborted — wiki push failed. Restored from backup. Check network and re-run.
    ```
 
-6. **Idempotent re-entry cleanup:** on a subsequent successful mill-setup run (`.mill/config.yaml` AND `.mill/reviewers.yaml` both present in the wiki clone), remove `_millhouse/config.yaml.bak` if it still exists.
+6. **Idempotent re-entry cleanup:** on a subsequent successful mill-setup run (`.mill/config.yaml` present in the wiki clone), remove `_millhouse/config.yaml.bak` if it still exists.
 
 #### 4b — Fresh setup path (no legacy config)
 
@@ -93,7 +92,7 @@ If `_millhouse/config.yaml` does NOT exist and `_millhouse/config.local.yaml` do
 
 2. **Write local config.** Create `_millhouse/config.local.yaml` with `notifications:` block (platform defaults).
 
-3. **Write shared config to wiki.** Read `plugins/mill/templates/millhouse-config.yaml`, substitute `<SHORT_NAME>`, and write to `<wiki-clone>/config.yaml`. Write the `reviewers:` block to `<wiki-clone>/reviewers.yaml`. Commit and push via `wiki.write_commit_push`.
+3. **Write shared config to wiki.** Read `plugins/mill/templates/millhouse-config.yaml`, substitute `<SHORT_NAME>`, and write to `<wiki-clone>/config.yaml`. Commit and push via `wiki.write_commit_push(cfg, ["config.yaml"], "chore: mill-setup init config")`.
 
 ### Phase 5: Bootstrap wiki contents
 
