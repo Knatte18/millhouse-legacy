@@ -1,9 +1,9 @@
 """
-reviewers/base.py — Worker, Ensemble, Reviewer Protocol, and ReviewerResult.
+reviewers/base.py — Worker, Cluster, Reviewer Protocol, and ReviewerResult.
 
-Worker:  atomic (provider, model, effort, dispatch_mode) configuration.
-Ensemble: ensemble composition referencing WORKERS entries by name.
-Reviewer: Protocol that all reviewer implementations must satisfy.
+Worker:      atomic (provider, model, effort, dispatch_mode) configuration.
+Cluster:     cluster composition referencing WORKERS entries by name.
+Reviewer:    Protocol that all reviewer implementations must satisfy.
 ReviewerResult: frozen result type returned by any Reviewer.run() call.
 SingleWorker: simple Reviewer implementation wrapping one Worker.
 
@@ -73,12 +73,12 @@ class Worker:
 
 
 # ---------------------------------------------------------------------------
-# Ensemble
+# Cluster
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class Ensemble:
-    """Ensemble composition: N parallel workers + one handler.
+class Cluster:
+    """Cluster composition: N parallel workers + one handler.
 
     Fields
     ------
@@ -101,7 +101,7 @@ class Ensemble:
     def __post_init__(self) -> None:
         if self.worker_count < 1:
             raise ValueError(
-                f"Ensemble.worker_count must be >= 1, got {self.worker_count}"
+                f"Cluster.worker_count must be >= 1, got {self.worker_count}"
             )
 
 

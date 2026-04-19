@@ -1,9 +1,9 @@
-"""Tests for millpy.reviewers.base — Worker, Ensemble, Reviewer, ReviewerResult."""
+"""Tests for millpy.reviewers.base — Worker, Cluster, Reviewer, ReviewerResult."""
 from __future__ import annotations
 
 import pytest
 
-from millpy.reviewers.base import Ensemble, Worker
+from millpy.reviewers.base import Cluster, Worker
 
 
 class TestWorkerDefaults:
@@ -48,17 +48,17 @@ class TestWorkerFrozen:
         assert w.extras["think"] is True
 
 
-class TestEnsemble:
+class TestCluster:
     def test_worker_count_zero_raises(self):
         with pytest.raises(ValueError):
-            Ensemble(worker="sonnet", worker_count=0, handler="opus")
+            Cluster(worker="sonnet", worker_count=0, handler="opus")
 
     def test_worker_count_one_allowed(self):
-        e = Ensemble(worker="sonnet", worker_count=1, handler="opus")
+        e = Cluster(worker="sonnet", worker_count=1, handler="opus")
         assert e.worker_count == 1
 
     def test_handler_prep_default_false(self):
-        e = Ensemble(worker="sonnet", worker_count=2, handler="opus")
+        e = Cluster(worker="sonnet", worker_count=2, handler="opus")
         assert e.handler_prep is False
 
 

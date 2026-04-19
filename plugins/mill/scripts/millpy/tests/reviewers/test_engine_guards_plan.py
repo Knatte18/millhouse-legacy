@@ -3,7 +3,7 @@ test_engine_guards_plan.py — Tests for engine._guard_plan_whole_bulk.
 
 Four scenarios:
 1. Bulk SingleWorker + plan phase + plan_dir_path set → guard passes (holistic allowed)
-2. Bulk EnsembleReviewer + plan phase + plan_dir_path set → guard passes (holistic allowed)
+2. Bulk ClusterReviewer + plan phase + plan_dir_path set → guard passes (holistic allowed)
 3. Tool-use SingleWorker + plan phase + plan_dir_path set → passes (no error)
 4. Bulk SingleWorker + plan phase + plan_dir_path=None → passes (no error)
 """
@@ -74,11 +74,11 @@ class TestGuardPlanWholeBulk:
         assert result.verdict == "APPROVE"
 
     def test_bulk_ensemble_allowed_with_plan_dir(self, tmp_path: Path):
-        """Scenario 2: bulk EnsembleReviewer + plan + plan_dir_path → guard passes (holistic allowed)."""
+        """Scenario 2: bulk ClusterReviewer + plan + plan_dir_path → guard passes (holistic allowed)."""
         FakeER = _make_fake_ensemble_reviewer_class()
         with (
             patch("millpy.reviewers.engine.project_root", return_value=tmp_path),
-            patch("millpy.reviewers.engine.EnsembleReviewer", FakeER),
+            patch("millpy.reviewers.engine.ClusterReviewer", FakeER),
         ):
             from millpy.reviewers.engine import run_reviewer
             prompt_file = tmp_path / "prompt.md"

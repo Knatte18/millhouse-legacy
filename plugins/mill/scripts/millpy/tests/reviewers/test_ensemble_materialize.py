@@ -12,7 +12,7 @@ import pytest
 
 from millpy.core.config import ConfigError
 from millpy.reviewers.base import Worker
-from millpy.reviewers.ensemble import _materialize_prompt
+from millpy.reviewers.cluster import _materialize_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ class TestBulkPerBatch:
         monkeypatch.chdir(root)
 
         # Patch repo_root to return our fake root
-        import millpy.reviewers.ensemble as ens_mod
+        import millpy.reviewers.cluster as ens_mod
         monkeypatch.setattr(ens_mod, "repo_root", lambda: root)
 
         overview = write_file(root / "plan" / "00-overview.md", "OVERVIEW BODY")
@@ -111,7 +111,7 @@ class TestBulkPerBatch:
         assert "Round: 2" in result
 
     def test_bulk_per_batch_raises_if_template_missing(self, tmp_path, monkeypatch):
-        import millpy.reviewers.ensemble as ens_mod
+        import millpy.reviewers.cluster as ens_mod
         monkeypatch.setattr(ens_mod, "repo_root", lambda: tmp_path)
 
         overview = write_file(tmp_path / "overview.md", "ov")
@@ -126,7 +126,7 @@ class TestBulkPerBatch:
             )
 
     def test_bulk_per_batch_raises_if_overview_token_missing(self, tmp_path, monkeypatch):
-        import millpy.reviewers.ensemble as ens_mod
+        import millpy.reviewers.cluster as ens_mod
         monkeypatch.setattr(ens_mod, "repo_root", lambda: tmp_path)
 
         template_path = tmp_path / "plugins" / "mill" / "doc" / "prompts" / "plan-review-bulk.md"
@@ -159,7 +159,7 @@ def _write_holistic_template(root: Path) -> Path:
 
 class TestBulkHolisticMode:
     def test_materialize_holistic_bulk_substitutes_plan_content(self, tmp_path, monkeypatch):
-        import millpy.reviewers.ensemble as ens_mod
+        import millpy.reviewers.cluster as ens_mod
         monkeypatch.setattr(ens_mod, "repo_root", lambda: tmp_path)
         _write_holistic_template(tmp_path)
 
@@ -183,7 +183,7 @@ class TestBulkHolisticMode:
         assert "Round: 1" in result
 
     def test_materialize_holistic_bulk_empty_dir_fallback(self, tmp_path, monkeypatch):
-        import millpy.reviewers.ensemble as ens_mod
+        import millpy.reviewers.cluster as ens_mod
         monkeypatch.setattr(ens_mod, "repo_root", lambda: tmp_path)
         _write_holistic_template(tmp_path)
 
@@ -202,7 +202,7 @@ class TestBulkHolisticMode:
         assert "(plan directory is empty)" in result
 
     def test_materialize_holistic_bulk_missing_template_raises_configerror(self, tmp_path, monkeypatch):
-        import millpy.reviewers.ensemble as ens_mod
+        import millpy.reviewers.cluster as ens_mod
         monkeypatch.setattr(ens_mod, "repo_root", lambda: tmp_path)
         # intentionally do not create the template
 
@@ -226,7 +226,7 @@ class TestBulkHolisticMode:
 
 class TestBulkCodeReviewV1:
     def test_v1_plan_content_substituted(self, tmp_path, monkeypatch):
-        import millpy.reviewers.ensemble as ens_mod
+        import millpy.reviewers.cluster as ens_mod
         monkeypatch.setattr(ens_mod, "repo_root", lambda: tmp_path)
 
         template_path = tmp_path / "plugins" / "mill" / "doc" / "prompts" / "code-review-bulk.md"
@@ -253,7 +253,7 @@ class TestBulkCodeReviewV1:
 
 class TestBulkCodeReviewV2:
     def test_v2_directory_uses_plan_io(self, tmp_path, monkeypatch):
-        import millpy.reviewers.ensemble as ens_mod
+        import millpy.reviewers.cluster as ens_mod
         monkeypatch.setattr(ens_mod, "repo_root", lambda: tmp_path)
 
         template_path = tmp_path / "plugins" / "mill" / "doc" / "prompts" / "code-review-bulk.md"

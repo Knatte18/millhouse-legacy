@@ -1,4 +1,4 @@
-"""Tests for millpy.reviewers.ensemble — EnsembleReviewer."""
+"""Tests for millpy.reviewers.cluster — ClusterReviewer."""
 from __future__ import annotations
 
 import sys
@@ -9,8 +9,8 @@ import pytest
 
 from millpy.backends.base import BulkResult, ToolUseResult
 from millpy.core.config import ConfigError
-from millpy.reviewers.base import Ensemble, ReviewerResult
-from millpy.reviewers.ensemble import EnsembleReviewer, _materialize_prompt
+from millpy.reviewers.base import Cluster, ReviewerResult
+from millpy.reviewers.cluster import ClusterReviewer, _materialize_prompt
 from millpy.reviewers.workers import WORKERS
 
 
@@ -64,7 +64,7 @@ def _make_tool_use_backend(result_text: str = "VERDICT: APPROVE\n", exit_code: i
 # Test: all workers fail → DEGRADED_FATAL
 # ---------------------------------------------------------------------------
 
-class TestEnsembleDegradation:
+class TestClusterDegradation:
     def test_all_workers_fail_degraded_fatal(
         self, tmp_path: Path, prompt_file: Path, fake_review_file: Path
     ):
@@ -86,8 +86,8 @@ class TestEnsembleDegradation:
             )
         failing_backend.dispatch_bulk = dispatch_bulk_fail
 
-        ensemble = Ensemble(worker="g3pro", worker_count=2, handler="opus")
-        reviewer = EnsembleReviewer(ensemble)
+        cluster = Cluster(worker="g3pro", worker_count=2, handler="opus")
+        reviewer = ClusterReviewer(cluster)
 
         fake_root = tmp_path
         (fake_root / "_millhouse" / "scratch" / "reviews").mkdir(parents=True)
@@ -96,11 +96,11 @@ class TestEnsembleDegradation:
         synth_result.write_text("VERDICT: APPROVE\n", encoding="utf-8")
 
         with (
-            patch("millpy.reviewers.ensemble.BACKENDS", {
+            patch("millpy.reviewers.cluster.BACKENDS", {
                 "gemini": failing_backend,
                 "claude": _make_tool_use_backend(),
             }),
-            patch("millpy.reviewers.ensemble.repo_root", return_value=fake_root),
+            patch("millpy.reviewers.cluster.repo_root", return_value=fake_root),
         ):
             result = reviewer.run(
                 prompt_file=prompt_file,
@@ -122,14 +122,12 @@ class TestEnsembleDegradation:
         def dispatch_bulk_mixed(prompt, output_path, *, model, effort):
             call_count[0] += 1
             if call_count[0] == 1:
-                # First call fails
                 return BulkResult(
                     stdout="",
                     stderr="error",
                     exit_code=11,
                     output_path=output_path,
                 )
-            # Second call succeeds
             output_path.write_text("VERDICT: APPROVE\n", encoding="utf-8")
             return BulkResult(
                 stdout="VERDICT: APPROVE\n",
@@ -143,8 +141,8 @@ class TestEnsembleDegradation:
 
         tool_use_backend = _make_tool_use_backend("VERDICT: APPROVE\n")
 
-        ensemble = Ensemble(worker="g3pro", worker_count=2, handler="opus")
-        reviewer = EnsembleReviewer(ensemble)
+        cluster = Cluster(worker="g3pro", worker_count=2, handler="opus")
+        reviewer = ClusterReviewer(cluster)
 
         fake_root = tmp_path
         (fake_root / "_millhouse" / "scratch" / "reviews").mkdir(parents=True)
@@ -155,14 +153,13 @@ class TestEnsembleDegradation:
             return output_path
 
         with (
-            patch("millpy.reviewers.ensemble.BACKENDS", {
+            patch("millpy.reviewers.cluster.BACKENDS", {
                 "gemini": mixed_backend,
                 "claude": tool_use_backend,
             }),
-            patch("millpy.reviewers.ensemble.repo_root", return_value=fake_root),
+            patch("millpy.reviewers.cluster.repo_root", return_value=fake_root),
             patch("millpy.reviewers.handler.synthesize", fake_synthesize),
         ):
-            # Need to also patch the dynamic import
             import millpy.reviewers.handler as handler_mod
             with patch.object(handler_mod, "synthesize", fake_synthesize):
                 result = reviewer.run(
@@ -173,7 +170,6 @@ class TestEnsembleDegradation:
                     files_from=None,
                 )
 
-        # Should not be DEGRADED_FATAL (at least one succeeded)
         assert result.verdict != "DEGRADED_FATAL"
 
 
@@ -187,7 +183,6 @@ class TestBulkPayloadSubstitution:
         prompt_file = tmp_path / "prompt.md"
         prompt_file.write_text("No placeholder here.\n", encoding="utf-8")
 
-        # Template without <FILES_PAYLOAD>
         prompts_dir = tmp_path / "plugins" / "mill" / "doc" / "prompts"
         prompts_dir.mkdir(parents=True)
         template = prompts_dir / "code-review-bulk.md"
@@ -198,21 +193,18 @@ class TestBulkPayloadSubstitution:
 
         worker = WORKERS["g3pro"]  # bulk dispatch
 
-        with patch("millpy.reviewers.ensemble.repo_root", return_value=tmp_path):
+        with patch("millpy.reviewers.cluster.repo_root", return_value=tmp_path):
             with pytest.raises(ConfigError, match="FILES_PAYLOAD"):
                 _materialize_prompt(prompt_file, "code", worker, files_from)
 
     def test_bulk_payload_substituted(self, tmp_path: Path):
         """<FILES_PAYLOAD> placeholder is replaced with file contents."""
-        # Create a source file to include
         src = tmp_path / "src.py"
         src.write_text("x = 1\n", encoding="utf-8")
 
-        # Create files_from listing
         files_from = tmp_path / "files.txt"
         files_from.write_text("src.py\n", encoding="utf-8")
 
-        # Create bulk template with placeholder
         prompts_dir = tmp_path / "plugins" / "mill" / "doc" / "prompts"
         prompts_dir.mkdir(parents=True)
         template = prompts_dir / "code-review-bulk.md"
@@ -223,7 +215,7 @@ class TestBulkPayloadSubstitution:
 
         worker = WORKERS["g3pro"]
 
-        with patch("millpy.reviewers.ensemble.repo_root", return_value=tmp_path):
+        with patch("millpy.reviewers.cluster.repo_root", return_value=tmp_path):
             result = _materialize_prompt(prompt_file, "code", worker, files_from)
 
         assert "<FILES_PAYLOAD>" not in result

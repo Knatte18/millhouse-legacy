@@ -1,7 +1,7 @@
 """
 reviewers/__init__.py — Registry validation for millpy reviewer layer.
 
-Imports WORKERS and REVIEWERS from their respective modules and validates
+Imports WORKERS and CLUSTERS from their respective modules and validates
 all invariants at import time. Any violation raises ValueError immediately
 with a message naming the offending entry.
 
@@ -9,24 +9,24 @@ Validation invariants (per the import-time validation decision):
   1. Every Worker.provider is a key in BACKENDS.
   2. Worker.effort is None unless provider == "claude".
   3. Every Worker.dispatch_mode is in {"tool-use", "bulk"}.
-  4. Every Ensemble.worker and Ensemble.handler is a valid WORKERS key.
-  5. Every Ensemble.worker_count >= 1 (also enforced by __post_init__).
-  6. Name-space non-overlap: WORKERS.keys() & REVIEWERS.keys() == set().
+  4. Every Cluster.worker and Cluster.handler is a valid WORKERS key.
+  5. Every Cluster.worker_count >= 1 (also enforced by __post_init__).
+  6. Name-space non-overlap: WORKERS.keys() & CLUSTERS.keys() == set().
 """
 from __future__ import annotations
 
 from millpy.backends import BACKENDS
-from millpy.reviewers.base import Ensemble, Worker
-from millpy.reviewers.definitions import REVIEWERS
+from millpy.reviewers.base import Cluster, Worker
+from millpy.reviewers.clusters import CLUSTERS
 from millpy.reviewers.workers import WORKERS
 
-__all__ = ["WORKERS", "REVIEWERS", "Worker", "Ensemble", "validate_registries"]
+__all__ = ["WORKERS", "CLUSTERS", "Worker", "Cluster", "validate_registries"]
 
 _VALID_DISPATCH_MODES = {"tool-use", "bulk"}
 
 
 def validate_registries() -> None:
-    """Validate WORKERS and REVIEWERS registries.
+    """Validate WORKERS and CLUSTERS registries.
 
     Raises
     ------
@@ -57,31 +57,31 @@ def validate_registries() -> None:
                 f"in {_VALID_DISPATCH_MODES}"
             )
 
-    # Invariant 4: Every Ensemble.worker and Ensemble.handler must be valid WORKERS keys.
-    for name, ensemble in REVIEWERS.items():
+    # Invariant 4: Every Cluster.worker and Cluster.handler must be valid WORKERS keys.
+    for name, ensemble in CLUSTERS.items():
         if ensemble.worker not in WORKERS:
             raise ValueError(
-                f"REVIEWERS[{name!r}]: worker={ensemble.worker!r} is not a valid "
+                f"CLUSTERS[{name!r}]: worker={ensemble.worker!r} is not a valid "
                 f"WORKERS key"
             )
         if ensemble.handler not in WORKERS:
             raise ValueError(
-                f"REVIEWERS[{name!r}]: handler={ensemble.handler!r} is not a valid "
+                f"CLUSTERS[{name!r}]: handler={ensemble.handler!r} is not a valid "
                 f"WORKERS key"
             )
 
-    # Invariant 5: Every Ensemble.worker_count >= 1.
-    for name, ensemble in REVIEWERS.items():
+    # Invariant 5: Every Cluster.worker_count >= 1.
+    for name, ensemble in CLUSTERS.items():
         if ensemble.worker_count < 1:
             raise ValueError(
-                f"REVIEWERS[{name!r}]: worker_count={ensemble.worker_count} must be >= 1"
+                f"CLUSTERS[{name!r}]: worker_count={ensemble.worker_count} must be >= 1"
             )
 
     # Invariant 6: Name-space non-overlap.
-    overlap = set(WORKERS.keys()) & set(REVIEWERS.keys())
+    overlap = set(WORKERS.keys()) & set(CLUSTERS.keys())
     if overlap:
         raise ValueError(
-            f"Name(s) appear in both WORKERS and REVIEWERS: {overlap} — "
+            f"Name(s) appear in both WORKERS and CLUSTERS: {overlap} — "
             "names must be unique across both registries"
         )
 

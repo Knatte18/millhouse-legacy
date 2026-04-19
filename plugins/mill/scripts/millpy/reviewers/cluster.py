@@ -1,5 +1,5 @@
 """
-reviewers/ensemble.py — EnsembleReviewer: parallel worker dispatch.
+reviewers/cluster.py — ClusterReviewer: parallel worker dispatch.
 
 Dispatches worker_count parallel workers via ThreadPoolExecutor, aggregates
 results, and delegates final synthesis to reviewers.handler.synthesize.
@@ -15,7 +15,7 @@ Bulk payload:
     3. Call core.bulk_payload.build_payload and substitute at <FILES_PAYLOAD>.
     4. If the template does NOT contain <FILES_PAYLOAD>, raise ConfigError.
 
-Handler prep (Ensemble.handler_prep=True):
+Handler prep (Cluster.handler_prep=True):
   When True AND handler.dispatch_mode == "tool-use", spawn the handler prep
   pass in parallel via the same executor. Prep failure is non-fatal.
 """
@@ -32,26 +32,26 @@ from millpy.core.config import ConfigError
 from millpy.core.log_util import log
 from millpy.core.paths import project_root, repo_root
 from millpy.core.verdict import extract_verdict_from_text
-from millpy.reviewers.base import Ensemble, ReviewerResult, Worker
+from millpy.reviewers.base import Cluster, ReviewerResult, Worker
 from millpy.reviewers.failures import KIND_UNCLASSIFIED, WorkerFailure
 from millpy.reviewers.workers import WORKERS
 
 
 # ---------------------------------------------------------------------------
-# EnsembleReviewer
+# ClusterReviewer
 # ---------------------------------------------------------------------------
 
-class EnsembleReviewer:
-    """Implements the Reviewer Protocol for ensemble configurations.
+class ClusterReviewer:
+    """Implements the Reviewer Protocol for cluster configurations.
 
     Parameters
     ----------
-    ensemble:
-        The Ensemble definition (worker name, count, handler name, etc.).
+    cluster:
+        The Cluster definition (worker name, count, handler name, etc.).
     """
 
-    def __init__(self, ensemble: Ensemble) -> None:
-        self.ensemble = ensemble
+    def __init__(self, cluster: Cluster) -> None:
+        self.cluster = cluster
 
     def run(
         self,
@@ -94,8 +94,8 @@ class EnsembleReviewer:
         -------
         ReviewerResult
         """
-        worker_obj = WORKERS[self.ensemble.worker]
-        handler_obj = WORKERS[self.ensemble.handler]
+        worker_obj = WORKERS[self.cluster.worker]
+        handler_obj = WORKERS[self.cluster.handler]
 
         # Materialize the prompt (bulk template substitution: payload + plan/constraints/round)
         prompt = _materialize_prompt(
@@ -111,14 +111,14 @@ class EnsembleReviewer:
         scratch_dir.mkdir(parents=True, exist_ok=True)
 
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
-        worker_count = self.ensemble.worker_count
+        worker_count = self.cluster.worker_count
 
         # Optional handler-prep pass
         prep_notes: Path | None = None
         futures: dict = {}
         prep_future = None
 
-        with ThreadPoolExecutor(max_workers=worker_count + (1 if self.ensemble.handler_prep else 0)) as executor:
+        with ThreadPoolExecutor(max_workers=worker_count + (1 if self.cluster.handler_prep else 0)) as executor:
             # Submit worker tasks
             for idx in range(1, worker_count + 1):
                 out_path = scratch_dir / f"{ts}-worker{idx}-r{round}.md"
@@ -131,7 +131,7 @@ class EnsembleReviewer:
                 futures[fut] = out_path
 
             # Submit handler prep if requested
-            if self.ensemble.handler_prep and handler_obj.dispatch_mode == "tool-use":
+            if self.cluster.handler_prep and handler_obj.dispatch_mode == "tool-use":
                 prep_out = scratch_dir / f"{ts}-handler-prep-r{round}.md"
                 prep_future = executor.submit(
                     _run_handler_prep,
@@ -150,7 +150,7 @@ class EnsembleReviewer:
                     result = fut.result()
                     worker_results.append(result)
                 except Exception as exc:
-                    log("ensemble", f"worker raised exception: {exc}")
+                    log("cluster", f"worker raised exception: {exc}")
                     worker_results.append(WorkerFailure(
                         kind=KIND_UNCLASSIFIED,
                         detail=str(exc),
@@ -163,7 +163,7 @@ class EnsembleReviewer:
                 try:
                     prep_notes = prep_future.result()
                 except Exception as exc:
-                    log("ensemble", f"handler prep failed (non-fatal): {exc}")
+                    log("cluster", f"handler prep failed (non-fatal): {exc}")
                     prep_notes = None
 
         # Separate successes from failures
@@ -173,7 +173,7 @@ class EnsembleReviewer:
         if not successful:
             # All workers failed
             first_kind = failures[0].kind if failures else KIND_UNCLASSIFIED
-            log("ensemble", f"ALL workers failed ({len(failures)} failures); kind={first_kind}")
+            log("cluster", f"ALL workers failed ({len(failures)} failures); kind={first_kind}")
             return ReviewerResult(
                 verdict="DEGRADED_FATAL",
                 review_file=review_file_path,
@@ -183,7 +183,7 @@ class EnsembleReviewer:
 
         if failures:
             log(
-                "ensemble",
+                "cluster",
                 f"{len(failures)} worker(s) failed; continuing with {len(successful)} survivor(s)",
             )
 
@@ -211,9 +211,9 @@ class EnsembleReviewer:
                         tmp_files_from = scratch_dir / f"{ts}-handler-files-from-r{round}.txt"
                         tmp_files_from.write_text("\n".join(existing) + "\n", encoding="utf-8")
                         handler_files_from = tmp_files_from
-                        log("ensemble", f"derived handler files_from for holistic plan review: {len(existing)} files (skipped {len(touched) - len(existing)} non-existent)")
+                        log("cluster", f"derived handler files_from for holistic plan review: {len(existing)} files (skipped {len(touched) - len(existing)} non-existent)")
             except Exception as exc:
-                log("ensemble", f"failed to derive handler files_from from plan: {exc}")
+                log("cluster", f"failed to derive handler files_from from plan: {exc}")
 
         handler_mod.synthesize(
             successful,
@@ -322,10 +322,6 @@ def _materialize_prompt(
                 "<FILES_PAYLOAD> placeholder"
             )
 
-        # Build source-file FILES_PAYLOAD so bulk holistic reviewers can verify
-        # plan claims against actual code. Read every path in the plan overview's
-        # `## All Files Touched` section, resolve via plan_io (applies root prefix),
-        # skip entries that don't exist on disk (log the skip — gap in plan).
         source_paths: list[Path] = []
         try:
             from millpy.core.plan_io import resolve_plan_path, read_files_touched  # noqa: PLC0415
@@ -337,9 +333,9 @@ def _materialize_prompt(
                     if abs_path.exists() and abs_path.is_file():
                         source_paths.append(abs_path)
                     else:
-                        log("ensemble", f"holistic-bulk: skipping non-existent file from plan: {rel}")
+                        log("cluster", f"holistic-bulk: skipping non-existent file from plan: {rel}")
         except Exception as exc:
-            log("ensemble", f"holistic-bulk: could not resolve source files from plan: {exc}")
+            log("cluster", f"holistic-bulk: could not resolve source files from plan: {exc}")
         if source_paths:
             files_payload = bulk_payload_mod.build_payload(source_paths, base_dir=root)
         else:
@@ -351,12 +347,6 @@ def _materialize_prompt(
         else:
             constraints_content = "(no CONSTRAINTS.md)"
 
-        # One-pass regex substitution avoids recursive inflation:
-        # plan content and file payload both contain placeholder mentions
-        # ("substitute <FILES_PAYLOAD>", etc.) as literal prose; chained
-        # .replace() calls would rewrite those too, causing 27x blowup to
-        # 5 MB. Regex subn on the TEMPLATE touches each placeholder exactly
-        # once and leaves substituted content's prose untouched.
         import re as _re  # noqa: PLC0415
         substitutions = {
             "<PLAN_CONTENT>": full_plan,
@@ -396,7 +386,6 @@ def _materialize_prompt(
         overview_content = plan_overview.read_text(encoding="utf-8", errors="replace")
         batch_content = plan_batch.read_text(encoding="utf-8", errors="replace")
 
-        # Build file payload from files_from (if provided)
         if files_from is not None:
             raw_paths = files_from.read_text(encoding="utf-8", errors="replace").splitlines()
             paths = [root / p.strip() for p in raw_paths if p.strip()]
@@ -423,13 +412,12 @@ def _materialize_prompt(
     # Bulk: v1 single-file / code-review mode
     # ------------------------------------------------------------------
     if files_from is None:
-        # No files to build payload from; fall back to plain prompt
         return prompt_file.read_text(encoding="utf-8", errors="replace")
 
     template_path = root / "plugins" / "mill" / "doc" / "prompts" / f"{phase}-review-bulk.md"
 
     if not template_path.exists():
-        log("ensemble", f"bulk template not found at {template_path}; using plain prompt")
+        log("cluster", f"bulk template not found at {template_path}; using plain prompt")
         return prompt_file.read_text(encoding="utf-8", errors="replace")
 
     template = template_path.read_text(encoding="utf-8", errors="replace")
@@ -445,10 +433,8 @@ def _materialize_prompt(
     paths = [root / p.strip() for p in raw_paths if p.strip()]
     payload = bulk_payload_mod.build_payload(paths, base_dir=root)
 
-    # Load plan content — supports v2 directory via plan_io
     if plan_path is not None and plan_path.exists():
         if plan_path.is_dir():
-            # v2 directory: use plan_io to concatenate
             from millpy.core.plan_io import resolve_plan_path, read_plan_content  # noqa: PLC0415
             loc = resolve_plan_path(plan_path.parent)
             if loc is not None:
@@ -478,7 +464,7 @@ def _materialize_prompt(
 def _run_worker(worker: Worker, prompt: str, output_path: Path) -> Path:
     """Dispatch one worker and return the output path on success."""
     backend = BACKENDS[worker.provider]
-    log("ensemble", f"spawning worker {worker.model} dispatch={worker.dispatch_mode}")
+    log("cluster", f"spawning worker {worker.model} dispatch={worker.dispatch_mode}")
 
     if worker.dispatch_mode == "bulk":
         result = backend.dispatch_bulk(
@@ -527,12 +513,11 @@ def _run_handler_prep(
     prep_template_path = root / "plugins" / "mill" / "doc" / "prompts" / "handler-prep.md"
 
     if not prep_template_path.exists():
-        log("ensemble", f"handler-prep.md not found at {prep_template_path}; skipping prep")
+        log("cluster", f"handler-prep.md not found at {prep_template_path}; skipping prep")
         raise FileNotFoundError(str(prep_template_path))
 
     prep_template = prep_template_path.read_text(encoding="utf-8", errors="replace")
 
-    # Build <SUBJECT> substitution from files_from
     if files_from is not None and files_from.exists():
         raw_paths = files_from.read_text(encoding="utf-8", errors="replace").splitlines()
         paths = [p.strip() for p in raw_paths if p.strip()]
@@ -555,5 +540,5 @@ def _run_handler_prep(
     )
 
     if not output_path.exists():
-        log("ensemble", f"handler prep did not write {output_path}; synthesis proceeds without prep notes")
+        log("cluster", f"handler prep did not write {output_path}; synthesis proceeds without prep notes")
     return output_path

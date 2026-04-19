@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from millpy.reviewers.base import Ensemble, Worker
-from millpy.reviewers.definitions import REVIEWERS
+from millpy.reviewers.base import Cluster, Worker
+from millpy.reviewers.clusters import CLUSTERS
 from millpy.reviewers.workers import WORKERS
 
 
@@ -51,11 +51,11 @@ class TestWorkerProviderValidation:
         validate_registries()  # must not raise
 
 
-class TestEnsembleValidation:
+class TestClusterValidation:
     def test_ensemble_bad_worker_name_raises(self, clean_registries):
-        """Ensemble referencing non-existent WORKERS key raises ValueError."""
+        """Cluster referencing non-existent WORKERS key raises ValueError."""
         from millpy.reviewers import validate_registries
-        REVIEWERS["bogus-ensemble"] = Ensemble(
+        CLUSTERS["bogus-ensemble"] = Cluster(
             worker="nonexistent",
             worker_count=1,
             handler="opus",
@@ -64,9 +64,9 @@ class TestEnsembleValidation:
             validate_registries()
 
     def test_ensemble_bad_handler_name_raises(self, clean_registries):
-        """Ensemble with non-existent handler WORKERS key raises ValueError."""
+        """Cluster with non-existent handler WORKERS key raises ValueError."""
         from millpy.reviewers import validate_registries
-        REVIEWERS["bad-handler"] = Ensemble(
+        CLUSTERS["bad-handler"] = Cluster(
             worker="sonnet",
             worker_count=1,
             handler="nonexistent-handler",
@@ -77,11 +77,11 @@ class TestEnsembleValidation:
 
 class TestNamespaceOverlap:
     def test_name_in_both_raises(self, clean_registries):
-        """Name appearing in both WORKERS and REVIEWERS raises ValueError."""
+        """Name appearing in both WORKERS and CLUSTERS raises ValueError."""
         from millpy.reviewers import validate_registries
         # Add "foo" to both
         WORKERS["foo"] = Worker(provider="claude", model="x")
-        REVIEWERS["foo"] = Ensemble(worker="sonnet", worker_count=1, handler="opus")
+        CLUSTERS["foo"] = Cluster(worker="sonnet", worker_count=1, handler="opus")
         with pytest.raises(ValueError, match="foo"):
             validate_registries()
 
@@ -106,5 +106,5 @@ class TestExports:
     def test_all_exports(self):
         """__all__ contains the required symbols."""
         import millpy.reviewers as r
-        for sym in ("WORKERS", "REVIEWERS", "Worker", "Ensemble", "validate_registries"):
-            assert sym in dir(r), f"{sym} not in reviewers namespace"
+        for sym in ("WORKERS", "CLUSTERS", "Worker", "Cluster", "validate_registries"):
+            assert sym in dir(r), f"{sym!r} not in reviewers namespace"

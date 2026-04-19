@@ -1,9 +1,9 @@
-"""Tests for millpy.reviewers.workers and definitions registries."""
+"""Tests for millpy.reviewers.workers and clusters registries."""
 from __future__ import annotations
 
 from pathlib import Path
 
-from millpy.reviewers.definitions import REVIEWERS
+from millpy.reviewers.clusters import CLUSTERS
 from millpy.reviewers.workers import WORKERS
 
 
@@ -32,18 +32,18 @@ def test_workers_effort_and_extras():
     assert WORKERS["qwenthinker"].extras == {"think": True}
 
 
-def test_reviewers_invariants():
-    for name, ensemble in REVIEWERS.items():
-        assert ensemble.worker in WORKERS, \
-            f"{name}: worker {ensemble.worker!r} not in WORKERS"
-        assert ensemble.handler in WORKERS, \
-            f"{name}: handler {ensemble.handler!r} not in WORKERS"
-        assert ensemble.worker_count >= 1, \
-            f"{name}: worker_count must be >= 1, got {ensemble.worker_count}"
-        assert isinstance(ensemble.handler_prep, bool), \
-            f"{name}: handler_prep must be bool, got {type(ensemble.handler_prep).__name__}"
-        if ensemble.handler_prep:
-            handler_dispatch = WORKERS[ensemble.handler].dispatch_mode
+def test_clusters_invariants():
+    for name, cluster in CLUSTERS.items():
+        assert cluster.worker in WORKERS, \
+            f"{name}: worker {cluster.worker!r} not in WORKERS"
+        assert cluster.handler in WORKERS, \
+            f"{name}: handler {cluster.handler!r} not in WORKERS"
+        assert cluster.worker_count >= 1, \
+            f"{name}: worker_count must be >= 1, got {cluster.worker_count}"
+        assert isinstance(cluster.handler_prep, bool), \
+            f"{name}: handler_prep must be bool, got {type(cluster.handler_prep).__name__}"
+        if cluster.handler_prep:
+            handler_dispatch = WORKERS[cluster.handler].dispatch_mode
             assert handler_dispatch == "tool-use", (
                 f"{name}: handler_prep=True requires tool-use handler, "
                 f"got {handler_dispatch!r}"
@@ -52,11 +52,11 @@ def test_reviewers_invariants():
 
 def test_no_cross_import():
     import millpy.reviewers.workers as w_mod
-    import millpy.reviewers.definitions as d_mod
+    import millpy.reviewers.clusters as c_mod
     for mod_obj, bad in [
-        (w_mod, "definitions"),
-        (d_mod, "workers"),
+        (w_mod, "clusters"),
+        (c_mod, "workers"),
     ]:
         mod_path = Path(mod_obj.__file__)
-        lines = [l for l in mod_path.read_text(encoding="utf-8").splitlines() if l.strip().startswith(("import ", "from "))]
-        assert not any(bad in l for l in lines), f"{mod_path.name} must not import {bad}"
+        lines = [ln for ln in mod_path.read_text(encoding="utf-8").splitlines() if ln.strip().startswith(("import ", "from "))]
+        assert not any(bad in ln for ln in lines), f"{mod_path.name} must not import {bad}"

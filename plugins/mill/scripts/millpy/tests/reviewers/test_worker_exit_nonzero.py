@@ -135,7 +135,7 @@ class TestSingleWorkerExitNonzero:
 class TestEnsemblePartialFailure:
     """Document and pin ensemble behavior on per-worker failures.
 
-    Observed behavior (see `reviewers/ensemble.py:168-181`):
+    Observed behavior (see `reviewers/cluster.py:168-181`):
     - ALL workers fail → `verdict="DEGRADED_FATAL"`, `failure_kind` = first
       worker's failure kind, `exit_code=1`.
     - Some workers fail, some succeed → survivors' outputs are handed to the
@@ -148,9 +148,9 @@ class TestEnsemblePartialFailure:
 
         A live ensemble spawn is heavy (ThreadPoolExecutor + handler synthesis).
         This regression pin keeps us from silently flipping the
-        partial-failure-absorption semantics. See ensemble.py:168-211.
+        partial-failure-absorption semantics. See cluster.py:168-211.
         """
-        from millpy.reviewers import ensemble as ensemble_mod
+        from millpy.reviewers import cluster as ensemble_mod
 
         source = Path(ensemble_mod.__file__).read_text(encoding="utf-8")
         # If all workers fail → DEGRADED_FATAL (not ERROR).

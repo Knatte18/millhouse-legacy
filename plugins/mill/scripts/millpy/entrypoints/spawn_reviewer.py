@@ -288,7 +288,7 @@ def _run_plan_validation(
 
 def _print_reviewer_registries() -> None:
     """Print both WORKERS and REVIEWERS registries to stdout for discovery."""
-    from millpy.reviewers.definitions import REVIEWERS
+    from millpy.reviewers.clusters import CLUSTERS
     from millpy.reviewers.workers import WORKERS
 
     print("WORKERS:")
@@ -298,12 +298,12 @@ def _print_reviewer_registries() -> None:
         print(f"  {name:20s} - provider={worker.provider} model={worker.model}{effort}")
 
     print()
-    print("REVIEWERS:")
-    for name in sorted(REVIEWERS):
-        ensemble = REVIEWERS[name]
+    print("CLUSTERS:")
+    for name in sorted(CLUSTERS):
+        cluster = CLUSTERS[name]
         print(
-            f"  {name:36s} - worker={ensemble.worker} x{ensemble.worker_count} "
-            f"handler={ensemble.handler}"
+            f"  {name:36s} - worker={cluster.worker} x{cluster.worker_count} "
+            f"handler={cluster.handler}"
         )
 
 

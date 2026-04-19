@@ -99,7 +99,7 @@ class TestNonePathDerivation:
 
 
 # ---------------------------------------------------------------------------
-# Resolution type (WORKERS→SingleWorker, REVIEWERS→EnsembleReviewer)
+# Resolution type (WORKERS→SingleWorker, CLUSTERS→ClusterReviewer)
 # ---------------------------------------------------------------------------
 
 class TestResolutionType:
@@ -124,7 +124,7 @@ class TestResolutionType:
                          plan_start_hash=None, plan_path=None, files_from=None)
         assert created == ["SW"]
 
-    def test_reviewers_entry_wraps_as_ensemble(self, tmp_path: Path):
+    def test_reviewers_entry_wraps_as_cluster(self, tmp_path: Path):
         created = []
 
         class FakeER:
@@ -138,7 +138,7 @@ class TestResolutionType:
         prompt_file.write_text("p\n", encoding="utf-8")
         with (
             patch("millpy.reviewers.engine.project_root", return_value=tmp_path),
-            patch("millpy.reviewers.engine.EnsembleReviewer", FakeER),
+            patch("millpy.reviewers.engine.ClusterReviewer", FakeER),
         ):
             run_reviewer(reviewer_name="g3pro-x2-opus", prompt_file=prompt_file,
                          phase="code", round=1, review_file_path=tmp_path / "out.md",

@@ -22,7 +22,7 @@ def test_list_reviewers_prints_both_registries(capsys):
     spawn_reviewer.main(["--list-reviewers"])
     captured = capsys.readouterr()
     assert "WORKERS:" in captured.out
-    assert "REVIEWERS:" in captured.out
+    assert "CLUSTERS:" in captured.out
 
 
 def test_list_reviewers_lists_canonical_workers(capsys):

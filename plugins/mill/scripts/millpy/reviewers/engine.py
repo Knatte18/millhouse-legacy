@@ -24,8 +24,8 @@ from millpy.core.config import ConfigError
 from millpy.core.log_util import log
 from millpy.core.paths import project_root
 from millpy.reviewers.base import ReviewerResult, SingleWorker
-from millpy.reviewers.definitions import REVIEWERS
-from millpy.reviewers.ensemble import EnsembleReviewer
+from millpy.reviewers.clusters import CLUSTERS
+from millpy.reviewers.cluster import ClusterReviewer
 from millpy.reviewers.workers import WORKERS
 
 
@@ -50,7 +50,7 @@ def run_reviewer(
     Parameters
     ----------
     reviewer_name:
-        Name of a REVIEWERS or WORKERS entry.
+        Name of a CLUSTERS or WORKERS entry.
     prompt_file:
         Path to the review prompt file.
     phase:
@@ -163,11 +163,11 @@ def _resolve_reviewer(reviewer_name: str):
     """Resolve a reviewer name to a concrete reviewer instance.
 
     Resolution order:
-      1. REVIEWERS[reviewer_name] → EnsembleReviewer  (explicit ensemble invocation)
-      2. WORKERS[reviewer_name]   → SingleWorker       (single-model invocation)
+      1. CLUSTERS[reviewer_name] → ClusterReviewer  (cluster invocation)
+      2. WORKERS[reviewer_name]  → SingleWorker     (single-model invocation)
       3. Else → ConfigError
 
-    The mill default pipeline uses SingleWorker entries; EnsembleReviewer
+    The mill default pipeline uses SingleWorker entries; ClusterReviewer
     remains callable via an explicit reviewer name in config or CLI.
 
     Parameters
@@ -177,18 +177,18 @@ def _resolve_reviewer(reviewer_name: str):
 
     Returns
     -------
-    EnsembleReviewer | SingleWorker
+    ClusterReviewer | SingleWorker
     """
-    if reviewer_name in REVIEWERS:
-        log("engine", f"resolved {reviewer_name!r} as EnsembleReviewer")
-        return EnsembleReviewer(REVIEWERS[reviewer_name])
+    if reviewer_name in CLUSTERS:
+        log("engine", f"resolved {reviewer_name!r} as ClusterReviewer")
+        return ClusterReviewer(CLUSTERS[reviewer_name])
 
     if reviewer_name in WORKERS:
         log("engine", f"resolved {reviewer_name!r} as SingleWorker")
         return SingleWorker(WORKERS[reviewer_name])
 
     raise ConfigError(
-        f"unknown reviewer: {reviewer_name!r} — not found in REVIEWERS or WORKERS"
+        f"unknown reviewer: {reviewer_name!r} — not found in CLUSTERS or WORKERS"
     )
 
 
@@ -216,7 +216,7 @@ def _guard_discussion_bulk(reviewer_name: str, reviewer, phase: str) -> None:
                 f"discussion phase does not support bulk dispatch: "
                 f"reviewer {reviewer_name!r} has bulk-mode worker"
             )
-    elif isinstance(reviewer, EnsembleReviewer):
+    elif isinstance(reviewer, ClusterReviewer):
         worker_obj = WORKERS[reviewer.ensemble.worker]
         if worker_obj.dispatch_mode == "bulk":
             raise ConfigError(
