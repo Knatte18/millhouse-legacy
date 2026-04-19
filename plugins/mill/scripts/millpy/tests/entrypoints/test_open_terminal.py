@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import pytest
 
@@ -44,11 +44,11 @@ def temp_git_repo(tmp_path):
 
 def test_flat_layout_launch_cwd_equals_worktree(temp_git_repo, monkeypatch, capsys):
     """Flat layout: offset is '.', launch_cwd == child worktree root."""
-    (temp_git_repo / "_millhouse" / "children").mkdir(parents=True)
+    (temp_git_repo / ".millhouse" / "children").mkdir(parents=True)
 
     child_worktree = temp_git_repo / "fake-child-worktree"
     child_worktree.mkdir()
-    (child_worktree / "_millhouse").mkdir()
+    (child_worktree / ".millhouse").mkdir()
 
     captured_cwd = {}
     real_run = __import__("millpy.core.subprocess_util", fromlist=["run"]).run
@@ -72,9 +72,9 @@ def test_flat_layout_launch_cwd_equals_worktree(temp_git_repo, monkeypatch, caps
 
 
 def test_nested_layout_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
-    """Nested: _millhouse/ at <git>/projects/sub/, launch_cwd == child/projects/sub."""
+    """Nested: .millhouse/ at <git>/projects/sub/, launch_cwd == child/projects/sub."""
     project = temp_git_repo / "projects" / "sub"
-    (project / "_millhouse" / "children").mkdir(parents=True)
+    (project / ".millhouse" / "children").mkdir(parents=True)
 
     child_worktree = temp_git_repo / "fake-child-worktree"
     child_worktree.mkdir()
@@ -103,7 +103,7 @@ def test_nested_layout_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
 
 def test_offset_failure_falls_back_to_worktree(temp_git_repo, monkeypatch):
     """If cwd_offset raises, launch_cwd falls back to selected.worktree."""
-    (temp_git_repo / "_millhouse" / "children").mkdir(parents=True)
+    (temp_git_repo / ".millhouse" / "children").mkdir(parents=True)
 
     child_worktree = temp_git_repo / "fake-child-worktree"
     child_worktree.mkdir()
@@ -135,7 +135,7 @@ def test_offset_failure_falls_back_to_worktree(temp_git_repo, monkeypatch):
 
 def test_flat_subfolder_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
     """Flat layout with cwd in a subfolder: launch_cwd == child/<subfolder>."""
-    (temp_git_repo / "_millhouse" / "children").mkdir(parents=True)
+    (temp_git_repo / ".millhouse" / "children").mkdir(parents=True)
     subfolder = temp_git_repo / "plugins" / "mill" / "scripts"
     subfolder.mkdir(parents=True)
 

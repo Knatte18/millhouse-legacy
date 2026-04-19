@@ -21,7 +21,7 @@ The scanner is deterministic — sorted alphabetically by skill name, `\n`-only 
 ## Steps
 
 1. **Locate the entrypoint.** Resolve `skills_index.py` via three-tier resolution:
-   - `_millhouse/skills-index.py` forwarding wrapper (if present)
+   - `.millhouse/skills-index.py` forwarding wrapper (if present)
    - `<repo-root>/plugins/mill/scripts/millpy/entrypoints/skills_index.py` (in-repo plugin source)
    - `~/.claude/plugins/cache/millhouse/mill/<latest-version>/scripts/millpy/entrypoints/skills_index.py` (plugin cache)
 

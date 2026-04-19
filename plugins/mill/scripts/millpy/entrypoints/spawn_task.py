@@ -102,12 +102,12 @@ def main(argv: list[str] | None = None) -> int:
 
     # nested_offset = path from git toplevel down to the mill project root.
     # Flat layouts: "." (project == git toplevel).
-    # Nested layouts: e.g. "projects/sub" when `_millhouse/` lives below the
+    # Nested layouts: e.g. "projects/sub" when `.millhouse/` lives below the
     # git toplevel.
     _nested_parts = root.resolve().relative_to(git_root.resolve()).parts
     nested_offset = PurePosixPath(*_nested_parts) if _nested_parts else PurePosixPath(".")
 
-    config_path = root / "_millhouse" / "config.yaml"
+    config_path = root / ".millhouse" / "config.yaml"
     if not config_path.exists():
         print(
             "[spawn_task] mill-setup has not been run. Please run mill-setup first.",
@@ -178,9 +178,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print(f"[DryRun] Would claim (set to [active]) task '{task_title}' in tasks.md.")
         print(f"[DryRun] Would create worktree (branch: {branch_name})")
-        print(f"[DryRun] Would create .mill/ junction in new worktree")
-        print(f"[DryRun] Would copy _millhouse/ (excluding task/, scratch/, children/) to new worktree")
-        print(f"[DryRun] Would write status.md in new worktree")
+        print("[DryRun] Would create .millhouse/wiki/ junction in new worktree")
+        print("[DryRun] Would copy .millhouse/ (excluding task/, scratch/, children/) to new worktree")
+        print("[DryRun] Would write status.md in new worktree")
         return 0
 
     # Claim the picked task (set phase to 'active') in tasks.md
@@ -257,14 +257,14 @@ def main(argv: list[str] | None = None) -> int:
         display_name=task_title,
     )
 
-    # Copy _millhouse/ (excluding task/, scratch/, children/) to the mill
+    # Copy .millhouse/ (excluding task/, scratch/, children/) to the mill
     # project root inside the worktree (deeper than project_path in nested
     # layouts).
-    src_millhouse = root / "_millhouse"
-    dst_millhouse = project_in_worktree / "_millhouse"
+    src_millhouse = root / ".millhouse"
+    dst_millhouse = project_in_worktree / ".millhouse"
     dst_millhouse.mkdir(parents=True, exist_ok=True)
 
-    exclude = {"task", "scratch", "children"}
+    exclude = {"task", "scratch", "children", "wiki", "active"}
     if src_millhouse.exists():
         for item in src_millhouse.iterdir():
             if item.name in exclude:
@@ -276,19 +276,19 @@ def main(argv: list[str] | None = None) -> int:
                 shutil.copy2(str(item), str(dst))
 
     # Create scratch and task structures
-    (project_in_worktree / "_millhouse" / "scratch" / "reviews").mkdir(parents=True, exist_ok=True)
-    (project_in_worktree / "_millhouse" / "task" / "reviews").mkdir(parents=True, exist_ok=True)
+    (project_in_worktree / ".millhouse" / "scratch" / "reviews").mkdir(parents=True, exist_ok=True)
+    (project_in_worktree / ".millhouse" / "task" / "reviews").mkdir(parents=True, exist_ok=True)
 
-    # Create .mill/ junction in the new worktree pointing at the wiki clone.
+    # Create .millhouse/wiki/ junction in the new worktree pointing at the wiki clone.
     from millpy.core import junction
     from millpy.core.paths import wiki_clone_path as _wiki_clone_path
     from millpy.tasks import wiki as _wiki
     try:
         wcp = _wiki_clone_path(cfg)
-        junction.create(wcp, project_in_worktree / ".mill")
-        log("spawn_task", f".mill/ junction created → {wcp}")
+        junction.create(wcp, project_in_worktree / ".millhouse" / "wiki")
+        log("spawn_task", f".millhouse/wiki/ junction created → {wcp}")
     except Exception as exc:
-        log("spawn_task", f".mill/ junction creation failed (non-fatal): {exc}")
+        log("spawn_task", f".millhouse/wiki/ junction creation failed (non-fatal): {exc}")
 
     # Write initial status.md to wiki at active/<slug>/status.md and commit.
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -319,10 +319,26 @@ def main(argv: list[str] | None = None) -> int:
         (active_slug_dir / "status.md").write_text(status_content, encoding="utf-8", newline="\n")
         _wiki.write_commit_push(cfg, [f"active/{slug}/status.md"], f"task: init {slug}")
         log("spawn_task", f"wiki status.md written at active/{slug}/status.md")
+
+        # Create .millhouse/active/ junction pointing into the wiki active dir.
+        # Must happen after active_slug_dir.mkdir() — mklink /J requires target to exist.
+        try:
+            junction.create(active_slug_dir, project_in_worktree / ".millhouse" / "active")
+            log("spawn_task", f".millhouse/active/ junction created → {active_slug_dir}")
+        except Exception as exc:
+            log("spawn_task", f".millhouse/active/ junction creation failed (non-fatal): {exc}")
+
+        # Write <slug>.slug.md to .millhouse/ so the worktree identifies its task.
+        try:
+            slug_file = project_in_worktree / ".millhouse" / f"{slug}.slug.md"
+            slug_file.write_text(f"# {slug}\n\n{task_title}\n", encoding="utf-8", newline="\n")
+            log("spawn_task", f"slug file written: {slug_file.name}")
+        except Exception as exc:
+            log("spawn_task", f"slug file write failed (non-fatal): {exc}")
     except Exception as exc:
         log("spawn_task", f"wiki status.md write failed (non-fatal): {exc}")
         # Fallback: write to legacy path so the task is not left without status
-        status_path = project_in_worktree / "_millhouse" / "task" / "status.md"
+        status_path = project_in_worktree / ".millhouse" / "task" / "status.md"
         _write_status(status_path, task_title, task_description, parent_branch)
 
     # Open VS Code if requested. Apply the cwd-offset rule so VS Code opens
@@ -350,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.vscode:
         print("Run mill-start in the new VS Code window to continue planning.")
     else:
-        print("Run mill-terminal from the parent terminal (python _millhouse/mill-terminal.py) to open a Claude Code session.")
+        print("Run mill-terminal from the parent terminal (python .millhouse/mill-terminal.py) to open a Claude Code session.")
 
     # Emit the project path as the final stdout line (parity with PS1)
     print(str(project_path))
@@ -423,7 +439,7 @@ def _write_status(
     task_description: str,
     parent_branch: str,
 ) -> None:
-    """Write _millhouse/task/status.md using the status template shape."""
+    """Write .millhouse/task/status.md using the status template shape."""
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Indent task_description for YAML block scalar

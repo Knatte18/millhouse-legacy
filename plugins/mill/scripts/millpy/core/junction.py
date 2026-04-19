@@ -45,6 +45,8 @@ def create(target: Path, link_path: Path) -> None:
     if link_path.exists() or link_path.is_symlink():
         raise ValueError(f"{link_path} already exists — remove it before creating a junction")
 
+    link_path.parent.mkdir(parents=True, exist_ok=True)
+
     if os.name == "nt":
         # Windows: use mklink /J for directory junctions.
         # Normalise to Windows path form for cmd.exe.
@@ -87,7 +89,19 @@ def remove(link_path: Path) -> None:
 
     if os.name == "nt":
         # Python 3.12+: os.path.isjunction detects Windows directory junctions.
-        if hasattr(os.path, "isjunction") and os.path.isjunction(str(link_path)):
+        # Python 3.10/3.11 fallback: check FILE_ATTRIBUTE_REPARSE_POINT (0x400)
+        # via os.lstat().st_file_attributes.
+        is_junction = False
+        if hasattr(os.path, "isjunction"):
+            is_junction = os.path.isjunction(str(link_path))
+        else:
+            try:
+                attrs = os.lstat(str(link_path)).st_file_attributes
+                is_junction = bool(attrs & 0x400)
+            except (OSError, AttributeError):
+                is_junction = False
+
+        if is_junction:
             os.rmdir(str(link_path))
             log(_MODULE, f"removed junction {link_path}")
         elif os.path.islink(str(link_path)):

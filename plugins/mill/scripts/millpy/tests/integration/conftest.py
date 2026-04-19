@@ -3,8 +3,8 @@ conftest.py — shared fixtures for integration and cross-layout tests.
 
 Three fixtures:
 - temp_git_repo: an empty git repo with one commit, resolved to absolute path.
-- flat_project_layout: temp_git_repo with _millhouse/ at the toplevel.
-- nested_project_layout: temp_git_repo with _millhouse/ at projects/sub/.
+- flat_project_layout: temp_git_repo with .millhouse/ at the toplevel.
+- nested_project_layout: temp_git_repo with .millhouse/ at projects/sub/.
 """
 from __future__ import annotations
 
@@ -37,8 +37,8 @@ class ProjectLayout:
 
 @pytest.fixture
 def flat_project_layout(temp_git_repo):
-    """Flat layout: _millhouse/ at the git toplevel."""
-    millhouse = temp_git_repo / "_millhouse"
+    """Flat layout: .millhouse/ at the git toplevel."""
+    millhouse = temp_git_repo / ".millhouse"
     millhouse.mkdir()
     (millhouse / "scratch").mkdir()
     (millhouse / "task").mkdir()
@@ -51,10 +51,10 @@ def flat_project_layout(temp_git_repo):
 
 @pytest.fixture
 def nested_project_layout(temp_git_repo):
-    """Nested layout: _millhouse/ at <git>/projects/sub/."""
+    """Nested layout: .millhouse/ at <git>/projects/sub/."""
     project = temp_git_repo / "projects" / "sub"
     project.mkdir(parents=True)
-    millhouse = project / "_millhouse"
+    millhouse = project / ".millhouse"
     millhouse.mkdir()
     (millhouse / "scratch").mkdir()
     (millhouse / "task").mkdir()

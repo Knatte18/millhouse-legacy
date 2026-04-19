@@ -2,7 +2,7 @@
 
 This is the prompt template that `mill-go` Phase: Spawn Thread B materializes and passes to `millpy.entrypoints.spawn_agent --role implementer`. It is the canonical specification for Thread B's responsibilities, lifecycle, and failure handling. Edit it like a SKILL.md — every line is part of Thread B's runtime instructions.
 
-The template lives in `plugins/mill/doc/prompts/` (alongside other prompt templates) so that the spawn-time materialization pattern matches the existing brief precedent: `mill-go` reads this template and substitutes runtime values to produce a concrete prompt at `.mill/active/<slug>/implementer-brief-instance.md`, then passes that path as `--prompt-file`.
+The template lives in `plugins/mill/doc/prompts/` (alongside other prompt templates) so that the spawn-time materialization pattern matches the existing brief precedent: `mill-go` reads this template and substitutes runtime values to produce a concrete prompt at `.millhouse/wiki/active/<slug>/implementer-brief-instance.md`, then passes that path as `--prompt-file`.
 
 ## Substitution Tokens
 
@@ -10,14 +10,14 @@ The template lives in `plugins/mill/doc/prompts/` (alongside other prompt templa
 
 | Token | Replaced with |
 |---|---|
-| `<PLAN_PATH>` | Absolute path to the plan: `.mill/active/<slug>/plan` (v2/v3 directory) or `.mill/active/<slug>/plan.md` (v1 file). Use `plan_io.resolve_plan_path(task_dir)` to read the correct format. |
-| `<STATUS_PATH>` | Absolute path to `.mill/active/<slug>/status.md` |
+| `<PLAN_PATH>` | Absolute path to the plan: `.millhouse/wiki/active/<slug>/plan` (v2/v3 directory) or `.millhouse/wiki/active/<slug>/plan.md` (v1 file). Use `plan_io.resolve_plan_path(task_dir)` to read the correct format. |
+| `<STATUS_PATH>` | Absolute path to `.millhouse/wiki/active/<slug>/status.md` |
 | `<WORK_DIR>` | Absolute path to the worktree (output of `git rev-parse --show-toplevel`) |
 | `<SCRIPTS_DIR>` | `<WORK_DIR>/plugins/mill/scripts`. Used as `PYTHONPATH=<SCRIPTS_DIR>` when spawning millpy entrypoints — replaces the old `(cd plugins/mill/scripts && ...)` pattern which broke relative-path args when called from a child worktree. No `cd` is involved; cwd stays at `<WORK_DIR>`. |
 | `<REPO_ROOT>` | Same as `<WORK_DIR>` (alias kept for clarity in the brief body) |
 | `<VERIFY_CMD>` | The `verify:` value from plan frontmatter |
 | `<MAX_CODE_REVIEW_ROUNDS>` | The resolved max rounds (CLI arg or `reviews.code` config or default 3) |
-| `<CODE_REVIEW_RESOLUTION_SNAPSHOT>` | The `review-modules.code` block from `_millhouse/config.yaml` (verbatim copy so Thread B can do per-round resolution itself — maps round numbers to reviewer names) |
+| `<CODE_REVIEW_RESOLUTION_SNAPSHOT>` | The `review-modules.code` block from `.millhouse/config.local.yaml` (verbatim copy so Thread B can do per-round resolution itself — maps round numbers to reviewer names) |
 | `<TASK_TITLE>` | Task title from `status.md` |
 
 ## CRITICAL Banners (top of materialized prompt)
@@ -50,7 +50,7 @@ Call the shell and capture the result per write. Do NOT copy a timestamp from an
 
 **I3. Skip-clauses require active-attempt-then-document.** If the brief or the plan contains a "skip X if Y" escape clause (VPN, network, missing credentials, flaky infra, whatever), you MUST:
 - Attempt the command once. No preemptive skip based on reading the clause.
-- On a failure that matches the clause's precondition: record `SKIPPED: <command> — <reason>` in `_millhouse/scratch/test-baseline.md`. Still add the command to `tests_run` with an annotation like `(skipped: <reason>)`.
+- On a failure that matches the clause's precondition: record `SKIPPED: <command> — <reason>` in `.millhouse/scratch/test-baseline.md`. Still add the command to `tests_run` with an annotation like `(skipped: <reason>)`.
 - On a failure that does NOT match the clause (assertion failure, unexpected exception, non-network error): treat as a normal test failure and enter the retry loop.
 
 A silent skip — one where the command was never attempted, or was attempted but the skip was not logged — is a protocol violation, not a valid completion.
@@ -80,7 +80,7 @@ You **do not** write the plan, do not interact with the user, and do not re-ente
 - **Code review model resolution snapshot:** `<CODE_REVIEW_RESOLUTION_SNAPSHOT>`
 - **Task title:** `<TASK_TITLE>`
 
-For each code-review round `<N>`, resolve the model from the snapshot: look up the integer key `<N>` (compared as a string); if absent, fall back to `default`. The snapshot is the only model source you should use — do not re-read `_millhouse/config.yaml` unless explicitly required.
+For each code-review round `<N>`, resolve the model from the snapshot: look up the integer key `<N>` (compared as a string); if absent, fall back to `default`. The snapshot is the only model source you should use — do not re-read `.millhouse/config.local.yaml` unless explicitly required.
 
 ### 3. Resume Protocol (Post-Setup only)
 
@@ -104,7 +104,7 @@ Do NOT redo completed work. Do NOT re-run tests for steps that already committed
 Before implementing any steps (and only if not resuming past this point), capture the test baseline:
 
 1. Run the full test suite (`<VERIFY_CMD>`).
-2. Record which tests fail (if any) to `_millhouse/scratch/test-baseline.md`. (test-baseline.md is ephemeral and stays in `_millhouse/scratch/`.)
+2. Record which tests fail (if any) to `.millhouse/scratch/test-baseline.md`. (test-baseline.md is ephemeral and stays in `.millhouse/scratch/`.)
 3. If all pass: write "All tests pass — clean baseline."
 4. If verify command isn't runnable yet (missing dependencies, not buildable): write "No baseline — not yet buildable."
 5. If `<VERIFY_CMD>` is `N/A`: check the discussion file's `## Testing Strategy` section. If it specifies that tests should be written or mentions a test approach, there is a contradiction — the verify command should not be N/A when tests are planned. Write `phase: blocked`, `blocked_reason: Verify command N/A but Testing Strategy specifies tests`, send a notification, and exit. If Testing Strategy also says no tests, write "No verify command — skip test baseline."
@@ -154,13 +154,13 @@ When all plan steps are committed, run full verification:
 1. Update `<STATUS_PATH>` `phase: testing`. Insert `testing  <timestamp>` in the timeline. **Invariant I1:** shell out to `date -u` for every timestamp — see section 0.
 2. **Thread B no longer updates tasks.md at Phase: Test.** The `[active]` marker written at claim time remains in place until merge (by `mill-merge`, writing `[done]`) or abandon (by `mill-abandon`, writing `[abandoned]`).
 3. Run `<VERIFY_CMD>`. All tests must pass — not just tests related to this task.
-4. Compare failures against `_millhouse/scratch/test-baseline.md` to distinguish pre-existing failures from new regressions. Only new failures matter.
+4. Compare failures against `.millhouse/scratch/test-baseline.md` to distinguish pre-existing failures from new regressions. Only new failures matter.
 5. If new failures: debug with the Systematic Debugging Protocol. Max 3 retries for the full verification. If unresolved: write blocked state, notify, exit.
 6. **If `<VERIFY_CMD>` is `N/A`:** check the discussion file's `## Testing Strategy`. If it specifies tests, there is a contradiction — block. Otherwise skip verification and proceed.
 7. **Record which test commands actually ran.** Maintain a list `tests_run` of every test command executed in this phase (including the full `<VERIFY_CMD>` and any follow-up commands invoked during TDD or retries). Write the list to `<STATUS_PATH>` YAML as `tests_run:` before transitioning out of Phase: Test. Each entry is a shell-quotable command string. This is the transparency signal Thread A and the user read to verify that `phase: complete` corresponds to "everything the plan asked for was actually executed" — not "the verify command passed but nothing else was tried."
 8. **Skip-clauses are never silent skips.** If the materialized implementer brief (or the plan) contains an escape clause of the shape "skip <test> if <condition>" (e.g. "skip the integration test if VPN is unavailable"), you MUST:
    a. **Always attempt the test command once.** Do not preemptively skip based on reading the clause. Run the command.
-   b. **If the attempt fails with a connectivity / infrastructure error** that matches the clause's precondition (network timeout, VPN down, external service 5xx, missing credentials the clause names), record the result in `_millhouse/scratch/test-baseline.md` as a line `SKIPPED: <command> — <reason>`. Do NOT treat it as a test failure.
+   b. **If the attempt fails with a connectivity / infrastructure error** that matches the clause's precondition (network timeout, VPN down, external service 5xx, missing credentials the clause names), record the result in `.millhouse/scratch/test-baseline.md` as a line `SKIPPED: <command> — <reason>`. Do NOT treat it as a test failure.
    c. **If the attempt fails in a way the clause does NOT cover** (real test assertion failure, unexpected exception, timeout that isn't network-related), treat it as a test failure and enter the retry loop.
    d. **Add the command to `tests_run` regardless of outcome** — attempted, passed, skipped-with-reason, and failed-then-retried all get recorded. The rule: if a test was supposed to exist but was never even attempted, that is a protocol violation, not a valid completion.
    e. **Never mark `phase: complete` while an "expected" test command is missing from `tests_run`.** Cross-check `tests_run` against the plan's file list (v1: `## Files`; v2: `plan_io.read_files_touched(loc)` which reads `## All Files Touched` from the overview): if the plan adds a test file under a path like `tests/integration/**` or `**/test_*.py`, there must be a `tests_run` entry that invoked it (directly or via an enclosing pytest target).
@@ -170,7 +170,7 @@ When all plan steps are committed, run full verification:
 
 1. Update `<STATUS_PATH>` `phase: reviewing`. Insert `reviewing  <timestamp>` in the timeline.
 2. **Thread B no longer updates tasks.md at Phase: Review.** The `[active]` marker written at claim time remains in place until merge (by `mill-merge`, writing `[done]`) or abandon (by `mill-abandon`, writing `[abandoned]`).
-3. Ensure `.mill/active/<slug>/reviews/` exists. Initialize `prev_fixer_report_path` to empty.
+3. Ensure `.millhouse/wiki/active/<slug>/reviews/` exists. Initialize `prev_fixer_report_path` to empty.
 
 For each round `N` from 1 to `<MAX_CODE_REVIEW_ROUNDS>`:
 
@@ -178,7 +178,7 @@ a. Compute the diff: `git diff <plan_start_hash>..HEAD` (read `plan_start_hash` 
 
 b. Read `_codeguide/Overview.md` if it exists, and `CONSTRAINTS.md` from repo root if it exists. These will be inlined into the prompt.
 
-c. Materialize the prompt template from `plugins/mill/doc/prompts/code-review.md` into `_millhouse/scratch/code-review-prompt-r<N>.md`, substituting `<DIFF>`, `<PLAN_CONTENT>` (read via `plan_io.read_plan_content(loc)` — handles both v1 file and v2 directory), `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`. This file is used as `--prompt-file` by spawn-reviewer.py for tool-use recipes and retained for debugging traceability on bulk recipes (bulk recipes ignore it and use their own template).
+c. Materialize the prompt template from `plugins/mill/doc/prompts/code-review.md` into `.millhouse/scratch/code-review-prompt-r<N>.md`, substituting `<DIFF>`, `<PLAN_CONTENT>` (read via `plan_io.read_plan_content(loc)` — handles both v1 file and v2 directory), `<OVERVIEW_CONTENT>`, `<CONSTRAINTS_CONTENT>`, `<FILE_PATHS>`, and `<N>`. This file is used as `--prompt-file` by spawn-reviewer.py for tool-use recipes and retained for debugging traceability on bulk recipes (bulk recipes ignore it and use their own template).
 
 d. Resolve the reviewer name for round `N` from `<CODE_REVIEW_RESOLUTION_SNAPSHOT>`: look up integer key `N` (as string); fall back to `default`. The snapshot contains the `pipeline.code-review` block verbatim from the config (reviewer names, not model names). Each reviewer name resolves via `millpy.core.config.resolve_reviewer_name` internally, which reads `pipeline.code-review.<N>|default` with legacy fallback paths.
 
@@ -186,7 +186,7 @@ e. Spawn in the background via Bash (`run_in_background: true`) — code reviewe
    ```bash
    PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
      --reviewer-name <reviewer-name> \
-     --prompt-file <WORK_DIR>/_millhouse/scratch/code-review-prompt-r<N>.md \
+     --prompt-file <WORK_DIR>/.millhouse/scratch/code-review-prompt-r<N>.md \
      --phase code --round <N> --plan-start-hash <plan_start_hash>
    ```
    Read `plan_start_hash` from the `plan_start_hash:` field in the YAML block of `<STATUS_PATH>`.
@@ -203,7 +203,7 @@ h. **On `REQUEST_CHANGES`:**
    3. For each BLOCKING finding, apply the receiving-review decision tree: VERIFY accuracy (cite actual code if inaccurate), then HARM CHECK (breaks functionality / conflicts with documented design decision / destabilizes out-of-scope code). If none apply: FIX IT. If harm found: PUSH BACK with cited evidence.
    4. Apply fixes inline to source files. Stage files individually (never `git add .` or `git add -A`).
    5. Re-run `<VERIFY_CMD>` after fixes. If verification fails: treat as a blocked state (same as Phase: Test failure handling).
-   6. Write a fixer report to `.mill/active/<slug>/reviews/<timestamp>-code-fix-r<N>.md` with `## Fixed` and `## Pushed Back` sections. Format:
+   6. Write a fixer report to `.millhouse/wiki/active/<slug>/reviews/<timestamp>-code-fix-r<N>.md` with `## Fixed` and `## Pushed Back` sections. Format:
 
       ```markdown
       # Code Fix Report — Round <N>
@@ -234,7 +234,7 @@ k. **Max `<MAX_CODE_REVIEW_ROUNDS>` rounds.** If unresolved BLOCKING issues afte
 
 3. **Update `<STATUS_PATH>`:** `phase: complete`. Insert `complete  <timestamp>` in the timeline. **Invariant I1:** shell out to `date -u +"%Y-%m-%dT%H:%M:%SZ"` for the timestamp. **Invariant I2:** before writing `phase: complete`, verify `tests_run` in the status YAML includes every plan-added test file (directly or via an enclosing pytest target). If any plan-added test was never attempted, write `phase: blocked` instead with a clear `blocked_reason` naming the missing tests.
 
-4. **Auto-merge.** Read `git.auto-merge` from `_millhouse/config.yaml`.
+4. **Auto-merge.** Read `git.auto-merge` from `.millhouse/config.local.yaml`.
    - If `false`: send notification `COMPLETE: Task done, auto-merge disabled` (info, no Slack). Exit with `phase: complete`.
    - If `true` (or not set): detect child vs in-place worktree via `git worktree list --porcelain`.
      - **Child worktree:** invoke the `mill-merge` skill via the Skill tool. If `mill-merge` fails (conflicts, etc.): write `phase: blocked`, `blocked_reason: Merge failed`. Notify. Exit.
@@ -327,7 +327,7 @@ For completion events, ensure `phase: complete`.
 
 #### Step 2: Send notification
 
-Run the `notify` Python entrypoint. It reads `_millhouse/config.yaml`, detects the platform, and sends a desktop toast (and Slack, when enabled). Best-effort — failures warn on stderr, never block execution.
+Run the `notify` Python entrypoint. It reads `.millhouse/config.local.yaml`, detects the platform, and sends a desktop toast (and Slack, when enabled). Best-effort — failures warn on stderr, never block execution.
 
 ```bash
 PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.notify \

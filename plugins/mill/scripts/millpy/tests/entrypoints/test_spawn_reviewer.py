@@ -6,7 +6,6 @@ and the new error-message text that points at --list-reviewers.
 """
 from __future__ import annotations
 
-import json
 
 import pytest
 
@@ -77,7 +76,7 @@ def test_reviewer_name_resolved_from_config_default(capsys, tmp_path, monkeypatc
     import textwrap
     prompt = tmp_path / "prompt.md"
     prompt.write_text("hello\n", encoding="utf-8")
-    config_dir = tmp_path / "_millhouse"
+    config_dir = tmp_path / ".millhouse"
     config_dir.mkdir()
     (config_dir / "config.yaml").write_text(
         textwrap.dedent("""\
@@ -110,7 +109,7 @@ def test_explicit_reviewer_name_bypasses_config(capsys, tmp_path, monkeypatch):
     import textwrap
     prompt = tmp_path / "prompt.md"
     prompt.write_text("hello\n", encoding="utf-8")
-    config_dir = tmp_path / "_millhouse"
+    config_dir = tmp_path / ".millhouse"
     config_dir.mkdir()
     (config_dir / "config.yaml").write_text(
         textwrap.dedent("""\

@@ -62,7 +62,7 @@ Effective context set = `reads ∪ modifies` is a computed view, not declared.
 
 Per-card plan review fans out N reviewer spawns per plan (one per card, plus 1 holistic). For a 13-card plan that is 14 spawns per round. Holistic alone caught every BLOCKING finding the per-card reviewers found, plus DAG conflicts they could not see.
 
-**Change.** Introduce `pipeline.plan-review.per-card-threshold` (default `20`) in `_millhouse/config.yaml`. Below threshold: holistic only. At or above threshold: holistic + per-card fan-out.
+**Change.** Introduce `pipeline.plan-review.per-card-threshold` (default `20`) in `.millhouse/config.local.yaml`. Below threshold: holistic only. At or above threshold: holistic + per-card fan-out.
 
 **Complement.** Rebalance the holistic prompt (#36) so it focuses on cross-card and architectural concerns (constraint violations, design-decision alignment, DAG correctness, overall completeness, batch graph integrity). Leave per-card concerns (atomicity, testability, reads-completeness, step granularity, Explore⊆{Reads∪Modifies}) to the per-card reviewers when they run.
 

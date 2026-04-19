@@ -12,7 +12,6 @@ import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from millpy.backends.base import BulkResult, ToolUseResult
 from millpy.reviewers.base import Worker

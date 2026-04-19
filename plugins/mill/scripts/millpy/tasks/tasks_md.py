@@ -15,7 +15,7 @@ Entry format
 - Background link (if present) is a markdown link `[Background](<slug>.md)`.
 - `description` is the first line of body text (excluding the Background link).
 
-`resolve_path(cfg)` returns the absolute path to `Home.md` inside the .mill/
+`resolve_path(cfg)` returns the absolute path to `Home.md` inside the .millhouse/wiki/
 junction at cwd. Raises `ConfigError` when the junction does not exist.
 
 `write_commit_push(cfg, content, commit_msg)` writes `Home.md`, then delegates
@@ -140,10 +140,9 @@ def _strip_background_link(body: str) -> str:
 # ---------------------------------------------------------------------------
 
 def resolve_path(cfg: dict) -> Path:
-    """Return the absolute path to Home.md inside the .mill/ junction.
+    """Return the absolute path to Home.md inside the wiki junction.
 
-    Looks for ``.mill/`` at ``cwd / ".mill"``. Falls back to looking at
-    ``project_root() / ".mill"`` to support running from a project subfolder.
+    Looks for the wiki junction at ``cwd / ".millhouse" / "wiki"``.
 
     Parameters
     ----------
@@ -153,12 +152,12 @@ def resolve_path(cfg: dict) -> Path:
     Returns
     -------
     Path
-        ``<cwd-or-project-root>/.mill/Home.md``
+        ``<cwd>/.millhouse/wiki/Home.md``
 
     Raises
     ------
     ConfigError
-        If the ``.mill/`` junction does not exist.
+        If the wiki junction does not exist.
     """
     from millpy.core.config import ConfigError  # local import to avoid cycles
     from millpy.core.paths import mill_junction_path
@@ -166,7 +165,7 @@ def resolve_path(cfg: dict) -> Path:
     mill = mill_junction_path()
     if not mill.exists():
         raise ConfigError(
-            f".mill/ junction not found at {mill_junction_path()}. "
+            f".millhouse/wiki/ junction not found at {mill_junction_path()}. "
             "Run mill-setup to create the wiki junction."
         )
     return mill / "Home.md"

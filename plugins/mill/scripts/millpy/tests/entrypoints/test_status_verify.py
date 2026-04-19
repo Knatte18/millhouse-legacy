@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 
 
 def _make_status_md(path: Path, phase: str) -> None:
@@ -31,7 +30,7 @@ def _make_status_md(path: Path, phase: str) -> None:
 
 
 def _make_active_dir(mill_dir: Path, slug: str) -> Path:
-    """Create .mill/active/<slug>/ directory structure."""
+    """Create .millhouse/wiki/active/<slug>/ directory structure."""
     active = mill_dir / "active" / slug
     active.mkdir(parents=True, exist_ok=True)
     return active
@@ -44,7 +43,7 @@ class TestStatusVerifyConsistent:
         """phase=planned, discussion.md + plan/ present → consistent, exit 0."""
         from millpy.entrypoints import status_verify
 
-        mill = tmp_path / ".mill"
+        mill = tmp_path / ".millhouse/wiki"
         slug = "my-task"
         active = _make_active_dir(mill, slug)
         _make_status_md(active / "status.md", "planned")
@@ -67,7 +66,7 @@ class TestStatusVerifyConsistent:
         """No active dir → 'no active task', exit 0."""
         from millpy.entrypoints import status_verify
 
-        mill = tmp_path / ".mill"
+        mill = tmp_path / ".millhouse/wiki"
         mill.mkdir(parents=True)
 
         monkeypatch.chdir(tmp_path)
@@ -89,7 +88,7 @@ class TestStatusVerifyMismatch:
         """phase=discussing but plan/ exists → exit 1, report mismatch."""
         from millpy.entrypoints import status_verify
 
-        mill = tmp_path / ".mill"
+        mill = tmp_path / ".millhouse/wiki"
         slug = "my-task"
         active = _make_active_dir(mill, slug)
         _make_status_md(active / "status.md", "discussing")
@@ -113,7 +112,7 @@ class TestStatusVerifyMismatch:
         """phase=complete but plan/ missing → exit 1."""
         from millpy.entrypoints import status_verify
 
-        mill = tmp_path / ".mill"
+        mill = tmp_path / ".millhouse/wiki"
         slug = "my-task"
         active = _make_active_dir(mill, slug)
         _make_status_md(active / "status.md", "complete")

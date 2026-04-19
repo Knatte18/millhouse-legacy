@@ -164,7 +164,7 @@ The following files were removed after this retrospective was written (April 202
 - `plugins/mill/doc/guides/wsl2-gpu-setup.md`
 - `plugins/mill/doc/guides/troubleshooting.md` (vLLM-specific entries)
 - `plugins/mill/templates/llm-config.example.yaml`
-- `llm-backend:` section in `_millhouse/config.yaml` template
+- `llm-backend:` section in `.millhouse/config.yaml` template
 - LLM Backend Dispatch sections in `mill-start`, `mill-go`, `mill-setup` SKILL.md files
 - Forwarding wrappers for spawn-agent/start-qwen/stop-qwen in mill-setup
 

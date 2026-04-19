@@ -6,10 +6,9 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-import pytest
 
 from millpy.core.plan_io import resolve_plan_path
-from millpy.core.plan_validator import ValidationError, validate
+from millpy.core.plan_validator import validate
 
 
 # ---------------------------------------------------------------------------

@@ -19,12 +19,12 @@ See `plugins/mill/doc/architecture/overview.md` for the three-skill architecture
 Invoke `wiki.sync_pull(cfg)` on entry before reading any wiki state.
 
 Load config via `millpy.core.config.load_merged(shared_path, local_path)`:
-- `shared_path` = `.mill/config.yaml` (shared, tracked in wiki)
-- `local_path`  = `_millhouse/config.local.yaml` (local overrides, gitignored)
+- `shared_path` = `.millhouse/wiki/config.yaml` (shared, tracked in wiki)
+- `local_path`  = `.millhouse/config.local.yaml` (local overrides, gitignored)
 
 If both files are absent, halt:
 ```
-Neither .mill/config.yaml nor _millhouse/config.local.yaml found.
+Neither .millhouse/wiki/config.yaml nor .millhouse/config.local.yaml found.
 Run mill-setup to initialize.
 ```
 
@@ -40,7 +40,7 @@ Config schema out of date. Expected pipeline.<slot>. Run 'mill-setup' to auto-mi
 Legacy slots are not accepted. `pipeline:` is the only config schema.
 
 Derive slug via `paths.slug_from_branch(cfg)`. Read status.md at
-`active_status_path(cfg)` = `.mill/active/<slug>/status.md`. Check the `phase:` field:
+`active_status_path(cfg)` = `.millhouse/wiki/active/<slug>/status.md`. Check the `phase:` field:
 
 - **`phase: planned`:** proceed to Phase: Setup.
 - **`phase: implementing`, `testing`, `reviewing`:** resume mid-run; check the Builder double-spawn guard below, then proceed to Phase: Execute.
@@ -97,7 +97,7 @@ Entered when `phase:` is `discussing` or `discussed`.
 **Polling loop (background):**
 ```bash
 while true; do
-  phase=$(grep "^phase:" .mill/active/<slug>/status.md | head -1 | awk '{print $2}')
+  phase=$(grep "^phase:" .millhouse/wiki/active/<slug>/status.md | head -1 | awk '{print $2}')
   echo "PRE-ARM: phase=$phase $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   if [ "$phase" = "planned" ]; then echo "PRE-ARM: planned detected"; break; fi
   if [ "$phase" = "blocked" ]; then echo "PRE-ARM: blocked detected"; break; fi
@@ -121,7 +121,7 @@ Run with `run_in_background: true`, then Monitor. Periodically read status.md an
    `plan_start_hash:` (Edit tool for this one field — it's not a phase transition).
 
 4. **Read and detect plan format.** Resolve via `plan_io.resolve_plan_path(task_dir)` where
-   `task_dir = Path(".mill/active/<slug>")`:
+   `task_dir = Path(".millhouse/wiki/active/<slug>")`:
    - `"v3"` → DAG-aware execution.
    - `"v2"` or `"v1"` → legacy batch execution.
    - `None` → stop: "No plan found. Run `mill-plan` first."
@@ -134,7 +134,7 @@ Run with `run_in_background: true`, then Monitor. Periodically read status.md an
    from millpy.core.dag import build_dag, extract_layers, CycleError
    from pathlib import Path
 
-   task_dir = Path(".mill/active/<slug>")
+   task_dir = Path(".millhouse/wiki/active/<slug>")
    loc = resolve_plan_path(task_dir)
    card_index = read_card_index(loc)
    dag = build_dag(card_index)
@@ -155,7 +155,7 @@ Run with `run_in_background: true`, then Monitor. Periodically read status.md an
 
 6. **Read constraints.** Read `CONSTRAINTS.md` from repo root if it exists.
 
-7. **Claim `_millhouse/builder.lock`.** Check for active PID. If running: stop. If stale: overwrite.
+7. **Claim `.millhouse/builder.lock`.** Check for active PID. If running: stop. If stale: overwrite.
 
 ### Phase: Execute (v3 DAG path)
 
@@ -170,7 +170,7 @@ For v3 plans, execute cards in layer order.
    a. **Materialize the implementer brief.** Read `plugins/mill/doc/prompts/implementer-brief.md`.
       Substitute runtime tokens (plan path, status path, verify cmd, max review rounds,
       code-review config snapshot, task title). Write to
-      `_millhouse/task/implementer-brief-card-<card_number>.md`.
+      `.millhouse/task/implementer-brief-card-<card_number>.md`.
 
    b. Resolve implementer model: `pipeline.implementer` from config.
 
@@ -180,7 +180,7 @@ For v3 plans, execute cards in layer order.
       ```bash
       PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_agent \
         --role implementer \
-        --prompt-file _millhouse/task/implementer-brief-card-<card_number>.md \
+        --prompt-file .millhouse/task/implementer-brief-card-<card_number>.md \
         --provider <implementer-model>
       ```
       Monitor. Periodically relay `current_step` changes to user.
@@ -203,13 +203,13 @@ For v3 plans, execute cards in layer order.
          ```
 
       ii. **Materialize code-review prompt.** Scope: files created/modified by this card. Write to
-          `_millhouse/scratch/code-review-prompt-r<cr_round>-card-<card_number>.md`.
+          `.millhouse/scratch/code-review-prompt-r<cr_round>-card-<card_number>.md`.
 
       iii. **Spawn code-reviewer (background):**
            ```bash
            PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
              --reviewer-name <reviewer-name> \
-             --prompt-file _millhouse/scratch/code-review-prompt-r<cr_round>-card-<card_number>.md \
+             --prompt-file .millhouse/scratch/code-review-prompt-r<cr_round>-card-<card_number>.md \
              --phase code \
              --round <cr_round> \
              --plan-start-hash <plan_start_hash>
@@ -242,7 +242,7 @@ For v3 plans, execute cards in layer order.
     ```bash
     PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
       --reviewer-name <holistic-reviewer-name> \
-      --prompt-file _millhouse/scratch/code-review-prompt-holistic.md \
+      --prompt-file .millhouse/scratch/code-review-prompt-holistic.md \
       --phase code \
       --round 1 \
       --plan-start-hash <plan_start_hash>
@@ -254,7 +254,7 @@ For v3 plans, execute cards in layer order.
 ### Phase: Execute (v1/v2 legacy path)
 
 Spawn a single implementer for the entire plan. Code-review loop holistically (all files touched).
-Plan path: `plan/` directory (v2) or `plan.md` file (v1) inside `.mill/active/<slug>/`.
+Plan path: `plan/` directory (v2) or `plan.md` file (v1) inside `.millhouse/wiki/active/<slug>/`.
 
 ### Phase: Completion
 
@@ -264,7 +264,7 @@ Plan path: `plan/` directory (v2) or `plan.md` file (v1) inside `.mill/active/<s
 
     b. **`complete`:** report final commit. Update Home.md: change `[active]` to `[completed]` via
        `tasks_md.parse` → modify → `tasks_md.render` → `tasks_md.write_commit_push`. Release
-       `_millhouse/builder.lock`.
+       `.millhouse/builder.lock`.
 
     b.i. **Auto-fire `mill-self-report` (if enabled).** Read
     `notifications.auto-report.enabled`. If `true`, invoke `mill-self-report` skill. Wait for return.
@@ -344,6 +344,6 @@ PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.notify \
 1. Call `status_md.append_phase(active_status_path(cfg), "blocked", cfg=cfg)`.
 2. Set `blocked_reason:` via a targeted Edit.
 3. Preserve all state — do not clean up.
-4. Release `_millhouse/builder.lock`.
+4. Release `.millhouse/builder.lock`.
 5. Run the Notification Procedure.
 6. Report the blocker to the user.

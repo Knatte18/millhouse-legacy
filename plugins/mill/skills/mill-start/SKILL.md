@@ -17,12 +17,12 @@ Interactive. Pick a task and design the solution.
 Invoke `wiki.sync_pull(cfg)` on entry before reading any wiki state.
 
 Load config via `millpy.core.config.load_merged(shared_path, local_path)`:
-- `shared_path` = `.mill/config.yaml` (shared, tracked in wiki)
-- `local_path`  = `_millhouse/config.local.yaml` (local overrides, gitignored)
+- `shared_path` = `.millhouse/wiki/config.yaml` (shared, tracked in wiki)
+- `local_path`  = `.millhouse/config.local.yaml` (local overrides, gitignored)
 
 Both files are optional individually. If both are absent, halt with:
 ```
-Neither .mill/config.yaml nor _millhouse/config.local.yaml found.
+Neither .millhouse/wiki/config.yaml nor .millhouse/config.local.yaml found.
 Run mill-setup to initialize.
 ```
 
@@ -149,7 +149,7 @@ match: skip silently.
 ### Phase: Discussion File
 
 7. **Write the discussion file** per `plugins/mill/doc/formats/discussion.md` to
-   `.mill/active/<slug>/discussion.md`.
+   `.millhouse/wiki/active/<slug>/discussion.md`.
 
    Include:
    - The evolved problem statement
@@ -174,7 +174,7 @@ match: skip silently.
 
 **If `max_review_rounds` is `0`:** skip Phase: Discussion Review. Proceed to Phase: Handoff.
 
-8. **Discussion review loop:** operates against `.mill/active/<slug>/reviews/`.
+8. **Discussion review loop:** operates against `.millhouse/wiki/active/<slug>/reviews/`.
 
    a. Report: **"Discussion Review --- round N/<max_review_rounds>"**
 
@@ -185,13 +185,13 @@ match: skip silently.
 
    d. **Materialize the prompt.** Read `plugins/mill/doc/prompts/discussion-review.md`. Substitute
       `<DISCUSSION_FILE_PATH>`, `<TASK_TITLE>`, and `<CONSTRAINTS_CONTENT>`. Write materialized
-      prompt to `_millhouse/scratch/discussion-review-prompt-r<N>.md`.
+      prompt to `.millhouse/scratch/discussion-review-prompt-r<N>.md`.
 
    e. **Spawn the discussion-reviewer in the background:**
       ```bash
       PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
         --reviewer-name <reviewer-name> \
-        --prompt-file _millhouse/scratch/discussion-review-prompt-r<N>.md \
+        --prompt-file .millhouse/scratch/discussion-review-prompt-r<N>.md \
         --phase discussion \
         --round <N>
       ```

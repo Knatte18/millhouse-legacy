@@ -1,9 +1,7 @@
 """Tests for millpy.core.subprocess_logging — structured spawn/exit log lines."""
 from __future__ import annotations
 
-import sys
 
-import pytest
 
 from millpy.core.subprocess_logging import log_exit, log_spawn
 

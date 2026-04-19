@@ -50,7 +50,7 @@ class TestFixE:
                 _run(tmp_path, "bogus-reviewer-xyz", "plan", tmp_path / "out.md")
 
     def test_unknown_reviewer_no_directory_created(self, tmp_path: Path):
-        reviews_dir = tmp_path / "_millhouse" / "scratch" / "reviews"
+        reviews_dir = tmp_path / ".millhouse" / "scratch" / "reviews"
         with patch("millpy.reviewers.engine.project_root", return_value=tmp_path):
             with pytest.raises(ConfigError):
                 _run(tmp_path, "bogus-reviewer-xyz", "plan", tmp_path / "out.md")
@@ -60,7 +60,7 @@ class TestFixE:
         assert issubclass(ConfigError, ValueError)
 
     def test_bulk_in_discussion_raises_config_error(self, tmp_path: Path):
-        reviews_dir = tmp_path / "_millhouse" / "scratch" / "reviews"
+        reviews_dir = tmp_path / ".millhouse" / "scratch" / "reviews"
         with patch("millpy.reviewers.engine.project_root", return_value=tmp_path):
             with pytest.raises(ConfigError, match="discussion"):
                 _run(tmp_path, "g3pro", "discussion", tmp_path / "out.md")
@@ -153,7 +153,6 @@ class TestResolutionType:
 class TestSpawnReviewerSliceTypeRemoved:
     def test_slice_type_arg_rejected(self, tmp_path: Path):
         """Happy: spawn_reviewer CLI errors on --slice-type (unknown argument)."""
-        import sys
         from millpy.entrypoints.spawn_reviewer import main
 
         prompt = tmp_path / "prompt.md"

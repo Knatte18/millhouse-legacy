@@ -10,6 +10,7 @@ import pytest
 from millpy.core.paths import (
     RepoRootNotFound,
     active_dir,
+    active_junction_path,
     active_status_path,
     cwd_offset,
     local_config_path,
@@ -20,6 +21,7 @@ from millpy.core.paths import (
     project_offset,
     project_root,
     repo_root,
+    slug_file_path,
     slug_from_branch,
     wiki_clone_path,
 )
@@ -61,7 +63,7 @@ def temp_git_repo(tmp_path):
     """Create an empty git repo at tmp_path with one commit.
 
     Returns the resolved Path to the git toplevel. Caller can create
-    subdirectories and _millhouse/ placements for nested-project tests.
+    subdirectories and .millhouse/ placements for nested-project tests.
     """
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     subprocess.run(
@@ -74,29 +76,29 @@ def temp_git_repo(tmp_path):
 
 
 def test_project_root_flat_layout_equals_repo_root(temp_git_repo):
-    """Flat layout: _millhouse/ at git toplevel -> project_root() == repo_root()."""
-    (temp_git_repo / "_millhouse").mkdir()
+    """Flat layout: .millhouse/ at git toplevel -> project_root() == repo_root()."""
+    (temp_git_repo / ".millhouse").mkdir()
     assert project_root(start=temp_git_repo) == temp_git_repo
 
 
 def test_project_root_nested_layout_walks_up(temp_git_repo):
-    """Nested: _millhouse/ at <git>/projects/sub/ -> project_root() from src/ returns projects/sub/."""
+    """Nested: .millhouse/ at <git>/projects/sub/ -> project_root() from src/ returns projects/sub/."""
     project = temp_git_repo / "projects" / "sub"
-    (project / "_millhouse").mkdir(parents=True)
+    (project / ".millhouse").mkdir(parents=True)
     (project / "src").mkdir()
     assert project_root(start=project / "src") == project
 
 
 def test_project_root_from_inside_millhouse_subdir(temp_git_repo):
-    """Walk-up from deep inside _millhouse/ still returns the project root."""
+    """Walk-up from deep inside .millhouse/ still returns the project root."""
     project = temp_git_repo / "projects" / "sub"
-    deep = project / "_millhouse" / "some" / "subdir"
+    deep = project / ".millhouse" / "some" / "subdir"
     deep.mkdir(parents=True)
     assert project_root(start=deep) == project
 
 
 def test_project_root_no_millhouse_falls_back_to_git_root(temp_git_repo):
-    """No _millhouse/ anywhere -> fall back to git toplevel, do not raise."""
+    """No .millhouse/ anywhere -> fall back to git toplevel, do not raise."""
     sub = temp_git_repo / "a" / "b"
     sub.mkdir(parents=True)
     assert project_root(start=sub) == temp_git_repo
@@ -133,17 +135,17 @@ def test_project_offset_unrelated_paths_raises(tmp_path):
 
 
 def test_millhouse_dir_returns_cwd_millhouse(tmp_path, monkeypatch):
-    """millhouse_dir() returns cwd / '_millhouse' (project_dir()-anchored)."""
+    """millhouse_dir() returns cwd / '.millhouse' (project_dir()-anchored)."""
     monkeypatch.chdir(tmp_path)
-    assert millhouse_dir() == tmp_path / "_millhouse"
+    assert millhouse_dir() == tmp_path / ".millhouse"
 
 
 def test_millhouse_dir_subfolder_follows_cwd(tmp_path, monkeypatch):
-    """millhouse_dir() from a subfolder returns that subfolder / '_millhouse'."""
+    """millhouse_dir() from a subfolder returns that subfolder / '.millhouse'."""
     sub = tmp_path / "projects" / "sub"
     sub.mkdir(parents=True)
     monkeypatch.chdir(sub)
-    assert millhouse_dir() == sub / "_millhouse"
+    assert millhouse_dir() == sub / ".millhouse"
 
 
 # -------------------------------------------------------------------
@@ -259,14 +261,14 @@ def test_slug_from_branch_no_match_returns_full(monkeypatch):
 
 
 def test_mill_junction_path_defaults_to_cwd(tmp_path, monkeypatch):
-    """mill_junction_path() returns cwd / '.mill' when cwd is used."""
+    """mill_junction_path() returns cwd / '.millhouse' / 'wiki' when cwd is used."""
     monkeypatch.chdir(tmp_path)
-    assert mill_junction_path() == tmp_path / ".mill"
+    assert mill_junction_path() == tmp_path / ".millhouse" / "wiki"
 
 
 def test_mill_junction_path_explicit_cwd(tmp_path):
-    """mill_junction_path(cwd=<path>) returns <path>/.mill."""
-    assert mill_junction_path(cwd=tmp_path) == tmp_path / ".mill"
+    """mill_junction_path(cwd=<path>) returns <path>/.millhouse/wiki."""
+    assert mill_junction_path(cwd=tmp_path) == tmp_path / ".millhouse" / "wiki"
 
 
 # -------------------------------------------------------------------
@@ -275,11 +277,11 @@ def test_mill_junction_path_explicit_cwd(tmp_path):
 
 
 def test_active_dir_with_explicit_slug(tmp_path, monkeypatch):
-    """active_dir(cfg, 'my-task') returns <cwd>/.mill/active/my-task."""
+    """active_dir(cfg, 'my-task') returns <cwd>/.millhouse/wiki/active/my-task."""
     monkeypatch.chdir(tmp_path)
     cfg: dict = {}
     result = active_dir(cfg, "my-task")
-    assert result == tmp_path / ".mill" / "active" / "my-task"
+    assert result == tmp_path / ".millhouse" / "wiki" / "active" / "my-task"
 
 
 def test_active_dir_no_slug_reads_git(monkeypatch, tmp_path):
@@ -301,7 +303,7 @@ def test_active_dir_no_slug_reads_git(monkeypatch, tmp_path):
 
     monkeypatch.setattr(subprocess_util, "run", fake_run)
     result = active_dir(cfg)
-    assert result == tmp_path / ".mill" / "active" / "my-feature"
+    assert result == tmp_path / ".millhouse" / "wiki" / "active" / "my-feature"
 
 
 # -------------------------------------------------------------------
@@ -328,7 +330,7 @@ def test_active_status_path(monkeypatch, tmp_path):
 
     monkeypatch.setattr(subprocess_util, "run", fake_run)
     result = active_status_path(cfg)
-    assert result == tmp_path / ".mill" / "active" / "some-task" / "status.md"
+    assert result == tmp_path / ".millhouse" / "wiki" / "active" / "some-task" / "status.md"
 
 
 # -------------------------------------------------------------------
@@ -337,14 +339,14 @@ def test_active_status_path(monkeypatch, tmp_path):
 
 
 def test_local_config_path_defaults_to_cwd(tmp_path, monkeypatch):
-    """local_config_path() returns cwd / '_millhouse' / 'config.local.yaml'."""
+    """local_config_path() returns cwd / '.millhouse' / 'config.local.yaml'."""
     monkeypatch.chdir(tmp_path)
-    assert local_config_path() == tmp_path / "_millhouse" / "config.local.yaml"
+    assert local_config_path() == tmp_path / ".millhouse" / "config.local.yaml"
 
 
 def test_local_config_path_explicit_cwd(tmp_path):
-    """local_config_path(cwd=<path>) returns <path>/_millhouse/config.local.yaml."""
-    assert local_config_path(cwd=tmp_path) == tmp_path / "_millhouse" / "config.local.yaml"
+    """local_config_path(cwd=<path>) returns <path>/.millhouse/config.local.yaml."""
+    assert local_config_path(cwd=tmp_path) == tmp_path / ".millhouse" / "config.local.yaml"
 
 
 # -------------------------------------------------------------------
@@ -404,3 +406,30 @@ def test_wiki_clone_path_derived_from_remote_url(monkeypatch, tmp_path):
     result = wiki_clone_path(cfg)
     # repo-name comes from remote URL basename, not short-name
     assert result == tmp_path.parent / "myrepo.wiki"
+
+
+# -------------------------------------------------------------------
+# active_junction_path
+# -------------------------------------------------------------------
+
+
+def test_active_junction_path_defaults_to_cwd(tmp_path, monkeypatch):
+    """active_junction_path() returns cwd / '.millhouse' / 'active'."""
+    monkeypatch.chdir(tmp_path)
+    assert active_junction_path() == tmp_path / ".millhouse" / "active"
+
+
+def test_active_junction_path_explicit_cwd(tmp_path):
+    """active_junction_path(cwd=<path>) returns <path>/.millhouse/active."""
+    assert active_junction_path(cwd=tmp_path) == tmp_path / ".millhouse" / "active"
+
+
+# -------------------------------------------------------------------
+# slug_file_path
+# -------------------------------------------------------------------
+
+
+def test_slug_file_path(tmp_path, monkeypatch):
+    """slug_file_path('my-task') returns cwd / '.millhouse' / 'my-task.slug.md'."""
+    monkeypatch.chdir(tmp_path)
+    assert slug_file_path("my-task") == tmp_path / ".millhouse" / "my-task.slug.md"

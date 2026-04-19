@@ -1,7 +1,6 @@
 """Tests for millpy.reviewers.failures — exit classification and malformed output."""
 from __future__ import annotations
 
-import pytest
 
 from millpy.reviewers.failures import (
     KIND_BINARY_MISSING,

@@ -15,7 +15,7 @@ This skill replaces the older `mill-inbox` import flow with a status-checking + 
 
    > `gh` is not authenticated. Run `gh auth login` and re-invoke `/mill-revise-tasks`.
 
-2. Load `_millhouse/config.yaml`. Resolve tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)`. If resolution raises, stop and tell the user to run `mill-setup` first. Extract from config:
+2. Load `.millhouse/config.yaml`. Resolve tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)`. If resolution raises, stop and tell the user to run `mill-setup` first. Extract from config:
    - `revise.brevity-threshold-lines` (default `5`)
    - `revise.brevity-threshold-chars` (default `500`)
 
@@ -23,11 +23,11 @@ This skill replaces the older `mill-inbox` import flow with a status-checking + 
 
 Invoke `fetch_issues.py` as a subprocess, resolving the script via three-tier path resolution:
 
-1. `_millhouse/fetch-issues.py` forwarding wrapper (written by `mill-setup`)
+1. `.millhouse/fetch-issues.py` forwarding wrapper (written by `mill-setup`)
 2. `<repo-root>/plugins/mill/scripts/fetch_issues.py` (in-repo plugin source)
 3. `~/.claude/plugins/cache/millhouse/mill/<latest-version>/scripts/fetch_issues.py` (plugin cache)
 
-Confirm `_millhouse/scratch/issues.json` was written. Read the JSON and extract:
+Confirm `.millhouse/scratch/issues.json` was written. Read the JSON and extract:
 - `repo`
 - `fetchedAt`
 - the `issues` array (each entry has at minimum `number`, `title`, `body`, and `labels`)
@@ -86,7 +86,7 @@ The user can approve or reject per task in Step 7.
 
 ## Step 7 — Write the proposal
 
-Render the consolidated proposal to `_millhouse/scratch/revision-proposal.md` with this structure:
+Render the consolidated proposal to `.millhouse/scratch/revision-proposal.md` with this structure:
 
 ```markdown
 # Tasks Revision Proposal
@@ -140,13 +140,13 @@ Edit this file to override any verdict or proposed change, then return to the ch
 Print to chat:
 
 - Counts: `<X> issues fetched. <Y> still-open, <Z> fixed-in-main, <W> moot. <V> brevity-cleanup proposals.`
-- Path: ``Full proposal at `_millhouse/scratch/revision-proposal.md`. Review and edit, then reply `approve` or `reject`.``
+- Path: ``Full proposal at `.millhouse/scratch/revision-proposal.md`. Review and edit, then reply `approve` or `reject`.``
 
 ## Step 9 — Wait for user response
 
 Await `approve` or `reject`:
 
-- `reject`: print ``Proposal rejected. No changes made. Proposal kept at `_millhouse/scratch/revision-proposal.md` for re-review.`` Exit.
+- `reject`: print ``Proposal rejected. No changes made. Proposal kept at `.millhouse/scratch/revision-proposal.md` for re-review.`` Exit.
 - `approve`: continue to Step 10.
 
 ## Step 10 — Apply changes (on approval)

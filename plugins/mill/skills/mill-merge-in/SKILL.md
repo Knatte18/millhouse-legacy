@@ -11,9 +11,9 @@ Merge the parent branch into the current branch. This is a standalone operation 
 
 ## Entry
 
-Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
+Read `.millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
 
-Extract `git.parent-branch` as the default merge source. If not found, fall back to `parent:` in `_millhouse/task/status.md`. If neither exists, ask the user which branch to merge from.
+Extract `git.parent-branch` as the default merge source. If not found, fall back to `parent:` in `.millhouse/task/status.md`. If neither exists, ask the user which branch to merge from.
 
 ### Arguments
 
@@ -62,7 +62,7 @@ Never use `-X theirs` or `-X ours` on real code conflicts.
 
 ### 4. Verify
 
-Run full verification (the `verify` command from plan frontmatter if available in `_millhouse/task/plan.md`, or the project's standard build/test command).
+Run full verification (the `verify` command from plan frontmatter if available in `.millhouse/task/plan.md`, or the project's standard build/test command).
 
 If verify is `N/A` (no test suite): skip verification.
 

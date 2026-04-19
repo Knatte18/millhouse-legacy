@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 
 from millpy.worktree.children import Child, find_by_branch, find_by_slug, list_children
 

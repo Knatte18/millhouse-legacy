@@ -36,7 +36,7 @@ If on `main` or `master`: stop and tell the user "You're on main — switch to a
 Resolve the base branch in this order:
 
 1. **Argument** — if the user provided one (e.g. `/git-pr develop`), use it.
-2. **`_millhouse/config.yaml`** — if the file exists and contains a `git.parent-branch` key, use its value. If the file doesn't exist, skip silently.
+2. **`.millhouse/config.yaml`** — if the file exists and contains a `git.parent-branch` key, use its value. If the file doesn't exist, skip silently.
 3. **Default** — `main`.
 
 Verify the base branch exists on the remote:

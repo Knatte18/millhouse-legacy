@@ -5,24 +5,19 @@ After Card 6 refactor:
 - TaskEntry replaces Task (new dataclass fields: display_name, slug, phase, description, background_slug)
 - slugify() helper added
 - ValidationError exception class added for slug collision detection
-- resolve_path(cfg) uses .mill/ junction (mill_junction_path)
+- resolve_path(cfg) uses .millhouse/wiki/ junction (mill_junction_path)
 - write_commit_push uses wiki.write_commit_push internally
 - GitPushError and TasksLockError removed from tasks_md (now in wiki module)
 """
 from __future__ import annotations
 
-import os
-import subprocess
 import textwrap
-import types
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
 
 import pytest
 
 from millpy.core.config import ConfigError
 from millpy.tasks.tasks_md import (
-    TaskEntry,
     ValidationError,
     parse,
     render,
@@ -221,14 +216,14 @@ class TestValidate:
 
 
 # ---------------------------------------------------------------------------
-# resolve_path — new .mill/ junction based resolution
+# resolve_path — new .millhouse/wiki/ junction based resolution
 # ---------------------------------------------------------------------------
 
 class TestResolvePath:
     def test_resolve_path_returns_home_md_in_mill_junction(self, tmp_path, monkeypatch):
-        """resolve_path returns <cwd>/.mill/Home.md."""
-        mill_dir = tmp_path / ".mill"
-        mill_dir.mkdir()
+        """resolve_path returns <cwd>/.millhouse/wiki/Home.md."""
+        mill_dir = tmp_path / ".millhouse" / "wiki"
+        mill_dir.mkdir(parents=True)
         (mill_dir / "Home.md").write_text("# Tasks\n", encoding="utf-8")
         monkeypatch.chdir(tmp_path)
         cfg: dict = {}
@@ -236,10 +231,10 @@ class TestResolvePath:
         assert result == mill_dir / "Home.md"
 
     def test_resolve_path_raises_configerror_when_mill_missing(self, tmp_path, monkeypatch):
-        """resolve_path raises ConfigError when .mill/ junction does not exist."""
+        """resolve_path raises ConfigError when .millhouse/wiki/ junction does not exist."""
         monkeypatch.chdir(tmp_path)
         cfg: dict = {}
-        with pytest.raises(ConfigError, match=r"\.mill"):
+        with pytest.raises(ConfigError, match=r"\.millhouse"):
             resolve_path(cfg)
 
 
@@ -250,8 +245,8 @@ class TestResolvePath:
 class TestWriteCommitPush:
     def test_write_commit_push_calls_wiki_helpers(self, tmp_path, monkeypatch):
         """write_commit_push acquires lock, writes file, calls wiki.write_commit_push, releases lock."""
-        mill_dir = tmp_path / ".mill"
-        mill_dir.mkdir()
+        mill_dir = tmp_path / ".millhouse" / "wiki"
+        mill_dir.mkdir(parents=True)
         (mill_dir / "Home.md").write_text("# Tasks\n", encoding="utf-8")
         monkeypatch.chdir(tmp_path)
         cfg: dict = {}
@@ -273,8 +268,8 @@ class TestWriteCommitPush:
 
     def test_write_commit_push_writes_content(self, tmp_path, monkeypatch):
         """write_commit_push writes the new content to Home.md before calling wiki helpers."""
-        mill_dir = tmp_path / ".mill"
-        mill_dir.mkdir()
+        mill_dir = tmp_path / ".millhouse" / "wiki"
+        mill_dir.mkdir(parents=True)
         home = mill_dir / "Home.md"
         home.write_text("# Tasks\n", encoding="utf-8")
         monkeypatch.chdir(tmp_path)

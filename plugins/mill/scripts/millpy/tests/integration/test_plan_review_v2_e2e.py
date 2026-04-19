@@ -18,7 +18,6 @@ import json
 import textwrap
 from pathlib import Path
 
-import pytest
 
 from millpy.core.plan_io import resolve_plan_path
 from millpy.core.plan_validator import validate
@@ -199,13 +198,12 @@ class TestPlanValidatorPassesV2:
 class TestSpawnReviewerCliV2Args:
     def test_plan_validator_gate_blocks_invalid_plan(self, tmp_path: Path):
         """spawn_reviewer emits ERROR JSON when plan has BLOCKING validation errors."""
-        import sys
         from io import StringIO
         from unittest.mock import patch
 
-        # _run_plan_validation resolves task_dir via project_root() / "_millhouse" / "task".
+        # _run_plan_validation resolves task_dir via project_root() / ".millhouse" / "task".
         # Write the invalid plan there and mock project_root() to return tmp_path.
-        plan_dir = tmp_path / "_millhouse" / "task" / "plan"
+        plan_dir = tmp_path / ".millhouse" / "task" / "plan"
         plan_dir.mkdir(parents=True)
         (plan_dir / "00-overview.md").write_text(textwrap.dedent(VALID_OVERVIEW), encoding="utf-8")
         (plan_dir / "02-extras.md").write_text(textwrap.dedent(VALID_BATCH_EXTRAS), encoding="utf-8")

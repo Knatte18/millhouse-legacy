@@ -2,11 +2,11 @@
 entrypoints/worktree.py — Worktree creator for millpy (live).
 
 Creates a git worktree with millhouse setup (colors, .env copy, config).
-Card 10: also creates a .mill junction pointing at the wiki clone and copies
-_millhouse/config.local.yaml from the parent worktree.
+Also creates a .millhouse/wiki/ junction pointing at the wiki clone and copies
+.millhouse/config.local.yaml from the parent worktree.
 
-Live after W1 Step 10 skill-text flip: called directly via
-`_millhouse/mill-worktree.py` or `python plugins/mill/scripts/worktree.py`.
+Called directly via `.millhouse/mill-worktree.py` or
+`python plugins/mill/scripts/worktree.py`.
 """
 from __future__ import annotations
 
@@ -24,14 +24,22 @@ from millpy.core import junction
 
 
 def remove(worktree_path: Path) -> None:
-    """Remove the .mill junction from a worktree, then clean up via git.
+    """Remove the wiki and active junctions from a worktree, then clean up via git.
 
     Parameters
     ----------
     worktree_path:
         Absolute path to the worktree being removed.
     """
-    junction.remove(worktree_path / ".mill")
+    # active/ junction only exists if the worktree had a claimed task.
+    # Remove best-effort.
+    active_junction = worktree_path / ".millhouse" / "active"
+    if active_junction.exists():
+        try:
+            junction.remove(active_junction)
+        except Exception:
+            pass
+    junction.remove(worktree_path / ".millhouse" / "wiki")
     _git_worktree_remove(worktree_path)
 
 
@@ -46,7 +54,7 @@ def _git_worktree_remove(worktree_path: Path) -> None:
     worktree_path:
         Path to pass to ``git worktree remove``.
     """
-    from millpy.core.git_ops import git, worktree_list
+    from millpy.core.git_ops import git
     from millpy.core.paths import repo_root
     try:
         repo = repo_root()
@@ -71,7 +79,6 @@ def main(argv: list[str] | None = None) -> int:
     from millpy.core.git_ops import git, worktree_list
     from millpy.core.log_util import log
     from millpy.core.paths import repo_root, local_config_path
-    from millpy.core.subprocess_util import run as subprocess_run
     from millpy.worktree.setup import copy_env, pick_color, write_vscode_settings
 
     parser = argparse.ArgumentParser(
@@ -143,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dry_run:
         print(f"[DryRun] Would create worktree at {project_path} on branch {args.branch_name}")
-        print(f"[DryRun] Would write .vscode/settings.json with a unique title bar color")
+        print("[DryRun] Would write .vscode/settings.json with a unique title bar color")
         print(str(project_path))
         return 0
 
@@ -177,22 +184,22 @@ def main(argv: list[str] | None = None) -> int:
     cfg: dict = {}
     try:
         from millpy.core.config import load as _load_config
-        src_config = repo / "_millhouse" / "config.yaml"
+        src_config = repo / ".millhouse" / "config.yaml"
         if src_config.exists():
             cfg = _load_config(src_config)
     except Exception as exc:
         log("worktree", f"config load failed (non-fatal): {exc}")
 
-    # Copy _millhouse/config.yaml to new worktree
-    src_config = repo / "_millhouse" / "config.yaml"
-    dst_millhouse = project_path / "_millhouse"
+    # Copy .millhouse/config.yaml to new worktree
+    src_config = repo / ".millhouse" / "config.yaml"
+    dst_millhouse = project_path / ".millhouse"
     dst_millhouse.mkdir(parents=True, exist_ok=True)
     dst_config = dst_millhouse / "config.yaml"
     if src_config.exists() and not dst_config.exists():
         import shutil
         shutil.copy2(str(src_config), str(dst_config))
 
-    # Copy _millhouse/config.local.yaml to new worktree (Card 10)
+    # Copy .millhouse/config.local.yaml to new worktree
     src_local = local_config_path(repo)
     dst_local = local_config_path(project_path)
     if src_local.exists() and not dst_local.exists():
@@ -201,14 +208,14 @@ def main(argv: list[str] | None = None) -> int:
         _shutil.copy2(str(src_local), str(dst_local))
         log("worktree", f"Copied config.local.yaml to {dst_local}")
 
-    # Create .mill junction pointing at wiki clone (Card 10)
+    # Create .millhouse/wiki junction pointing at wiki clone
     try:
         wiki_path = wiki_clone_path_fn(cfg)
-        mill_link = project_path / ".mill"
-        junction.create(wiki_path, mill_link)
-        log("worktree", f"Created .mill junction -> {wiki_path}")
+        wiki_link = project_path / ".millhouse" / "wiki"
+        junction.create(wiki_path, wiki_link)
+        log("worktree", f"Created .millhouse/wiki junction -> {wiki_path}")
     except Exception as exc:
-        log("worktree", f".mill junction creation failed (non-fatal): {exc}")
+        log("worktree", f".millhouse/wiki junction creation failed (non-fatal): {exc}")
 
     # Emit project path (parity with PS1)
     print(str(project_path))

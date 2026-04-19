@@ -8,7 +8,6 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-import pytest
 
 from millpy.entrypoints.skills_index import (
     render_table,

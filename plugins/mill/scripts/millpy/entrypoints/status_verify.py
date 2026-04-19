@@ -1,7 +1,7 @@
 """
 entrypoints/status_verify.py — Verify status.md against directory state.
 
-Reads the current active task's status.md via .mill/active/<slug>/status.md
+Reads the current active task's status.md via .millhouse/wiki/active/<slug>/status.md
 and checks whether the recorded phase is consistent with the filesystem state
 (presence of discussion.md, plan/ directory, reviews/ files).
 
@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import re
 import sys
-from pathlib import Path
 
 
 def _phase_index(phase: str, ordered: list[str]) -> int:
@@ -106,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Check: discussion.md
     discussion_present = (task_dir / "discussion.md").exists()
-    discussed_idx = _BASE_PHASES.index("discussed")
+    _BASE_PHASES.index("discussed")
     if discussion_present and phase_idx < _BASE_PHASES.index("discussing"):
         mismatches.append(
             f"phase={phase} but discussion.md present"

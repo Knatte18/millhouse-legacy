@@ -1,13 +1,13 @@
 """
 entrypoints/open_terminal.py — Terminal launcher for millpy (live).
 
-Scans _millhouse/children/ for active entries, presents a picker,
+Scans .millhouse/children/ for active entries, presents a picker,
 then launches Claude Code in the selected worktree. Applies the B.4
 project-within-worktree offset in nested-project layouts (see
 main() for details).
 
 Live after W1 Step 10 skill-text flip: called directly via
-`_millhouse/mill-terminal.py` or `python plugins/mill/scripts/open_terminal.py`.
+`.millhouse/mill-terminal.py` or `python plugins/mill/scripts/open_terminal.py`.
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     from millpy.core.log_util import log
     from millpy.core.paths import cwd_offset, project_root
     from millpy.core.subprocess_util import run as subprocess_run
-    from millpy.worktree.children import Child, find_by_slug, list_children
+    from millpy.worktree.children import list_children
 
     try:
         root = project_root()
@@ -63,11 +63,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[open_terminal] Not in a git repository: {exc}", file=sys.stderr)
         return 1
 
-    millhouse_dir = root / "_millhouse"
+    millhouse_dir = root / ".millhouse"
     children_dir = millhouse_dir / "children"
 
     if not children_dir.exists():
-        print("No _millhouse/children/ directory found. No spawned worktrees.")
+        print("No .millhouse/children/ directory found. No spawned worktrees.")
         return 0
 
     children = list_children(millhouse_dir)

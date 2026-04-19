@@ -1,7 +1,7 @@
 """
 config.py — Minimal YAML parser and config resolver for millpy.
 
-Reads _millhouse/config.yaml with no third-party dependencies. Handles the
+Reads .millhouse/config.yaml with no third-party dependencies. Handles the
 subset of YAML used by mill: flat top-level scalars, nested mappings one level
 deep, quoted and unquoted scalars, block-scalar (|) values, and comments.
 
@@ -13,14 +13,14 @@ Config schema (new wiki-based system)
 --------------------------------------
 Two sources are merged by ``load_merged()``:
 
-Shared config (``.mill/config.yaml``, tracked in wiki):
+Shared config (``.millhouse/wiki/config.yaml``, tracked in wiki):
   git:          git workflow settings (auto-merge, branch-prefix, …)
   repo:         repo metadata (short-name, branch-prefix)
   pipeline:     review pipeline configuration (reviewer names, rounds)
   runtime:      runtime settings (implementer model, …)
   revise:       revise-tasks settings
 
-Local config (``_millhouse/config.local.yaml``, gitignored):
+Local config (``.millhouse/config.local.yaml``, gitignored):
   notifications:  platform notification settings (slack, desktop)
   wiki:           wiki override settings
     clone-path:   (str, optional) absolute path to local wiki clone
@@ -31,7 +31,6 @@ treated as empty.
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 
@@ -40,7 +39,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 class ConfigError(ValueError):
-    """Raised when _millhouse/config.yaml is malformed or a reviewer name cannot be resolved."""
+    """Raised when .millhouse/config.yaml is malformed or a reviewer name cannot be resolved."""
 
 
 # ---------------------------------------------------------------------------
@@ -285,11 +284,11 @@ def load_merged(
     """Load and merge shared + local config files.
 
     Resolution order:
-    1. **Shared config:** ``shared_path`` (``.mill/config.yaml``).
-       If missing, falls back to ``legacy_path`` (``_millhouse/config.yaml``)
+    1. **Shared config:** ``shared_path`` (``.millhouse/wiki/config.yaml``).
+       If missing, falls back to ``legacy_path`` (``.millhouse/config.yaml``)
        when provided — temporary bootstrap until ``mill-setup`` splits the
        config. Logs a DEBUG message on the legacy path.
-    2. **Local config:** ``local_path`` (``_millhouse/config.local.yaml``).
+    2. **Local config:** ``local_path`` (``.millhouse/config.local.yaml``).
        Missing → treated as empty.
 
     Merge rule: deep-merge per top-level key. Local values override shared
@@ -298,9 +297,9 @@ def load_merged(
     Parameters
     ----------
     shared_path:
-        Path to the shared config (``.mill/config.yaml``).
+        Path to the shared config (``.millhouse/wiki/config.yaml``).
     local_path:
-        Path to the local config (``_millhouse/config.local.yaml``).
+        Path to the local config (``.millhouse/config.local.yaml``).
     legacy_path:
         Optional fallback for the shared config when ``shared_path`` is absent.
 
@@ -317,7 +316,7 @@ def load_merged(
         shared = load(shared_path)
     elif legacy_path is not None and legacy_path.exists():
         sys.stderr.write(
-            f"[config] DEBUG: .mill/config.yaml not found; "
+            f"[config] DEBUG: .millhouse/wiki/config.yaml not found; "
             f"falling back to legacy {legacy_path} (run mill-setup to migrate)\n"
         )
         sys.stderr.flush()

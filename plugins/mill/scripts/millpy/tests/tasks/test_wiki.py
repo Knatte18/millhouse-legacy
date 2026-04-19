@@ -11,10 +11,8 @@ Tests cover:
 from __future__ import annotations
 
 import datetime
-import os
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -55,7 +53,7 @@ class TestSyncPull:
     def test_happy_path_calls_fetch_then_merge(self, tmp_path):
         """sync_pull runs fetch then merge --ff-only, returns None on success."""
         cfg = _cfg(tmp_path)
-        ok = _make_completed(0, stdout="refs/remotes/origin/HEAD")
+        _make_completed(0, stdout="refs/remotes/origin/HEAD")
         ok_fetch = _make_completed(0)
         ok_merge = _make_completed(0)
 

@@ -73,7 +73,7 @@ Resolution order in `millpy.reviewers.engine.run_reviewer`:
 
 **Discussion-phase bulk guard:** If the resolved reviewer uses a bulk-mode worker and `phase == "discussion"`, the engine raises `ConfigError` before spawning anything. No `discussion-review-bulk.md` template exists; bulk is only defined for `plan` and `code` phases.
 
-**Validate-before-mkdir (Fix E):** Reviewer name validation and the discussion-bulk guard run before any directory creation. A bad reviewer name does not create `_millhouse/scratch/reviews/`.
+**Validate-before-mkdir (Fix E):** Reviewer name validation and the discussion-bulk guard run before any directory creation. A bad reviewer name does not create `.millhouse/scratch/reviews/`.
 
 ## Import-time validation
 
@@ -90,7 +90,7 @@ These invariants are also accessible via `millpy.reviewers.validate_registries()
 
 ## Config integration
 
-`_millhouse/config.yaml` uses the `pipeline:` block to name reviewers by phase:
+`.millhouse/config.yaml` uses the `pipeline:` block to name reviewers by phase:
 
 ```yaml
 pipeline:

@@ -17,12 +17,12 @@ Autonomous. Read the discussion file, write the v3 flat-card plan, review it, ma
 Invoke `wiki.sync_pull(cfg)` on entry before reading any wiki state.
 
 Load config via `millpy.core.config.load_merged(shared_path, local_path)`:
-- `shared_path` = `.mill/config.yaml` (shared, tracked in wiki)
-- `local_path`  = `_millhouse/config.local.yaml` (local overrides, gitignored)
+- `shared_path` = `.millhouse/wiki/config.yaml` (shared, tracked in wiki)
+- `local_path`  = `.millhouse/config.local.yaml` (local overrides, gitignored)
 
 If both files are absent, halt:
 ```
-Neither .mill/config.yaml nor _millhouse/config.local.yaml found.
+Neither .millhouse/wiki/config.yaml nor .millhouse/config.local.yaml found.
 Run mill-setup to initialize.
 ```
 
@@ -40,7 +40,7 @@ Legacy slots (`pipeline.plan-review.holistic`, `pipeline.plan-review.per-card`, 
 `review-modules:`, `reviews:`) are not accepted.
 
 Derive slug via `paths.slug_from_branch(cfg)`. Read status.md at
-`active_status_path(cfg)` = `.mill/active/<slug>/status.md`. Check the `phase:` field:
+`active_status_path(cfg)` = `.millhouse/wiki/active/<slug>/status.md`. Check the `phase:` field:
 
 - **`phase: discussed`, no `plan:` field:** normal entry — Phase: Plan (plan not yet written).
 - **`phase: discussed`, `plan:` field exists, plan frontmatter `approved: false`:** re-enter Phase: Plan Review.
@@ -48,7 +48,7 @@ Derive slug via `paths.slug_from_branch(cfg)`. Read status.md at
 - **`phase: planned`:** stop: "Plan already written and approved. Run `mill-go` to start the Builder."
 - Any other phase: stop and report the current phase.
 
-Extract the `discussion:` field to locate the discussion file at `.mill/active/<slug>/discussion.md`.
+Extract the `discussion:` field to locate the discussion file at `.millhouse/wiki/active/<slug>/discussion.md`.
 Read it. If absent: stop — tell the user to re-run `mill-start`.
 
 Extract the `task:` field from the status.md YAML block to identify the task title.
@@ -86,14 +86,14 @@ wiki automatically. Free-form Edit of status.md YAML block for phase/timeline is
    TS=$(date -u +"%Y%m%d-%H%M%S")
    ```
 
-   Write the plan to `.mill/active/<slug>/plan/` per the v3 schema in
+   Write the plan to `.millhouse/wiki/active/<slug>/plan/` per the v3 schema in
    `plugins/mill/doc/formats/plan.md`:
 
-   - **`.mill/active/<slug>/plan/00-overview.md`** — frontmatter (`kind: plan-overview`, `task`,
+   - **`.millhouse/wiki/active/<slug>/plan/00-overview.md`** — frontmatter (`kind: plan-overview`, `task`,
      `verify`, `dev-server`, `approved: false`, `started: $TS`, `root: <prefix>`), then
      `## Card Index` (fenced YAML block with DAG metadata), `## All Files Touched` (flat bulleted list).
 
-   - **`.mill/active/<slug>/plan/card-NN-<slug>.md`** — one file per card.
+   - **`.millhouse/wiki/active/<slug>/plan/card-NN-<slug>.md`** — one file per card.
 
    Commit+push after writing the plan:
    ```python
@@ -117,7 +117,7 @@ frontmatter and proceed to Phase: Handoff.
 
 2. **Plan review loop (single holistic reviewer per round):**
 
-   **Setup:** Ensure `.mill/active/<slug>/reviews/` directory exists.
+   **Setup:** Ensure `.millhouse/wiki/active/<slug>/reviews/` directory exists.
 
    a. Report: **"Plan Review — round N/<max_plan_review_rounds>"**
 
@@ -131,18 +131,18 @@ frontmatter and proceed to Phase: Handoff.
       Falls back to `pipeline.plan-review.default` when no per-round override is set.
 
    d. **Materialize the prompt.** Read the Holistic Mode section from
-      `plugins/mill/doc/prompts/plan-review.md`. Substitute `<PLAN_DIR_PATH>` (`.mill/active/<slug>/plan/`),
+      `plugins/mill/doc/prompts/plan-review.md`. Substitute `<PLAN_DIR_PATH>` (`.millhouse/wiki/active/<slug>/plan/`),
       `<TASK_TITLE>`, `<CONSTRAINTS_CONTENT>`, `<N>`. Write to
-      `_millhouse/scratch/plan-review-prompt-r<N>-holistic.md`.
+      `.millhouse/scratch/plan-review-prompt-r<N>-holistic.md`.
 
    e. **Spawn the plan-reviewer in the background:**
       ```bash
       PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.spawn_reviewer \
         --reviewer-name <reviewer-name> \
-        --prompt-file _millhouse/scratch/plan-review-prompt-r<N>-holistic.md \
+        --prompt-file .millhouse/scratch/plan-review-prompt-r<N>-holistic.md \
         --phase plan \
         --round <N> \
-        --plan-dir-path .mill/active/<slug>/plan/ \
+        --plan-dir-path .millhouse/wiki/active/<slug>/plan/ \
         --slice-type holistic \
         --slice-id holistic
       ```
@@ -168,7 +168,7 @@ frontmatter and proceed to Phase: Handoff.
       3. For each BLOCKING finding, apply the receiving-review decision tree: VERIFY accuracy, then
          HARM CHECK. If neither: FIX IT. If harm: PUSH BACK with cited evidence.
       4. Apply fixes inline to the plan card file(s) and 00-overview.md if needed.
-      5. Write fixer report to `.mill/active/<slug>/reviews/<timestamp>-plan-fix-r<N>.md`:
+      5. Write fixer report to `.millhouse/wiki/active/<slug>/reviews/<timestamp>-plan-fix-r<N>.md`:
          ```markdown
          # Plan Fix Report — Round <N>
 
@@ -226,7 +226,7 @@ Phase transitions → `status_md.append_phase(active_status_path(cfg), phase, cf
 function updates `phase:` in the YAML block, appends the timeline entry, and commits+pushes to the
 wiki. Free-form Edit of status.md for phase/timeline is banned.
 
-Plan files live at `.mill/active/<slug>/plan/`. Review files live at `.mill/active/<slug>/reviews/`.
+Plan files live at `.millhouse/wiki/active/<slug>/plan/`. Review files live at `.millhouse/wiki/active/<slug>/reviews/`.
 
 mill-plan does not write to Home.md. The `[active]` marker written by `mill-spawn` stays in place
 until `mill-merge` (`[done]`) or `mill-abandon` (cleared entirely).

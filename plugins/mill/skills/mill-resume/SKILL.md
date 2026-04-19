@@ -26,9 +26,9 @@ If a slug is passed, resume that specific task. If no argument is provided, list
 
 ### Phase 1: Verify setup
 
-If `_millhouse/config.local.yaml` (or the legacy `_millhouse/config.yaml`) does not exist, stop and tell the user to run `mill-setup` first.
+If `.millhouse/config.local.yaml` (or the legacy `.millhouse/config.yaml`) does not exist, stop and tell the user to run `mill-setup` first.
 
-If the `.mill/` junction does not exist at cwd, stop and tell the user to run `mill-setup` first (the wiki junction is required to read task state).
+If the `.millhouse/wiki/` junction does not exist at cwd, stop and tell the user to run `mill-setup` first (the wiki junction is required to read task state).
 
 ### Phase 2: Sync wiki
 
@@ -38,7 +38,7 @@ Call `wiki.sync_pull(cfg)` to refresh the local wiki clone from remote. This ens
 
 **If a slug argument was passed:** use it directly. Skip to Phase 4.
 
-**If no argument was passed:** read `Home.md` from `.mill/Home.md` and find resume candidates.
+**If no argument was passed:** read `Home.md` from `.millhouse/wiki/Home.md` and find resume candidates.
 
 A resume candidate is an entry that:
 
@@ -56,7 +56,7 @@ Resume candidates:
 Pick a number:
 ```
 
-The phase shown is from `.mill/active/<slug>/status.md` (read the `phase:` field from the YAML block). If status.md is missing, show `(phase: unknown)`.
+The phase shown is from `.millhouse/wiki/active/<slug>/status.md` (read the `phase:` field from the YAML block). If status.md is missing, show `(phase: unknown)`.
 
 If there are no candidates (all active tasks already have a local worktree), print:
 
@@ -91,7 +91,7 @@ No remote branch '<branch_name>' exists. The task is active but the feature bran
 
 **Check 2 — wiki state exists:**
 
-Check whether `.mill/active/<slug>/` exists in the local wiki clone.
+Check whether `.millhouse/wiki/active/<slug>/` exists in the local wiki clone.
 
 If it does not exist, halt with:
 
@@ -111,26 +111,26 @@ Where:
 
 If the remote-tracking branch is not yet fetched, git will fetch it automatically. If `git worktree add` fails (branch already checked out elsewhere, disk error, etc.), report the error and stop.
 
-### Phase 7: Copy `_millhouse/` from parent
+### Phase 7: Copy `.millhouse/` from parent
 
-Copy `_millhouse/` (excluding `task/`, `scratch/`, and `children/`) from the parent worktree (cwd) to the new worktree. This gives the new worktree the config and wrapper scripts without inheriting stale task state.
+Copy `.millhouse/` (excluding `task/`, `scratch/`, and `children/`) from the parent worktree (cwd) to the new worktree. This gives the new worktree the config and wrapper scripts without inheriting stale task state.
 
-Also copy `_millhouse/config.local.yaml` from the parent to the new worktree if it exists.
+Also copy `.millhouse/config.local.yaml` from the parent to the new worktree if it exists.
 
 This is the same copy step as `mill-spawn` — see `plugins/mill/scripts/millpy/entrypoints/spawn_task.py` for the canonical implementation.
 
-### Phase 8: Create `.mill/` junction
+### Phase 8: Create `.millhouse/wiki/` junction
 
-Create a `.mill/` junction in the new worktree pointing at the same wiki clone as the parent:
+Create a `.millhouse/wiki/` junction in the new worktree pointing at the same wiki clone as the parent:
 
 ```python
 from millpy.core.junction import create as junction_create
-junction_create(new_worktree / ".mill", wiki_clone_path)
+junction_create(new_worktree / ".millhouse" / "wiki", wiki_clone_path)
 ```
 
 ### Phase 9: Read and report phase
 
-Read `.mill/active/<slug>/status.md` from the wiki clone. Parse the `phase:` field from the YAML block.
+Read `.millhouse/wiki/active/<slug>/status.md` from the wiki clone. Parse the `phase:` field from the YAML block.
 
 ### Phase 10: Regenerate sidebar
 
@@ -164,8 +164,8 @@ Note: task is mid-review. mill-go will re-enter the current phase from its start
 
 | Condition | Action |
 |---|---|
-| `_millhouse/config.local.yaml` missing | Stop, tell user to run `mill-setup` |
-| `.mill/` junction missing | Stop, tell user to run `mill-setup` |
+| `.millhouse/config.local.yaml` missing | Stop, tell user to run `mill-setup` |
+| `.millhouse/wiki/` junction missing | Stop, tell user to run `mill-setup` |
 | `wiki.sync_pull` fails | Report error; do not proceed (stale state risk) |
 | No remote branch for slug | Halt with manual-resolution message |
 | No wiki state for slug | Halt with manual-resolution message |

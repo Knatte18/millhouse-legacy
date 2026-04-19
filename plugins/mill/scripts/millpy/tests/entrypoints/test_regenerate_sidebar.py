@@ -4,11 +4,9 @@ Card 12: regenerate_sidebar builds _Sidebar.md from Home.md + proposals/.
 """
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
-import pytest
 
 
 def _make_wiki(tmp_path: Path, home_content: str) -> tuple[Path, Path]:
@@ -24,11 +22,11 @@ def _make_wiki(tmp_path: Path, home_content: str) -> tuple[Path, Path]:
     project_dir = tmp_path / "repo"
     project_dir.mkdir()
 
-    # Create .mill junction (fake: just a directory in tests)
-    mill = project_dir / ".mill"
-    mill.mkdir()
-    # Link .mill to wiki_dir by symlinking or just copying content for tests
-    # For unit tests, we fake the junction by writing files directly in .mill
+    # Create .millhouse/wiki junction (fake: just a directory in tests)
+    mill = project_dir / ".millhouse" / "wiki"
+    mill.mkdir(parents=True)
+    # Link .millhouse/wiki to wiki_dir by symlinking or just copying content for tests
+    # For unit tests, we fake the junction by writing files directly in .millhouse/wiki
     (mill / "Home.md").write_text(home_content, encoding="utf-8")
     (mill / "proposals").mkdir()
 
@@ -75,8 +73,8 @@ class TestRegenerateSidebarHappy:
         proposals_dir = wiki_dir / "proposals"
         (proposals_dir / "zebra-task.md").write_text("# Zebra Task\nDesc.\n", encoding="utf-8")
         (proposals_dir / "apple-task.md").write_text("# Apple Task\nDesc.\n", encoding="utf-8")
-        # Also update .mill/proposals
-        mill_proposals = project_dir / ".mill" / "proposals"
+        # Also update .millhouse/wiki/proposals
+        mill_proposals = project_dir / ".millhouse" / "wiki" / "proposals"
         (mill_proposals / "zebra-task.md").write_text("# Zebra Task\nDesc.\n", encoding="utf-8")
         (mill_proposals / "apple-task.md").write_text("# Apple Task\nDesc.\n", encoding="utf-8")
 
@@ -124,7 +122,7 @@ class TestRegenerateSidebarHappy:
         )
         proposals_dir = wiki_dir / "proposals"
         (proposals_dir / "no-heading.md").write_text("Some content without heading.\n", encoding="utf-8")
-        mill_proposals = project_dir / ".mill" / "proposals"
+        mill_proposals = project_dir / ".millhouse" / "wiki" / "proposals"
         (mill_proposals / "no-heading.md").write_text("Some content without heading.\n", encoding="utf-8")
 
         monkeypatch.chdir(project_dir)

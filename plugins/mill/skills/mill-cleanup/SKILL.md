@@ -69,7 +69,7 @@ Enumerate `<wiki-clone>/active/*/` directories. Each entry is an authoritative a
 For each active `<slug>`:
 - Check if `git worktree list --porcelain` includes a worktree for the matching branch
   (`<branch-prefix>/<slug>` or `<slug>` when no prefix is configured).
-- Read `.mill/active/<slug>/status.md` (via the wiki clone, not the junction) and extract `phase:`.
+- Read `.millhouse/wiki/active/<slug>/status.md` (via the wiki clone, not the junction) and extract `phase:`.
 
 Categories:
 - **`phase: complete` + worktree present** → candidate for merged cleanup.
@@ -98,7 +98,7 @@ Report inconsistencies to the user at Phase 3. Do NOT auto-fix them — they req
 
 Run `git worktree list --porcelain`. For each worktree other than the main one:
 - Derive slug from the branch name.
-- If `<wiki-clone>/active/<slug>/` does NOT exist AND the worktree has no `.mill/` junction:
+- If `<wiki-clone>/active/<slug>/` does NOT exist AND the worktree has no `.millhouse/wiki/` junction:
   the worktree is a stray (created outside mill). Flag as orphan for user review.
 
 #### Scan 4: Orphan worktree directories

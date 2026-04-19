@@ -5,14 +5,14 @@ Business logic is covered by tests/worktree/test_children.py. This file
 exercises the CLI contract — argparse boundary behaviour and missing
 required args.
 
-Card 10 additions: .mill junction creation and config.local.yaml copy.
+Card 10 additions: .millhouse/wiki junction creation and config.local.yaml copy.
 """
 from __future__ import annotations
 
 import os
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -52,7 +52,7 @@ def test_main_dry_run_prints_plan_and_exits_zero(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Card 10: .mill junction and config.local.yaml copy
+# Card 10: .millhouse/wiki junction and config.local.yaml copy
 # ---------------------------------------------------------------------------
 
 class TestWorktreeCreate:
@@ -72,14 +72,14 @@ class TestWorktreeCreate:
         return repo
 
     def test_create_makes_mill_junction(self, tmp_path, monkeypatch):
-        """After worktree add, .mill junction is created in the new worktree."""
+        """After worktree add, .millhouse/wiki junction is created in the new worktree."""
         repo = self._setup_repo(tmp_path)
         wiki_dir = tmp_path / "test.wiki"
         wiki_dir.mkdir()
 
         worktrees_parent = tmp_path / "repo.worktrees"
         worktrees_parent.mkdir()
-        new_wt = worktrees_parent / "test-wt"
+        worktrees_parent / "test-wt"
 
         monkeypatch.chdir(repo)
 
@@ -103,18 +103,18 @@ class TestWorktreeCreate:
             ])
 
         assert exit_code == 0, "main() should succeed"
-        assert len(created_junctions) == 1, ".mill junction should be created once"
+        assert len(created_junctions) == 1, ".millhouse/wiki junction should be created once"
         _target, link_path = created_junctions[0]
-        assert link_path.name == ".mill", "junction link_path should be named .mill"
+        assert link_path.name == "wiki", "junction link_path should be named wiki (inside .millhouse/)"
 
     def test_create_copies_local_config_when_present(self, tmp_path, monkeypatch):
-        """config.local.yaml from parent _millhouse/ is copied to new worktree."""
+        """config.local.yaml from parent .millhouse/ is copied to new worktree."""
         repo = self._setup_repo(tmp_path)
         wiki_dir = tmp_path / "test.wiki"
         wiki_dir.mkdir()
 
         # Create a local config in the parent repo.
-        src_local = repo / "_millhouse" / "config.local.yaml"
+        src_local = repo / ".millhouse" / "config.local.yaml"
         src_local.parent.mkdir(parents=True, exist_ok=True)
         src_local.write_text("notifications:\n  slack:\n    webhook: secret\n", encoding="utf-8")
 
@@ -134,7 +134,7 @@ class TestWorktreeCreate:
         # Find the new worktree path.
         worktrees_parent = repo.parent / f"{repo.name}.worktrees"
         new_wt = worktrees_parent / "test-wt"
-        dst_local = new_wt / "_millhouse" / "config.local.yaml"
+        dst_local = new_wt / ".millhouse" / "config.local.yaml"
         assert dst_local.exists(), "config.local.yaml should be copied to new worktree"
         content = dst_local.read_text(encoding="utf-8")
         assert "secret" in content
@@ -165,11 +165,11 @@ class TestWorktreeRemove:
     """Tests for the remove() function and junction cleanup."""
 
     def test_remove_clears_junction_before_git_cleanup(self, tmp_path):
-        """remove() calls junction.remove for .mill before git worktree remove."""
+        """remove() calls junction.remove for .millhouse/wiki before git worktree remove."""
         wt_path = tmp_path / "my-wt"
         wt_path.mkdir()
-        mill_dir = wt_path / ".mill"
-        mill_dir.mkdir()
+        mill_dir = wt_path / ".millhouse" / "wiki"
+        mill_dir.mkdir(parents=True)
 
         remove_calls: list[Path] = []
 
@@ -187,10 +187,10 @@ class TestWorktreeRemove:
         assert remove_calls[0] == mill_dir
 
     def test_remove_idempotent_when_no_junction(self, tmp_path):
-        """remove() is a no-op for .mill when junction doesn't exist."""
+        """remove() is a no-op for .millhouse/wiki when junction doesn't exist."""
         wt_path = tmp_path / "my-wt"
         wt_path.mkdir()
-        # No .mill directory.
+        # No .millhouse/wiki directory.
 
         with patch("millpy.entrypoints.worktree.junction") as mock_junc, \
              patch("millpy.entrypoints.worktree._git_worktree_remove") as mock_gwr:
@@ -199,4 +199,4 @@ class TestWorktreeRemove:
 
             worktree.remove(wt_path)  # Should not raise
 
-        mock_junc.remove.assert_called_once_with(wt_path / ".mill")
+        mock_junc.remove.assert_called_once_with(wt_path / ".millhouse" / "wiki")

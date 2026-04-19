@@ -30,8 +30,8 @@ STATUS_BASIC = """\
 task: My Task
 phase: implementing
 parent: main
-discussion: _millhouse/task/discussion.md
-plan: _millhouse/task/plan.md
+discussion: .millhouse/task/discussion.md
+plan: .millhouse/task/plan.md
 task_description: |
   Python toolkit — retire PowerShell scripts
 ```
@@ -110,7 +110,7 @@ class TestLoad:
 
     def test_smoke_real_status(self):
         """Smoke: loads the worktree's own status.md if present."""
-        status_path = Path(__file__).parents[5] / "_millhouse" / "task" / "status.md"
+        status_path = Path(__file__).parents[5] / ".millhouse" / "task" / "status.md"
         if status_path.exists():
             data = load(status_path)
             assert "phase" in data
@@ -241,14 +241,14 @@ class TestAppendPhase:
         mock_wcp.assert_not_called()
 
     def test_with_cfg_under_mill_junction_calls_wiki_push(self, tmp_path, monkeypatch):
-        """append_phase with cfg calls wiki.write_commit_push when path is under .mill/."""
-        # Set up a .mill/active/slug/ directory
+        """append_phase with cfg calls wiki.write_commit_push when path is under .millhouse/wiki/."""
+        # Set up a .millhouse/wiki/active/slug/ directory
         slug = "test-task"
-        active_dir = tmp_path / ".mill" / "active" / slug
+        active_dir = tmp_path / ".millhouse" / "wiki" / "active" / slug
         active_dir.mkdir(parents=True)
         status_path = active_dir / "status.md"
         status_path.write_text(
-            STATUS_BASIC.replace("_millhouse/task/status.md", str(status_path)),
+            STATUS_BASIC.replace(".millhouse/task/status.md", str(status_path)),
             encoding="utf-8",
         )
         # Write valid status.md content
@@ -274,8 +274,8 @@ class TestAppendPhase:
 task: Test
 phase: discussing
 parent: main
-discussion: _millhouse/task/discussion.md
-plan: _millhouse/task/plan.md
+discussion: .millhouse/task/discussion.md
+plan: .millhouse/task/plan.md
 task_description: |
   Test task
 ```

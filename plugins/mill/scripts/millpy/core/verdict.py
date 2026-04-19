@@ -28,7 +28,7 @@ Historical context — live repros driving the multi-format design:
   JSON verdict envelope, failed, and returned ``verdict: UNKNOWN`` to
   the orchestrator even though the review file itself was written
   correctly. Review file:
-  ``_millhouse/task/reviews/20260415-081248-discussion-review-r1.md``
+  ``.millhouse/task/reviews/20260415-081248-discussion-review-r1.md``
 
   Discussion review round 2 (2026-04-15): the worker emitted clean JSON
   with no fence wrapping at all. The engine STILL returned
@@ -37,7 +37,7 @@ Historical context — live repros driving the multi-format design:
   both scanning for a literal ``VERDICT:`` prefix line — neither JSON
   nor YAML frontmatter matched, so both paths always defaulted to
   ``UNKNOWN``. Review file:
-  ``_millhouse/task/reviews/20260415-083554-discussion-review-r2.md``
+  ``.millhouse/task/reviews/20260415-083554-discussion-review-r2.md``
 
 Both failure modes are resolved by routing through
 ``extract_verdict_from_text``, which recognizes frontmatter, fence-wrapped

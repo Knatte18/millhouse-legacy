@@ -13,7 +13,7 @@ For tasks.md file format details, see `plugins/mill/doc/formats/tasksmd.md`.
 
 ## How tasks.md is resolved
 
-As of the orphan-`tasks`-branch change, `tasks.md` lives on a dedicated branch and is checked out at the path configured in `_millhouse/config.yaml` → `tasks.worktree-path`. This skill reads and writes that file exclusively via `millpy.tasks.tasks_md.resolve_path` + `write_commit_push`. Never run git commands against `tasks.md` in the current worktree.
+As of the orphan-`tasks`-branch change, `tasks.md` lives on a dedicated branch and is checked out at the path configured in `.millhouse/config.yaml` → `tasks.worktree-path`. This skill reads and writes that file exclusively via `millpy.tasks.tasks_md.resolve_path` + `write_commit_push`. Never run git commands against `tasks.md` in the current worktree.
 
 ---
 
@@ -30,7 +30,7 @@ Text before the first colon is the title. Text after is the body. No colon means
 
 ### Step 1: Resolve tasks.md
 
-Load `_millhouse/config.yaml` via `millpy.core.config.load`. Call `millpy.tasks.tasks_md.resolve_path(cfg)` to get the absolute path to tasks.md on the tasks worktree. If this raises `ConfigError` or `FileNotFoundError`, stop and tell the user: "Tasks worktree not found — run mill-setup first."
+Load `.millhouse/config.yaml` via `millpy.core.config.load`. Call `millpy.tasks.tasks_md.resolve_path(cfg)` to get the absolute path to tasks.md on the tasks worktree. If this raises `ConfigError` or `FileNotFoundError`, stop and tell the user: "Tasks worktree not found — run mill-setup first."
 
 ### Step 2: Parse input
 

@@ -8,11 +8,9 @@ Covers:
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -20,8 +18,8 @@ import pytest
 # ---------------------------------------------------------------------------
 
 def _config_with_toast(enabled: bool, tmp_path: Path) -> Path:
-    """Write a minimal _millhouse/config.yaml with toast.enabled set."""
-    config_dir = tmp_path / "_millhouse"
+    """Write a minimal .millhouse/config.yaml with toast.enabled set."""
+    config_dir = tmp_path / ".millhouse"
     config_dir.mkdir()
     config_path = config_dir / "config.yaml"
     enabled_str = "true" if enabled else "false"
@@ -149,7 +147,7 @@ class TestToastDisabled:
 class TestConfigMissing:
     def test_missing_config_defaults_to_toast_enabled(self, tmp_path, monkeypatch):
         """When config.yaml is absent, toast is enabled by default."""
-        # tmp_path has no _millhouse/config.yaml
+        # tmp_path has no .millhouse/config.yaml
         monkeypatch.setattr("sys.platform", "linux")
 
         from millpy.entrypoints import notify

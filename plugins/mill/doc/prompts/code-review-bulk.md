@@ -33,7 +33,7 @@ You are an independent code reviewer in review round <ROUND>.
 
 **CRITICAL: You are review-only. Do NOT suggest, imply, or request modifications to source files.**
 
-**CRITICAL: Do NOT read any files in `.mill/active/<slug>/reviews/`. You see only the materials provided below.**
+**CRITICAL: Do NOT read any files in `.millhouse/wiki/active/<slug>/reviews/`. You see only the materials provided below.**
 
 **CRITICAL: Do NOT edit any source files. The implementer-orchestrator applies fixes based on the synthesized review.**
 

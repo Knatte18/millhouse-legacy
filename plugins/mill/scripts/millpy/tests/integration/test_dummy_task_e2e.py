@@ -128,7 +128,7 @@ def test_spawn_agent_implementer_role_validation(tmp_path, fake_claude_path):
         prompt,
         ["--role", "implementer", "--provider", "sonnet", "--max-turns", "1"],
         response=(
-            '{"phase": "complete", "status_file": "_millhouse/task/status.md", '
+            '{"phase": "complete", "status_file": ".millhouse/task/status.md", '
             '"final_commit": "abc123"}'
         ),
     )

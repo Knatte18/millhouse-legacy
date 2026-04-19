@@ -45,7 +45,7 @@ Run inside the target repo after global install:
 /mill-setup
 ```
 
-This creates the `_millhouse/` directory, kanban boards, config, and forwarding wrapper scripts.
+This creates the `.millhouse/` directory, wiki junction, config, and forwarding wrapper scripts.
 
 ## Updating
 

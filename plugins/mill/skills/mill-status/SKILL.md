@@ -15,7 +15,7 @@ Shows task overview, current status, and worktree overview. Read-only — if sta
 
 ### Step 1: Read tasks.md and status
 
-Load `_millhouse/config.yaml`. Resolve tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)`. If resolution raises (config missing or tasks worktree not found), note the error, print a one-line warning, and show `Tasks source: not configured` in the dashboard; continue rendering worktree state so the dashboard still has value.
+Load `.millhouse/config.yaml`. Resolve tasks.md via `millpy.tasks.tasks_md.resolve_path(cfg)`. If resolution raises (config missing or tasks worktree not found), note the error, print a one-line warning, and show `Tasks source: not configured` in the dashboard; continue rendering worktree state so the dashboard still has value.
 
 Read tasks.md via `tasks_md.parse(resolve_path(cfg))`. For each `## ` heading, categorize into the following buckets:
 - No `[phase]` marker → **Unclaimed**
@@ -25,11 +25,11 @@ Read tasks.md via `tasks_md.parse(resolve_path(cfg))`. For each `## ` heading, c
 - `[done]` → **Done**
 - `[abandoned]` → **Abandoned**
 
-Read the YAML code block in `_millhouse/task/status.md` if it exists. Extract `phase:`, `task:`, `plan:`, and the timeline entries from the ` ```text ``` ` fence in the `## Timeline` section.
+Read the YAML code block in `.millhouse/task/status.md` if it exists. Extract `phase:`, `task:`, `plan:`, and the timeline entries from the ` ```text ``` ` fence in the `## Timeline` section.
 
 ### Step 2: Read current status
 
-Read the YAML code block in `_millhouse/task/status.md` if it exists. Extract:
+Read the YAML code block in `.millhouse/task/status.md` if it exists. Extract:
 - `phase:` — current workflow phase
 - `plan:` — path to plan file (if any)
 - `task:` — current task name (if any)
@@ -38,28 +38,28 @@ If a plan file path is present and the file exists, read the plan to count total
 
 ### Step 3: Build worktree tree
 
-Read `tasks.worktree-path` from `_millhouse/config.yaml`. When iterating `git worktree list --porcelain`, filter out any worktree whose path (normalized to forward slashes) matches the configured tasks-worktree-path — it is not a feature worktree and must not appear in the tree render.
+Read `tasks.worktree-path` from `.millhouse/config.yaml`. When iterating `git worktree list --porcelain`, filter out any worktree whose path (normalized to forward slashes) matches the configured tasks-worktree-path — it is not a feature worktree and must not appear in the tree render.
 
 1. Run `git worktree list --porcelain` to get all worktrees with their branches and paths.
-2. For each worktree, read `_millhouse/children/` folder if it exists. Collect ALL `.md` files (active, merged, and abandoned entries). Parse YAML frontmatter for `branch:` and `status:` fields.
-3. For each worktree, read the YAML code block in `_millhouse/task/status.md` for phase and step progress. If a plan file path is present and the file exists, count total steps (`### Step` lines) and completed steps (via git log).
+2. For each worktree, read `.millhouse/children/` folder if it exists. Collect ALL `.md` files (active, merged, and abandoned entries). Parse YAML frontmatter for `branch:` and `status:` fields.
+3. For each worktree, read the YAML code block in `.millhouse/task/status.md` for phase and step progress. If a plan file path is present and the file exists, count total steps (`### Step` lines) and completed steps (via git log).
 4. Build a tree structure:
    - The main worktree is the root node.
-   - For each worktree, its children are the entries in its `_millhouse/children/` folder.
+   - For each worktree, its children are the entries in its `.millhouse/children/` folder.
    - For each **active** child (registry `status: active` or `status: pr-pending`):
      1. Derive the slug from the registry file's stem (strip the leading `<timestamp>-` prefix).
-     2. **Primary source:** try to read `<parent>/_millhouse/children/<slug>/status.md` (via the junction). If the read succeeds, use the YAML code block for phase/progress.
-     3. **Fallback:** if the junction read throws an exception (dangling junction — target missing or junction missing): fall back to `git worktree list --porcelain` lookup, reading `<child>/_millhouse/task/status.md` directly.
+     2. **Primary source:** try to read `<parent>/.millhouse/children/<slug>/status.md` (via the junction). If the read succeeds, use the YAML code block for phase/progress.
+     3. **Fallback:** if the junction read throws an exception (dangling junction — target missing or junction missing): fall back to `git worktree list --porcelain` lookup, reading `<child>/.millhouse/task/status.md` directly.
      4. **Both fail:** display `<slug>  [target missing — run mill-cleanup]` for that entry and continue rendering other children.
    - For **merged/abandoned** children, show them under their parent with their registry status. No live worktree lookup needed.
-   - Recurse: if a child worktree has its own `_millhouse/children/`, include its children as grandchildren, and so on.
+   - Recurse: if a child worktree has its own `.millhouse/children/`, include its children as grandchildren, and so on.
 
 ### Step 4: Detect stale state (for cleanup suggestion)
 
 Scan for any of the following. If any are found, remember to emit a cleanup suggestion at the bottom of the dashboard in Step 5:
 
-- Children entries in `_millhouse/children/*.md` with `status: merged`, `status: abandoned`, or `status: complete`.
-- Worktrees (from `git worktree list --porcelain`) whose `_millhouse/task/status.md` YAML code block has `phase: complete`.
+- Children entries in `.millhouse/children/*.md` with `status: merged`, `status: abandoned`, or `status: complete`.
+- Worktrees (from `git worktree list --porcelain`) whose `.millhouse/task/status.md` YAML code block has `phase: complete`.
 - Orphan directories in `<parent-of-repo-root>/<reponame>.worktrees/` (non-hub layout): subdirs not in `git worktree list` output. Skip this check if hub layout is detected (a `.bare` directory exists at `<parent-of-repo-root>/.bare`) — hub-layout orphan detection is handled by `mill-cleanup` itself.
 - `[done]` or `[abandoned]` task markers in `tasks.md`. Do NOT flag `[completed]` — it is a normal in-progress state ("work done, not yet merged").
 
@@ -86,12 +86,12 @@ Active tasks:
   [completed]  Task B
 ```
 
-Source of truth for phase: `phase:` field in the YAML code block of `_millhouse/task/status.md`.
+Source of truth for phase: `phase:` field in the YAML code block of `.millhouse/task/status.md`.
 
-If `_millhouse/task/status.md` exists and has a `## Timeline` section (read entries from within the ` ```text ``` ` fence):
+If `.millhouse/task/status.md` exists and has a `## Timeline` section (read entries from within the ` ```text ``` ` fence):
 
 ```
-Timeline (_millhouse/task/status.md):
+Timeline (.millhouse/task/status.md):
   discussing              2026-04-08T10:23:15Z
   discussed               2026-04-08T10:45:00Z
   implementing            2026-04-08T11:00:00Z
@@ -99,7 +99,7 @@ Timeline (_millhouse/task/status.md):
 
 Show all timeline entries from the `## Timeline` section, one per line. If status.md does not exist or has no `## Timeline` section, show `Timeline: (none)`.
 
-If the YAML code block in `_millhouse/task/status.md` has a phase that is not `complete`:
+If the YAML code block in `.millhouse/task/status.md` has a phase that is not `complete`:
 
 ```
 Current:
@@ -126,7 +126,7 @@ Where:
 - Active children with unresolvable state show `[target missing — run mill-cleanup]`
 - Merged/abandoned children show their registry status (e.g., `[merged]`, `[abandoned]`)
 - If a child's status is unreadable, show `[unknown]`
-- If `_millhouse/children/` is missing for a node, that node simply shows no children
+- If `.millhouse/children/` is missing for a node, that node simply shows no children
 
 If there are no worktrees beyond main and main has no children:
 
@@ -153,7 +153,7 @@ Active tasks:
   [active]     Implement mill-status skill
   [completed]  Add OAuth Support
 
-Timeline (_millhouse/task/status.md):
+Timeline (.millhouse/task/status.md):
   discussing              2026-04-08T10:23:15Z
   discussed               2026-04-08T10:45:00Z
   implementing            2026-04-08T11:00:00Z

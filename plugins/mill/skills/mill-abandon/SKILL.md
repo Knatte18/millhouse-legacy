@@ -28,7 +28,7 @@ Derive slug via `paths.slug_from_branch(cfg)`.
 Verify this is a worktree (not the main repo). If the current directory is the main worktree:
 stop: "mill-abandon must be run from a worktree, not the main repo."
 
-Verify mill management: read `.mill/active/<slug>/status.md`. If absent or missing `task:`/`phase:`,
+Verify mill management: read `.millhouse/wiki/active/<slug>/status.md`. If absent or missing `task:`/`phase:`,
 stop: "This worktree is not managed by mill (no status.md). Use `git worktree remove` manually."
 
 Read current branch:
@@ -100,12 +100,12 @@ wiki.release_lock(cfg)
 
 Release happens in `finally` — runs on both success and error paths after Step 4.
 
-### 9. Remove .mill/ junction
+### 9. Remove .millhouse/wiki/ junction
 
 ```python
 from millpy.core.junction import remove
 from millpy.core.paths import project_dir
-remove(project_dir() / ".mill")
+remove(project_dir() / ".millhouse" / "wiki")
 ```
 
 ### 10. Optional worktree cleanup
@@ -122,7 +122,7 @@ git -C <parent-path> branch -d <child-branch>
 If removal fails (locked directory): surface platform-aware hint (see mill-cleanup for
 `handle.exe`/`lsof` diagnostic). Tell user to close the directory and re-run.
 
-With `--keep-worktree`: skip Steps 9 and 10. The worktree remains with no `.mill/` junction.
+With `--keep-worktree`: skip Steps 9 and 10. The worktree remains with no `.millhouse/wiki/` junction.
 
 ### 11. Report
 

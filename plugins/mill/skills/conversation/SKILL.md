@@ -22,11 +22,11 @@ General behavior rules for Claude Code. These apply regardless of which plugins 
 
 ## Prompts for New Threads
 
-- When writing a prompt for a new thread: **write it to a file** at `_millhouse/scratch/prompt.md` (or `_millhouse/scratch/prompt-<slug>.md` if multiple). Never dump long prompts inline in the chat.
-- Tell the user: `Read _millhouse/scratch/prompt.md and follow the instructions there.`
+- When writing a prompt for a new thread: **write it to a file** at `.millhouse/scratch/prompt.md` (or `.millhouse/scratch/prompt-<slug>.md` if multiple). Never dump long prompts inline in the chat.
+- Tell the user: `Read .millhouse/scratch/prompt.md and follow the instructions there.`
 - If the prompt needs amendments before the user has started the thread: overwrite the file with the complete updated prompt. Never show partial diffs.
 - The user copies from the file in the editor, which has a built-in copy function.
-- **Every prompt must instruct the receiving thread to:** write its full report/result to a file (e.g. `_millhouse/scratch/result-<slug>.md`) and only output to the user: (1) the path to the result file, and (2) a brief summary of key points. This keeps thread output concise and results reviewable.
+- **Every prompt must instruct the receiving thread to:** write its full report/result to a file (e.g. `.millhouse/scratch/result-<slug>.md`) and only output to the user: (1) the path to the result file, and (2) a brief summary of key points. This keeps thread output concise and results reviewable.
 
 ## User Choices
 
@@ -38,9 +38,9 @@ General behavior rules for Claude Code. These apply regardless of which plugins 
 ## File Writing
 
 - **Never write to `/tmp/` or system temporary directories.** This causes permission prompts.
-- **Default scratch location:** `_millhouse/scratch/` in the repo root. Use for ephemeral files (materialized reviewer prompts, test baselines, merge locks, new-thread hand-off prompts). Task-state files (`status.md`, `plan.md`, `discussion.md`, `reviews/`, `implementer-brief-instance.md`) live in `_millhouse/task/` — see the task/scratch split documented in `plugins/mill/doc/architecture/overview.md`.
-- **Plugin-managed scratch:** All plugins share `_millhouse/scratch/` for ephemeral files. Subdirectories like `plans/` and `briefs/` are created as needed.
-- `_millhouse/scratch/` must be in the repo-root `.gitignore`.
+- **Default scratch location:** `.millhouse/scratch/` in the repo root. Use for ephemeral files (materialized reviewer prompts, test baselines, merge locks, new-thread hand-off prompts). Task-state files (`status.md`, `plan.md`, `discussion.md`, `reviews/`, `implementer-brief-instance.md`) live in `.millhouse/task/` — see the task/scratch split documented in `plugins/mill/doc/architecture/overview.md`.
+- **Plugin-managed scratch:** All plugins share `.millhouse/scratch/` for ephemeral files. Subdirectories like `plans/` and `briefs/` are created as needed.
+- `.millhouse/scratch/` must be in the repo-root `.gitignore`.
 
 ## Worktree isolation
 

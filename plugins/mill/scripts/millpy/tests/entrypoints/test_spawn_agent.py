@@ -18,7 +18,6 @@ unit level so they can run without a PATH fixture.
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,8 +122,8 @@ def test_happy_path_reviewer(fake_backend, prompt_file, capsys):
 
 def test_happy_path_implementer(fake_backend, prompt_file, capsys):
     fake_backend.canned = _FakeToolUseResult(
-        result_text='{"phase": "complete", "status_file": "_millhouse/task/status.md", "final_commit": "abc123"}',
-        parsed_json={"phase": "complete", "status_file": "_millhouse/task/status.md", "final_commit": "abc123"},
+        result_text='{"phase": "complete", "status_file": ".millhouse/task/status.md", "final_commit": "abc123"}',
+        parsed_json={"phase": "complete", "status_file": ".millhouse/task/status.md", "final_commit": "abc123"},
         exit_code=0,
         raw_stdout="",
     )
@@ -193,7 +192,7 @@ def test_missing_provider_and_no_config_exits_1(prompt_file, monkeypatch, tmp_pa
 def test_config_fallback_reads_pipeline_implementer(
     fake_backend, prompt_file, monkeypatch, tmp_path, capsys
 ):
-    millhouse = tmp_path / "_millhouse"
+    millhouse = tmp_path / ".millhouse"
     millhouse.mkdir()
     (millhouse / "config.yaml").write_text(
         "pipeline:\n  implementer: sonnet\n",

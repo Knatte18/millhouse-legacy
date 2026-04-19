@@ -4,9 +4,9 @@ plan_io.py — Plan path resolution and content reading for v1/v2/v3 plans.
 All callers go through this module — no inline v1-vs-v2-vs-v3 branching at
 call sites. This is the single source of truth for reading plan files.
 
-v1: _millhouse/task/plan.md (flat file)
-v2: _millhouse/task/plan/ (directory with 00-overview.md + batch files)
-v3: _millhouse/task/plan/ (directory with 00-overview.md + card-*.md files)
+v1: .millhouse/task/plan.md (flat file)
+v2: .millhouse/task/plan/ (directory with 00-overview.md + batch files)
+v3: .millhouse/task/plan/ (directory with 00-overview.md + card-*.md files)
 """
 from __future__ import annotations
 
@@ -214,7 +214,7 @@ def resolve_plan_path(task_dir: Path) -> PlanLocation | None:
     Parameters
     ----------
     task_dir:
-        Absolute path to `_millhouse/task/`.
+        Absolute path to `.millhouse/task/`.
 
     Returns
     -------

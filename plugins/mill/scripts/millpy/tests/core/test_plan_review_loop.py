@@ -295,7 +295,7 @@ class TestV3NextRoundPlan:
     def test_v3_mixed_verdicts_returns_continue(self, tmp_path: Path):
         from millpy.core.plan_review_loop import PlanOverviewV3
         loop = PlanReviewLoop(PlanOverviewV3(card_numbers=[1, 2]), max_rounds=3)
-        slices = loop.next_round_plan()
+        loop.next_round_plan()
         report = _make_report(tmp_path, "fix_r1.md", {
             "card-1": ["- Finding 1: missing Reads"],
             "card-2": [],

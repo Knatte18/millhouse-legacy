@@ -7,10 +7,10 @@ Covers:
 Live repros driving the multi-format extraction:
 - Discussion review round 1 (2026-04-15): worker emitted JSON wrapped in single
   backticks, engine returned verdict=UNKNOWN. File:
-  _millhouse/task/reviews/20260415-081248-discussion-review-r1.md
+  .millhouse/task/reviews/20260415-081248-discussion-review-r1.md
 - Discussion review round 2 (2026-04-15): worker emitted clean JSON, engine
   still returned verdict=UNKNOWN. File:
-  _millhouse/task/reviews/20260415-083554-discussion-review-r2.md
+  .millhouse/task/reviews/20260415-083554-discussion-review-r2.md
 """
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def test_parse_verdict_line_json_array_raises():
 
 def test_parse_verdict_line_round1_live_repro():
     """Live repro from discussion review round 1 — backtick-wrapped JSON."""
-    raw = '`{"verdict": "GAPS_FOUND", "review_file": "C:/Code/millhouse.worktrees/stabilization-bundle/_millhouse/task/reviews/20260415-081248-discussion-review-r1.md"}`'
+    raw = '`{"verdict": "GAPS_FOUND", "review_file": "C:/Code/millhouse.worktrees/stabilization-bundle/.millhouse/task/reviews/20260415-081248-discussion-review-r1.md"}`'
     result = parse_verdict_line(raw)
     assert result["verdict"] == "GAPS_FOUND"
     assert "discussion-review-r1.md" in result["review_file"]
@@ -130,7 +130,7 @@ def test_extract_triple_backtick_fenced_json_last_line():
 
 def test_extract_clean_json_last_line_after_trailing_newlines():
     """Round-2 live repro: clean JSON as the only non-empty line."""
-    text = '{"verdict": "APPROVE", "review_file": "c:\\\\Code\\\\mh\\\\_millhouse\\\\task\\\\reviews\\\\20260415-083554-discussion-review-r2.md"}\n'
+    text = '{"verdict": "APPROVE", "review_file": "c:\\\\Code\\\\mh\\\\.millhouse\\\\task\\\\reviews\\\\20260415-083554-discussion-review-r2.md"}\n'
     assert extract_verdict_from_text(text) == "APPROVE"
 
 

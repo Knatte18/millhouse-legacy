@@ -18,7 +18,7 @@ Exit cleanly. This check fires for BOTH manual and auto-fire invocations — the
 
 ## 2. Invocation modes
 
-- **Auto-fire from `mill-plan` and `mill-go`:** they invoke this skill at end-of-work IF `notifications.auto-report.enabled: true` in `_millhouse/config.yaml`. The skill receives no argument in this mode.
+- **Auto-fire from `mill-plan` and `mill-go`:** they invoke this skill at end-of-work IF `notifications.auto-report.enabled: true` in `.millhouse/config.yaml`. The skill receives no argument in this mode.
 - **Manual:** the user invokes `/mill-self-report` directly.
   - With NO argument, reflect on the current session's events broadly.
   - With a free-text argument (e.g. `/mill-self-report "the Gemini reviewer hung on card 5"`), use the argument as a steering hint focusing the reflection on the topic mentioned.
@@ -75,7 +75,7 @@ Followed by:
 
 For each selected candidate, invoke the `millhouse-issue` skill via the Skill tool, passing the candidate's title as the slash-command argument. The body is constructed by `millhouse-issue` from the title plus the auto-collected context (origin, branch, timestamp).
 
-For richer body content, this skill MAY pre-write the candidate body to `_millhouse/scratch/self-report-body-<slug>.md` and reference it from the `/millhouse-issue` invocation if needed — but the simpler approach (title-only invocation, let `millhouse-issue` auto-build the body) is the default.
+For richer body content, this skill MAY pre-write the candidate body to `.millhouse/scratch/self-report-body-<slug>.md` and reference it from the `/millhouse-issue` invocation if needed — but the simpler approach (title-only invocation, let `millhouse-issue` auto-build the body) is the default.
 
 ## 8. Step 6 — Report
 

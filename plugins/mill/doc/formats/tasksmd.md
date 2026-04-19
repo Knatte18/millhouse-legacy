@@ -4,7 +4,7 @@ Reference for the `Home.md` file in the GitHub Wiki. This is the wiki-based task
 
 ## File Location
 
-`Home.md` lives in the GitHub Wiki (`<repo>.wiki.git`), cloned locally at `<worktree-parent>/<repo>.wiki/`. Each worktree accesses it via the `.mill/` junction at cwd: `.mill/Home.md`.
+`Home.md` lives in the GitHub Wiki (`<repo>.wiki.git`), cloned locally at `<worktree-parent>/<repo>.wiki/`. Each worktree accesses it via the `.millhouse/wiki/` junction at cwd: `.millhouse/wiki/Home.md`.
 
 Created by `mill-setup`. Must have a `# Tasks` heading on line 1.
 
@@ -58,7 +58,7 @@ Task identity is the title text *without* any `[phase]` prefix. `## [active] Add
 
 The slug for a task equals the branch name (minus any configured `repo.branch-prefix/` prefix). Derive via `millpy.core.paths.slug_from_branch(cfg)`. Example: branch `mh/add-oauth-support` with prefix `mh` → slug `add-oauth-support`.
 
-The slug is also used as the task directory name under `.mill/active/<slug>/` in the wiki.
+The slug is also used as the task directory name under `.millhouse/wiki/active/<slug>/` in the wiki.
 
 ## Task Block Boundaries
 

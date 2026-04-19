@@ -14,6 +14,4 @@ __pycache__/
 nul
 
 # Mill local state
-**/_millhouse/
-**/.mill/
-**/_millhouse/config.local.yaml
+**/.millhouse/

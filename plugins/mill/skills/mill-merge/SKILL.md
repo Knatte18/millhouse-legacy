@@ -19,8 +19,8 @@ You are an integration engineer. Your job is to merge a feature branch back to i
 Invoke `wiki.sync_pull(cfg)` on entry before reading any wiki state.
 
 Load config via `millpy.core.config.load_merged(shared_path, local_path)`:
-- `shared_path` = `.mill/config.yaml`
-- `local_path`  = `_millhouse/config.local.yaml`
+- `shared_path` = `.millhouse/wiki/config.yaml`
+- `local_path`  = `.millhouse/config.local.yaml`
 
 Derive slug via `paths.slug_from_branch(cfg)`.
 
@@ -31,7 +31,7 @@ git worktree list --porcelain
 ```
 If the current directory is the main worktree, stop: "mill-merge must be run from a worktree."
 
-Verify mill management: read `.mill/active/<slug>/status.md`. If absent or missing `task:`/`phase:`,
+Verify mill management: read `.millhouse/wiki/active/<slug>/status.md`. If absent or missing `task:`/`phase:`,
 stop: "This worktree is not managed by mill (no status.md). Use `git worktree remove` manually."
 
 Read `git.parent-branch` from config, or fall back to `parent:` field in status.md, or ask user.
@@ -44,13 +44,13 @@ Read `git.parent-branch` from config, or fall back to `parent:` field in status.
 
 Resolve the parent worktree path from `git worktree list --porcelain`.
 
-Write `<parent-path>/_millhouse/scratch/merge.lock` with pid, timestamp, branch.
+Write `<parent-path>/.millhouse/scratch/merge.lock` with pid, timestamp, branch.
 
 If lock already exists: check PID liveness. If stale: remove and acquire. If active: wait up to 5 min.
 
 ### 2. Verify status
 
-Read `.mill/active/<slug>/status.md`. Verify `phase: complete` (or equivalent approved state).
+Read `.millhouse/wiki/active/<slug>/status.md`. Verify `phase: complete` (or equivalent approved state).
 If not, halt: "Status is <phase>, not complete. Cannot merge."
 
 ### 3. Write final phase update
@@ -122,17 +122,17 @@ Run:
 PYTHONPATH=<SCRIPTS_DIR> python -m millpy.entrypoints.regenerate_sidebar
 ```
 
-### 9. Remove .mill/ junction
+### 9. Remove .millhouse/wiki/ junction
 
 ```python
 from millpy.core.junction import remove
 from millpy.core.paths import project_dir
-remove(project_dir() / ".mill")
+remove(project_dir() / ".millhouse" / "wiki")
 ```
 
 ### 10. Release merge lock
 
-Delete `<parent-path>/_millhouse/scratch/merge.lock`.
+Delete `<parent-path>/.millhouse/scratch/merge.lock`.
 
 This step runs in ALL exit paths. Use trap/finally pattern.
 

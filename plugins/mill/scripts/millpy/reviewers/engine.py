@@ -10,7 +10,7 @@ Execution order (load-bearing for Fix E):
   2. Discussion-bulk guard → ConfigError if bulk worker + discussion phase.
   3. Plan-whole-bulk guard → ConfigError if bulk worker + plan phase + plan_dir_path set.
   4. Derive review_file_path if None (timestamp-based).
-  5. mkdir _millhouse/scratch/reviews/ — ONLY after validation passes.
+  5. mkdir .millhouse/scratch/reviews/ — ONLY after validation passes.
   6. Delegate to reviewer.run().
 
 ConfigError is imported from millpy.core.config — the authoritative source.
@@ -74,7 +74,7 @@ def run_reviewer(
         Optional path to plan/ directory for v2 whole-plan plan review.
     reviews_dir:
         Explicit reviews output directory. When None, falls back to
-        ``project_root() / "_millhouse" / "scratch" / "reviews"`` for
+        ``project_root() / ".millhouse" / "scratch" / "reviews"`` for
         backward compatibility.
 
     Returns
@@ -100,7 +100,7 @@ def run_reviewer(
     # Step 4: Derive review_file_path if None.
     if reviews_dir is None:
         root = project_root()
-        reviews_dir = root / "_millhouse" / "scratch" / "reviews"
+        reviews_dir = root / ".millhouse" / "scratch" / "reviews"
 
     if review_file_path is None:
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")

@@ -17,7 +17,7 @@ SENTINEL = "NavigationHooks"
 # File extensions that can plausibly carry NavigationHooks references.
 SCAN_EXTS = {".md", ".py", ".yaml", ".yml"}
 # Paths under plugins/mill/ that the walker skips.
-SKIP_DIRS = {"_millhouse", "_codeguide", "__pycache__"}
+SKIP_DIRS = {".millhouse", "_codeguide", "__pycache__"}
 
 
 def _repo_root() -> Path:

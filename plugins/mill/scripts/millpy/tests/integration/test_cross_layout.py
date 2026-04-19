@@ -2,8 +2,8 @@
 
 For every mill-state path consumer, assert that flat and nested layouts
 produce equivalent semantics. Specifically: when run from inside the
-project, mill-state paths resolve to <project_root>/_millhouse/, NOT to
-<git_root>/_millhouse/ in the nested case.
+project, mill-state paths resolve to <project_root>/.millhouse/, NOT to
+<git_root>/.millhouse/ in the nested case.
 
 The authoritative primitive is `millpy.core.paths.project_root()`.
 These tests verify that the callers that should route through
@@ -12,7 +12,6 @@ subdirectory does not surprise the caller.
 """
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
@@ -33,11 +32,11 @@ def test_millhouse_dir_resolves_inside_project_root(layout_name, flat_project_la
 
 
 def test_nested_millhouse_is_not_at_git_root(nested_project_layout, monkeypatch):
-    """Regression: in a nested layout, millhouse_dir() must NOT return the git toplevel's _millhouse."""
+    """Regression: in a nested layout, millhouse_dir() must NOT return the git toplevel's .millhouse."""
     monkeypatch.chdir(nested_project_layout.project_root)
     resolved = millhouse_dir()
-    assert resolved != nested_project_layout.git_root / "_millhouse"
-    assert resolved == nested_project_layout.project_root / "_millhouse"
+    assert resolved != nested_project_layout.git_root / ".millhouse"
+    assert resolved == nested_project_layout.project_root / ".millhouse"
 
 
 def test_nested_project_from_deep_subdirectory(nested_project_layout):
@@ -48,7 +47,7 @@ def test_nested_project_from_deep_subdirectory(nested_project_layout):
 
 
 def test_repo_root_unchanged_by_nested_layout(nested_project_layout):
-    """repo_root() keeps returning git toplevel regardless of where _millhouse/ lives.
+    """repo_root() keeps returning git toplevel regardless of where .millhouse/ lives.
 
     The split responsibility: repo_root() = source-content paths, project_root() = mill-state.
     """
@@ -61,8 +60,8 @@ def test_repo_root_unchanged_by_nested_layout(nested_project_layout):
 def test_spawn_reviewer_config_load_path_resolves_via_project_root(
     layout_name, flat_project_layout, nested_project_layout, monkeypatch
 ):
-    """spawn_reviewer reads _millhouse/config.yaml via project_root(). In the nested case,
-    the config must resolve under <project>/_millhouse/, not <git-root>/_millhouse/.
+    """spawn_reviewer reads .millhouse/config.yaml via project_root(). In the nested case,
+    the config must resolve under <project>/.millhouse/, not <git-root>/.millhouse/.
     This regression-tests the B.1 fix that rewired spawn_reviewer.py:98 from repo_root() to project_root()."""
     from millpy.core.config import load
 
@@ -78,7 +77,7 @@ def test_spawn_reviewer_config_load_path_resolves_via_project_root(
     )
 
     monkeypatch.chdir(layout.project_root)
-    resolved = project_root() / "_millhouse" / "config.yaml"
+    resolved = project_root() / ".millhouse" / "config.yaml"
     assert resolved == config_path
     cfg = load(resolved)
     assert cfg["pipeline"]["implementer"] == "sonnet"

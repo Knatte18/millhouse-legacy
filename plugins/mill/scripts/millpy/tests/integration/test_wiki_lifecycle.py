@@ -12,8 +12,8 @@ Layout
     tmp_path/
         main.git/       ← bare main repo
         main/           ← working clone (feature-test branch)
-            _millhouse/ ← local config
-            .mill/      →  tmp_path/main.wiki/  (junction)
+            .millhouse/ ← local config
+            .millhouse/wiki/      →  tmp_path/main.wiki/  (junction)
         main.wiki.git/  ← bare wiki repo
         main.wiki/      ← wiki clone
             Home.md
@@ -34,7 +34,6 @@ from pathlib import Path
 import pytest
 
 from millpy.core import junction
-from millpy.core.paths import active_dir, mill_junction_path, slug_from_branch
 
 
 # ---------------------------------------------------------------------------
@@ -165,8 +164,8 @@ def wiki_setup(tmp_path):
     wiki_clone = tmp_path / "main.wiki"
     _make_wiki_clone_with_home(bare_wiki, wiki_clone)
 
-    # Local _millhouse/ directory (simulate mill-setup output)
-    millhouse = main_clone / "_millhouse"
+    # Local .millhouse/ directory (simulate mill-setup output)
+    millhouse = main_clone / ".millhouse"
     millhouse.mkdir(parents=True, exist_ok=True)
 
     # Config dict (no config.yaml file needed — pass inline)
@@ -194,7 +193,7 @@ class TestWikiLifecycle:
     def test_lifecycle(self, wiki_setup, monkeypatch):
         """End-to-end lifecycle from spawn through merge cleanup."""
         from millpy.tasks import wiki as wiki_mod
-        from millpy.tasks import tasks_md, status_md
+        from millpy.tasks import status_md
 
         project = wiki_setup["project"]
         wiki_clone = wiki_setup["wiki_clone"]
@@ -204,14 +203,14 @@ class TestWikiLifecycle:
         monkeypatch.chdir(project)
 
         # -------------------------------------------------------------------
-        # Step 1: Spawn — create .mill/ junction, claim task in Home.md,
+        # Step 1: Spawn — create .millhouse/wiki/ junction, claim task in Home.md,
         #         write initial status.md at active/<slug>/
         # -------------------------------------------------------------------
 
-        # Create .mill/ junction
-        mill_link = project / ".mill"
+        # Create .millhouse/wiki/ junction
+        mill_link = project / ".millhouse" / "wiki"
         junction.create(wiki_clone, mill_link)
-        assert mill_link.exists(), ".mill/ junction must exist"
+        assert mill_link.exists(), ".millhouse/wiki/ junction must exist"
 
         # Claim task in Home.md (simulate spawn_task core path)
         home_path = wiki_clone / "Home.md"
@@ -266,7 +265,7 @@ class TestWikiLifecycle:
         wiki_mod.write_commit_push(
             cfg,
             [f"active/{slug}/status.md"],
-            f"task: phase discussed",
+            "task: phase discussed",
         )
 
         data = status_md.load(status_path)
@@ -361,7 +360,7 @@ class TestWikiLifecycle:
 
         monkeypatch.chdir(project)
 
-        mill_link = project / ".mill"
+        mill_link = project / ".millhouse" / "wiki"
         junction.create(wiki_clone, mill_link)
         assert mill_link.exists()
 

@@ -1,6 +1,6 @@
 """Regression — spawn_task does not write a `discussion.md` placeholder.
 
-Before 2026-04-16, spawn_task emitted an empty `_millhouse/task/discussion.md`
+Before 2026-04-16, spawn_task emitted an empty `.millhouse/task/discussion.md`
 shell file. That forced mill-start to use `Edit` on a pre-existing file
 instead of writing fresh, which caused a "must Read before Edit" protocol
 error the first time Claude touched it.

@@ -5,7 +5,7 @@ description: Initialize Mill for a repository. Creates wiki clone, junction, con
 
 # mill-setup
 
-One-time initialization (and idempotent re-run) per project. Bootstraps the GitHub Wiki clone as the central task hub, creates the `.mill/` junction, splits config into shared (wiki) and local (`_millhouse/`) files, and migrates from the legacy orphan-branch layout when detected.
+One-time initialization (and idempotent re-run) per project. Bootstraps the GitHub Wiki clone as the central task hub, creates the `.millhouse/wiki/` junction, splits config into shared (wiki) and local (`.millhouse/`) files, and migrates from the legacy orphan-branch layout when detected.
 
 For tasks.md (Home.md) file format details, see `plugins/mill/doc/formats/tasksmd.md`.
 
@@ -13,9 +13,9 @@ For tasks.md (Home.md) file format details, see `plugins/mill/doc/formats/tasksm
 
 ## Overview
 
-The new task system uses the repo's GitHub Wiki as the shared state store. Each worktree has a `.mill/` junction pointing at a local wiki clone (`<project-parent>/<repo>.wiki/`). Per-task runtime state lives in `.mill/active/<slug>/`. Config is split: shared settings in `.mill/config.yaml` (committed to the wiki), local-only settings in `_millhouse/config.local.yaml` (gitignored).
+The new task system uses the repo's GitHub Wiki as the shared state store. Each worktree has a `.millhouse/wiki/` junction pointing at a local wiki clone (`<project-parent>/<repo>.wiki/`). Per-task runtime state lives in `.millhouse/wiki/active/<slug>/`. Config is split: shared settings in `.millhouse/wiki/config.yaml` (committed to the wiki), local-only settings in `.millhouse/config.local.yaml` (gitignored).
 
-**Migration trigger:** if `_millhouse/config.yaml` exists and contains `tasks.worktree-path`, the repo is on the legacy orphan-branch layout — mill-setup performs the config split and wiki bootstrap migration automatically.
+**Migration trigger:** if `.millhouse/config.yaml` exists and contains `tasks.worktree-path`, the repo is on the legacy orphan-branch layout — mill-setup performs the config split and wiki bootstrap migration automatically.
 
 ---
 
@@ -48,9 +48,9 @@ Run each phase in order. Stop on the first hard error and report it. Each phase 
 
 4. **If the target exists but is NOT a git repo:** halt with a clear error — do not overwrite or delete user data.
 
-### Phase 3: Create `.mill/` junction
+### Phase 3: Create `.millhouse/wiki/` junction
 
-1. Compute junction path: `<cwd>/.mill`.
+1. Compute junction path: `<cwd>/.millhouse/wiki`.
 
 2. **If the junction does not exist:** create it via `millpy.core.junction.create(target=<wiki-clone-path>, link_path=<junction-path>)`.
 
@@ -58,39 +58,39 @@ Run each phase in order. Stop on the first hard error and report it. Each phase 
 
 4. **If the junction exists but points at a different target:** halt with:
    ```
-   .mill/ junction exists but points at <current-target>. Expected <wiki-clone-path>. Remove .mill/ and re-run.
+   .millhouse/wiki/ junction exists but points at <current-target>. Expected <wiki-clone-path>. Remove .millhouse/wiki/ and re-run.
    ```
 
 ### Phase 4: Config split (migration or fresh setup)
 
 #### 4a — Migration path (legacy config detected)
 
-**Trigger:** `_millhouse/config.yaml` exists AND contains `tasks.worktree-path`.
+**Trigger:** `.millhouse/config.yaml` exists AND contains `tasks.worktree-path`.
 
-1. **Backup first.** Copy `_millhouse/config.yaml` to `_millhouse/config.yaml.bak` BEFORE any write. Skip the backup if `.bak` already exists (a prior interrupted migration).
+1. **Backup first.** Copy `.millhouse/config.yaml` to `.millhouse/config.yaml.bak` BEFORE any write. Skip the backup if `.bak` already exists (a prior interrupted migration).
 
 2. **Split into two files:**
    - `<wiki-clone>/config.yaml` — shared settings: `git`, `repo`, `pipeline` (strip `holistic:` and `per-card:` keys — replaced by single holistic reviewer per card 5), `runtime`, `revise` blocks. Drop any `reviewers:` block — reviewer recipes live in Python (`reviewers/definitions.py` + `workers.py`).
-   - `_millhouse/config.local.yaml` — machine-specific settings: `notifications`, and `wiki:` (only if `clone-path` was non-default).
+   - `.millhouse/config.local.yaml` — machine-specific settings: `notifications`, and `wiki:` (only if `clone-path` was non-default).
 
 3. **Commit and push wiki file** via `millpy.tasks.wiki.write_commit_push(cfg, ["config.yaml"], "chore: mill-setup config split")`.
 
-4. **Only after the push succeeds:** delete `_millhouse/config.yaml`.
+4. **Only after the push succeeds:** delete `.millhouse/config.yaml`.
 
-5. **On push failure:** restore `_millhouse/config.yaml` from `.bak` and halt:
+5. **On push failure:** restore `.millhouse/config.yaml` from `.bak` and halt:
    ```
    Config split aborted — wiki push failed. Restored from backup. Check network and re-run.
    ```
 
-6. **Idempotent re-entry cleanup:** on a subsequent successful mill-setup run (`.mill/config.yaml` present in the wiki clone), remove `_millhouse/config.yaml.bak` if it still exists.
+6. **Idempotent re-entry cleanup:** on a subsequent successful mill-setup run (`.millhouse/wiki/config.yaml` present in the wiki clone), remove `.millhouse/config.yaml.bak` if it still exists.
 
 #### 4b — Fresh setup path (no legacy config)
 
-If `_millhouse/config.yaml` does NOT exist and `_millhouse/config.local.yaml` does NOT exist:
+If `.millhouse/config.yaml` does NOT exist and `.millhouse/config.local.yaml` does NOT exist:
 
 1. **Prompt for repo short-name.** Ask: "Repo short-name for window titles (default: `<directory-name>`):" If the user provides a value, use it. If the user skips, use the directory name.
 
-2. **Write local config.** Create `_millhouse/config.local.yaml` with `notifications:` block (platform defaults).
+2. **Write local config.** Create `.millhouse/config.local.yaml` with `notifications:` block (platform defaults).
 
 3. **Write shared config to wiki.** Read `plugins/mill/templates/millhouse-config.yaml`, substitute `<SHORT_NAME>`, and write to `<wiki-clone>/config.yaml`. Commit and push via `wiki.write_commit_push(cfg, ["config.yaml"], "chore: mill-setup init config")`.
 
@@ -113,24 +113,24 @@ Check and create missing standard wiki files. Each write uses `wiki.write_commit
 
 1. **Create local directories:**
    ```bash
-   mkdir -p _millhouse/scratch/reviews
-   mkdir -p _millhouse/task/reviews
+   mkdir -p .millhouse/scratch/reviews
+   mkdir -p .millhouse/task/reviews
    ```
 
-2. **Add `.gitignore` entry.** Check the repo's root `.gitignore` for an entry matching `**/_millhouse/`. If absent, append it.
+2. **Add `.gitignore` entry.** Check the repo's root `.gitignore` for an entry matching `**/.millhouse/`. If absent, append it.
 
-3. **Create forwarding wrappers.** Generate `.py` forwarding wrappers in `_millhouse/`. Read `plugins/mill/templates/wrapper.py`, substitute `<ENTRYPOINT>`, and write. Skip if the file already exists with the correct content.
+3. **Create forwarding wrappers.** Generate `.py` forwarding wrappers in `.millhouse/`. Read `plugins/mill/templates/wrapper.py`, substitute `<ENTRYPOINT>`, and write. Skip if the file already exists with the correct content.
 
    | Wrapper file | `<ENTRYPOINT>` |
    |---|---|
-   | `_millhouse/mill-spawn.py` | `spawn_task` |
-   | `_millhouse/fetch-issues.py` | `fetch_issues` |
-   | `_millhouse/mill-worktree.py` | `worktree` |
-   | `_millhouse/mill-terminal.py` | `open_terminal` |
-   | `_millhouse/mill-vscode.py` | `open_vscode` |
-   | `_millhouse/mill-color.py` | `set_worktree_color` |
+   | `.millhouse/mill-spawn.py` | `spawn_task` |
+   | `.millhouse/fetch-issues.py` | `fetch_issues` |
+   | `.millhouse/mill-worktree.py` | `worktree` |
+   | `.millhouse/mill-terminal.py` | `open_terminal` |
+   | `.millhouse/mill-vscode.py` | `open_vscode` |
+   | `.millhouse/mill-color.py` | `set_worktree_color` |
 
-   **Legacy cleanup.** Remove any `.ps1` and `.cmd` wrappers from `_millhouse/` (PowerShell-era: `mill-spawn`, `mill-worktree`, `mill-terminal`, `mill-vscode`, `fetch-issues`, `helm-spawn`, `millhouse-worktree`).
+   **Legacy cleanup.** Remove any `.ps1` and `.cmd` wrappers from `.millhouse/` (PowerShell-era: `mill-spawn`, `mill-worktree`, `mill-terminal`, `mill-vscode`, `fetch-issues`, `helm-spawn`, `millhouse-worktree`).
 
 4. **Plugin-cache junction check (detect-only).** Check whether `%USERPROFILE%\.claude\plugins\cache\millhouse\mill` resolves to a readable directory. If missing or dangling, print a warning (not a hard error): tell the user to run `symlink-plugins` from the millhouse repo to repair it. **Do not modify the junction** — user policy.
 
@@ -156,12 +156,12 @@ Read `plugins/mill/templates/claude-md-sections.md` (the `## Startup` + `## Task
 On successful completion, print:
 
 ```
-mill-setup complete. Wiki cloned at <wiki-clone-path>. Junction at <cwd>/.mill
+mill-setup complete. Wiki cloned at <wiki-clone-path>. Junction at <cwd>/.millhouse/wiki
 
-  Tasks (Home.md): .mill/Home.md
-  Config (shared): .mill/config.yaml
-  Config (local):  _millhouse/config.local.yaml
-  Active tasks:    .mill/active/<slug>/
+  Tasks (Home.md): .millhouse/wiki/Home.md
+  Config (shared): .millhouse/wiki/config.yaml
+  Config (local):  .millhouse/config.local.yaml
+  Active tasks:    .millhouse/wiki/active/<slug>/
 
 Migrations performed: <list or "none">
 Run mill-start to pick a task and begin.
@@ -174,7 +174,7 @@ Run mill-start to pick a task and begin.
 Every phase checks current state before acting. Re-running mill-setup after a partial run is always safe:
 
 - Wiki already cloned → pulls latest changes.
-- `.mill/` junction already correct → skipped.
+- `.millhouse/wiki/` junction already correct → skipped.
 - Config already split → skipped; `.bak` removed if wiki files are confirmed present.
 - Home.md already exists → skipped.
 - Wrappers already present with correct content → skipped.
@@ -188,6 +188,6 @@ Every phase checks current state before acting. Re-running mill-setup after a pa
 | `has_wiki: false` | Halt with instructions to enable wiki on GitHub |
 | Wiki empty (ls-remote fails) | Halt with URL to create first page |
 | Wiki clone target exists but not a git repo | Halt — do not overwrite |
-| `.mill/` junction points at wrong target | Halt with remove-and-rerun instructions |
+| `.millhouse/wiki/` junction points at wrong target | Halt with remove-and-rerun instructions |
 | Config split push fails | Restore from `.bak`, halt |
 | Plugin-cache junction missing | Warn only — do not halt |

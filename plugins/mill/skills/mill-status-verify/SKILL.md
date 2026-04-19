@@ -21,7 +21,7 @@ Verify the active task's `status.md` phase is consistent with directory state
 PYTHONPATH=<repo>/plugins/mill/scripts python -m millpy.entrypoints.status_verify
 ```
 
-Reads `.mill/active/<slug>/status.md` from the current worktree. Derives the
+Reads `.millhouse/wiki/active/<slug>/status.md` from the current worktree. Derives the
 slug from the current git branch (stripping `repo.branch-prefix` if set).
 
 ## Exit codes

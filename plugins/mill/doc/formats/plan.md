@@ -2,10 +2,10 @@
 
 ## v3 Flat-Card Layout (current format)
 
-For all new tasks, `mill-plan` writes a `.mill/active/<slug>/plan/` directory with a flat-card layout:
+For all new tasks, `mill-plan` writes a `.millhouse/wiki/active/<slug>/plan/` directory with a flat-card layout:
 
 ```
-.mill/active/<slug>/
+.millhouse/wiki/active/<slug>/
 ├── plan/
 │   ├── 00-overview.md
 │   ├── card-01-add-dag-module.md
@@ -228,10 +228,10 @@ The plan is the autonomous-execution contract written by `mill-go` Phase: Plan a
 
 ## v2 Directory Layout
 
-For all new tasks, `mill-go` Phase: Plan writes a `.mill/active/<slug>/plan/` directory:
+For all new tasks, `mill-go` Phase: Plan writes a `.millhouse/wiki/active/<slug>/plan/` directory:
 
 ```
-.mill/active/<slug>/
+.millhouse/wiki/active/<slug>/
 ├── plan/
 │   ├── 00-overview.md
 │   ├── 01-core.md
@@ -455,9 +455,9 @@ When a step's natural scope is large, split it into smaller steps. Each split st
 
 ## Backwards Compatibility
 
-- If `.mill/active/<slug>/plan/` (directory) exists **and** contains `card-*.md` files → **v3**.
-- If `.mill/active/<slug>/plan/` (directory) exists **without** `card-*.md` files → **v2**.
-- Else if `.mill/active/<slug>/plan.md` (file) exists → **v1**.
+- If `.millhouse/wiki/active/<slug>/plan/` (directory) exists **and** contains `card-*.md` files → **v3**.
+- If `.millhouse/wiki/active/<slug>/plan/` (directory) exists **without** `card-*.md` files → **v2**.
+- Else if `.millhouse/wiki/active/<slug>/plan.md` (file) exists → **v1**.
 - Both `plan/` and `plan.md` present → **v2 or v3 wins**; an INFO-level warning is logged. Never halts.
 - Neither → `plan_io.resolve_plan_path` returns `None`.
 
@@ -589,7 +589,7 @@ approved: false
 
 ## v1 Legacy Format
 
-v1 uses a single `.mill/active/<slug>/plan.md` file. In-flight v1 tasks are read via `plan_io.resolve_plan_path` which dispatches on `loc.kind == "v1"`. New tasks always use v2.
+v1 uses a single `.millhouse/wiki/active/<slug>/plan.md` file. In-flight v1 tasks are read via `plan_io.resolve_plan_path` which dispatches on `loc.kind == "v1"`. New tasks always use v2.
 
 ### v1 Frontmatter
 

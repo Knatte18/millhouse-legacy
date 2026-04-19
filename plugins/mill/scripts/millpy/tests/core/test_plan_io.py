@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 
 from millpy.core.plan_io import (
-    PlanLocation,
     parse_frontmatter,
     read_approved,
     read_card_index,

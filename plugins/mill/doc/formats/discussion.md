@@ -6,9 +6,9 @@ The discussion file is the handoff document between `mill-start` (interactive) a
 
 ## File Location
 
-`.mill/active/<slug>/discussion.md`
+`.millhouse/wiki/active/<slug>/discussion.md`
 
-`mill-go` discovers this file via the `discussion:` field in `.mill/active/<slug>/status.md`.
+`mill-go` discovers this file via the `discussion:` field in `.millhouse/wiki/active/<slug>/status.md`.
 
 ## Frontmatter
 
@@ -24,7 +24,7 @@ timestamp: <UTC YYYY-MM-DD-HHMMSS>
 
 - `timestamp:` must be generated via shell `date -u +"%Y%m%d-%H%M%S"` (see `@mill:cli` timestamp rules — never guess timestamps).
 - `worktree:` must be written using the output of `git rev-parse --show-toplevel` (forward-slash, even on Windows). `mill-go` compares this value against its own working directory to detect worktree mismatches.
-- `parent:` is the parent branch for merge operations. Required as a fallback for `mill-merge` and plan-stale revert when `_millhouse/config.yaml` is absent.
+- `parent:` is the parent branch for merge operations. Required as a fallback for `mill-merge` and plan-stale revert when `.millhouse/config.local.yaml` is absent.
 - The discussion file does NOT have an `approved:` field. The completion signal is `phase: discussed` in `status.md`.
 
 ## Mandatory Sections
@@ -111,7 +111,7 @@ These values are copied into the plan frontmatter by `mill-go`.
 # Status
 
 ```yaml
-discussion: .mill/active/<slug>/discussion.md
+discussion: .millhouse/wiki/active/<slug>/discussion.md
 phase: discussed
 task: <task-title>
 task_description: |
@@ -128,13 +128,13 @@ discussed               2026-04-08T11:00:00Z
 ````
 
 - `phase: discussed` is the completion sentinel. `mill-go` checks for exactly this value in the YAML code block on entry to confirm `mill-start` completed normally.
-- `parent:` is the fallback for `mill-merge` and plan-stale revert when `_millhouse/config.yaml` is absent.
+- `parent:` is the fallback for `mill-merge` and plan-stale revert when `.millhouse/config.local.yaml` is absent.
 - `task_description:` stores the task body text (migrated from tasks.md). Written by `mill-start` (in-place flow) and `mill-spawn.ps1` (worktree flow via template).
 
 After `mill-go` Plan Review completes and sets `approved: true` in the plan frontmatter, `mill-go` adds to the YAML code block:
 
 ```yaml
-plan: .mill/active/<slug>/plan.md
+plan: .millhouse/wiki/active/<slug>/plan.md
 ```
 
 The `approved:` field lives in the plan frontmatter, not in `status.md`.

@@ -193,7 +193,7 @@ def _validate_v2(loc: PlanLocation) -> list[ValidationError]:
                         location=batch_rel,
                         message=f"batch-depends references unknown batch: '{dep_slug}'",
                     ))
-        valid_dep_slugs = set(batch_deps) if isinstance(batch_deps, list) else set()
+        set(batch_deps) if isinstance(batch_deps, list) else set()
 
         # Batch sections
         for section in _V2_BATCH_REQUIRED_SECTIONS:

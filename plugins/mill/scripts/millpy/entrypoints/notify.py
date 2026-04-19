@@ -2,7 +2,7 @@
 entrypoints/notify.py — Best-effort desktop notification for mill skills.
 
 Called by mill-go and mill-merge at specific trigger points.
-Reads _millhouse/config.yaml to decide whether toast is enabled.
+Reads .millhouse/config.yaml to decide whether toast is enabled.
 Always exits 0 — failures warn on stderr, never block the caller.
 
 CLI interface mirrors notify.sh:
@@ -29,12 +29,12 @@ def _sanitize(text: str) -> str:
 
 
 def _toast_enabled(project_root: Path) -> bool:
-    """Read notifications.toast.enabled from _millhouse/config.yaml.
+    """Read notifications.toast.enabled from .millhouse/config.yaml.
 
     Returns True when config is missing, key is absent, or value is true.
     Returns False only when explicitly set to false.
     """
-    config_path = project_root / "_millhouse" / "config.yaml"
+    config_path = project_root / ".millhouse" / "config.yaml"
     if not config_path.exists():
         return True
 

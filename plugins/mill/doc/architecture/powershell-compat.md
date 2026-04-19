@@ -8,13 +8,13 @@ Pitfalls when writing scripts that must run on PowerShell 5.1 (Windows built-in)
 
 ```powershell
 # Broken on PS 5.1:
-$path = Join-Path $root "_millhouse" "git"
+$path = Join-Path $root ".millhouse" "git"
 
 # Fix — nest the calls:
-$path = Join-Path (Join-Path $root "_millhouse") "git"
+$path = Join-Path (Join-Path $root ".millhouse") "git"
 
 # Alternative — pipeline chaining (also works on 5.1):
-$path = Join-Path $root "_millhouse" | Join-Path -ChildPath "git"
+$path = Join-Path $root ".millhouse" | Join-Path -ChildPath "git"
 ```
 
 ### Misleading error with CmdletBinding

@@ -7,7 +7,6 @@ Step 15 E2E smoke.
 """
 from __future__ import annotations
 
-import pytest
 
 from millpy.entrypoints import fetch_issues
 

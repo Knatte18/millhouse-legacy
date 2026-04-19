@@ -51,8 +51,8 @@ Mill executes a task across two threads with a hard handoff at plan approval:
 
 | Phase | Skill | Thread | Model slot | Output artifacts |
 |---|---|---|---|---|
-| **1. Discussion** | `mill-start` | Thread A | `models.session` | `.mill/active/<slug>/discussion.md`, `status.md` `phase: discussed` |
-| **2. Plan** | `mill-go` (Phase 2) | Thread A | `models.session` (writer), `models.plan-review.<N>` (reviewer) | `.mill/active/<slug>/plan/` (`approved: true`), `status.md` `phase: planned` |
+| **1. Discussion** | `mill-start` | Thread A | `models.session` | `.millhouse/wiki/active/<slug>/discussion.md`, `status.md` `phase: discussed` |
+| **2. Plan** | `mill-go` (Phase 2) | Thread A | `models.session` (writer), `models.plan-review.<N>` (reviewer) | `.millhouse/wiki/active/<slug>/plan/` (`approved: true`), `status.md` `phase: planned` |
 | **3. Implement** | `mill-go` spawns Thread B via `millpy.entrypoints.spawn_agent` | Thread B | `models.implementer` (Thread B), `models.code-review.<N>` (reviewer) | All step commits, `status.md` `phase: testing/reviewing/complete` |
 | **4. Merge** | Thread B invokes `mill-merge` skill | Thread B | `models.implementer` | Merge commit on parent, `status.md` `phase: complete`, `Home.md` `[done]` marker (set by `mill-merge`) |
 
@@ -80,7 +80,7 @@ PYTHONPATH=<scripts-dir> python -m millpy.entrypoints.spawn_agent \
 ```
 
 - `--role` — required. `reviewer` or `implementer`. Determines max-turns default and the JSON return shape contract validated on exit.
-- `--prompt-file` — required. Path to a materialized prompt file. Callers materialize their prompt template (e.g. `discussion-review.md`, `plan-review.md`, `code-review.md`, `implementer-brief.md`) into a concrete file under `.mill/active/<slug>/scratch/` and pass the path here.
+- `--prompt-file` — required. Path to a materialized prompt file. Callers materialize their prompt template (e.g. `discussion-review.md`, `plan-review.md`, `code-review.md`, `implementer-brief.md`) into a concrete file under `.millhouse/scratch/` and pass the path here.
 - `--provider` — required. The model to invoke. `opus`, `sonnet`, `haiku` are routed to the `claude` backend. Unrecognized names exit with code 3.
 - `--max-turns` — optional. Defaults by role: reviewer = 20, implementer = 200.
 - `--work-dir` — optional. Defaults to cwd.
@@ -131,7 +131,7 @@ This decouples reviewer model choice from fix capability. Reviewers can be swapp
 
 ### `#config-resolution`
 
-Orchestrator skills (`mill-go`, `mill-start`, Thread B) resolve a reviewer name from `review-modules.<phase>.<round>` in `_millhouse/config.yaml`, then pass that name to `spawn-reviewer.py --reviewer-name`. `spawn-reviewer.py` reads the matching `reviewers.<name>` recipe and dispatches accordingly.
+Orchestrator skills (`mill-go`, `mill-start`, Thread B) resolve a reviewer name from `review-modules.<phase>.<round>` in `.millhouse/config.yaml`, then pass that name to `spawn-reviewer.py --reviewer-name`. `spawn-reviewer.py` reads the matching `reviewers.<name>` recipe and dispatches accordingly.
 
 For round `N`, the resolving skill looks up `review-modules.<phase>.<N>`. If that integer key is absent, it falls back to `review-modules.<phase>.default`. Rounds past the highest explicit index always use `default`. The `default` key is required for every phase slot.
 
@@ -166,15 +166,15 @@ See `plugins/mill/doc/architecture/reviewer-modules.md` for the full registry sc
    ```
    Validation runs every time, not just after migration. It catches edge cases the auto-migration cannot handle (e.g. a hand-edited config that introduces a malformed shape).
 
-In-flight `.mill/active/<slug>/discussion.md` or `plan/` files written before this task landed are a clean break — single-user repo. Any mid-flow task must be re-run.
+In-flight `.millhouse/wiki/active/<slug>/discussion.md` or `plan/` files written before this task landed are a clean break — single-user repo. Any mid-flow task must be re-run.
 
 ## Documentation Map
 
 | Document | What it covers |
 |---|---|
-| `plugins/mill/doc/formats/discussion.md` | Schema for `.mill/active/<slug>/discussion.md` (mill-start's output) |
+| `plugins/mill/doc/formats/discussion.md` | Schema for `.millhouse/wiki/active/<slug>/discussion.md` (mill-start's output) |
 | `plugins/mill/doc/prompts/discussion-review.md` | Discussion-reviewer protocol (read-only sub-agent invoked by mill-start) |
-| `plugins/mill/doc/formats/plan.md` | Schema for `.mill/active/<slug>/plan/`, including the atomic step-card invariant |
+| `plugins/mill/doc/formats/plan.md` | Schema for `.millhouse/wiki/active/<slug>/plan/`, including the atomic step-card invariant |
 | `plugins/mill/doc/prompts/plan-review.md` | Plan-reviewer protocol (read-only sub-agent invoked by mill-go) |
 | `plugins/mill/doc/prompts/code-review.md` | Code-reviewer protocol (`tool-use` dispatch — Claude reviewers) |
 | `plugins/mill/doc/prompts/code-review-bulk.md` | Code-reviewer prompt template for `bulk` dispatch (Gemini workers) |
@@ -187,10 +187,10 @@ In-flight `.mill/active/<slug>/discussion.md` or `plan/` files written before th
 
 ## Task System — Wiki-Based Layout
 
-Per-task runtime state lives in the GitHub Wiki (`<repo>.wiki.git`), cloned locally at `<worktree-parent>/<repo>.wiki/`. Each worktree accesses the wiki via a `.mill/` junction at its root:
+Per-task runtime state lives in the GitHub Wiki (`<repo>.wiki.git`), cloned locally at `<worktree-parent>/<repo>.wiki/`. Each worktree accesses the wiki via a `.millhouse/wiki/` junction at its root:
 
 ```
-.mill/                          ← junction → <worktree-parent>/<repo>.wiki/
+.millhouse/wiki/                ← junction → <worktree-parent>/<repo>.wiki/
   Home.md                       ← task list (shared; read/write via tasks_md)
   _Sidebar.md                   ← generated wiki sidebar
   active/
@@ -203,11 +203,11 @@ Per-task runtime state lives in the GitHub Wiki (`<repo>.wiki.git`), cloned loca
 
 The wiki is the source of truth for task state across machines. Every orchestrator entry point calls `millpy.tasks.wiki.sync_pull(cfg)` before reading wiki state. Every wiki write uses `wiki.write_commit_push` (for shared files like `Home.md`) or direct path writes followed by `wiki.write_commit_push` (for per-task files).
 
-The `.mill/` junction is gitignored and NOT committed to the main repo. `mill-setup` creates it. `mill-resume` recreates it on a new machine.
+The `.millhouse/wiki/` junction is gitignored and NOT committed to the main repo. `mill-setup` creates it. `mill-resume` recreates it on a new machine.
 
 ## Status File Channel
 
-`.mill/active/<slug>/status.md` is the only IPC channel between Thread A and Thread B. Thread B writes per-step updates to status.md after every phase transition, every step boundary, and every retry. Thread A reads status.md via `Monitor` (which streams the background subprocess's output) and a final read after the background process exits.
+`.millhouse/wiki/active/<slug>/status.md` is the only IPC channel between Thread A and Thread B. Thread B writes per-step updates to status.md after every phase transition, every step boundary, and every retry. Thread A reads status.md via `Monitor` (which streams the background subprocess's output) and a final read after the background process exits.
 
 Status.md writes go exclusively through `millpy.tasks.status_md.append_phase(path, phase, cfg=cfg)`. Free-form editing of status.md is banned — use `append_phase`.
 

@@ -1,7 +1,6 @@
 """Tests for millpy.reviewers.cluster — ClusterReviewer."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -9,7 +8,7 @@ import pytest
 
 from millpy.backends.base import BulkResult, ToolUseResult
 from millpy.core.config import ConfigError
-from millpy.reviewers.base import Cluster, ReviewerResult
+from millpy.reviewers.base import Cluster
 from millpy.reviewers.cluster import ClusterReviewer, _materialize_prompt
 from millpy.reviewers.workers import WORKERS
 
@@ -90,7 +89,7 @@ class TestClusterDegradation:
         reviewer = ClusterReviewer(cluster)
 
         fake_root = tmp_path
-        (fake_root / "_millhouse" / "scratch" / "reviews").mkdir(parents=True)
+        (fake_root / ".millhouse" / "scratch" / "reviews").mkdir(parents=True)
 
         synth_result = fake_review_file
         synth_result.write_text("VERDICT: APPROVE\n", encoding="utf-8")
@@ -145,7 +144,7 @@ class TestClusterDegradation:
         reviewer = ClusterReviewer(cluster)
 
         fake_root = tmp_path
-        (fake_root / "_millhouse" / "scratch" / "reviews").mkdir(parents=True)
+        (fake_root / ".millhouse" / "scratch" / "reviews").mkdir(parents=True)
         fake_review_file.write_text("VERDICT: APPROVE\n", encoding="utf-8")
 
         def fake_synthesize(worker_results, handler_worker, output_path, prep_notes=None, files_from=None):

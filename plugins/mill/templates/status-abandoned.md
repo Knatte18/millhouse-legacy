@@ -1,5 +1,5 @@
 <!--
-Template: _millhouse/task/status.md `## Abandon` section.
+Template: `.millhouse/wiki/active/<slug>/status.md` `## Abandon` section.
 Used by: plugins/mill/skills/mill-abandon/SKILL.md (Step 6).
 Tokens: <ABANDON_REASON>, <LAST_PHASE>, <LAST_STEP>, <CONTEXT_SUMMARY>.
 Strip this HTML comment before inserting.

@@ -17,7 +17,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 from millpy.backends.base import BulkResult, ToolUseResult
 from millpy.reviewers.base import ReviewerResult, SingleWorker, Worker

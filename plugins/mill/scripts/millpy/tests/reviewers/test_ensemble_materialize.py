@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -232,7 +231,7 @@ class TestBulkCodeReviewV1:
         template_path = tmp_path / "plugins" / "mill" / "doc" / "prompts" / "code-review-bulk.md"
         write_file(template_path, "Plan: <PLAN_CONTENT>\nFiles: <FILES_PAYLOAD>\nRound: <ROUND>")
 
-        plan_file = write_file(tmp_path / "_millhouse" / "task" / "plan.md", "---\nverify: noop\n---\n# Plan\n")
+        plan_file = write_file(tmp_path / ".millhouse" / "task" / "plan.md", "---\nverify: noop\n---\n# Plan\n")
         files_from = write_file(tmp_path / "files.txt", "")
 
         prompt_file = write_file(tmp_path / "prompt.md", "x")
@@ -260,7 +259,7 @@ class TestBulkCodeReviewV2:
         write_file(template_path, "Plan: <PLAN_CONTENT>\nFiles: <FILES_PAYLOAD>\nRound: <ROUND>")
 
         # Create a v2 plan directory
-        task_dir = tmp_path / "_millhouse" / "task"
+        task_dir = tmp_path / ".millhouse" / "task"
         plan_dir = task_dir / "plan"
         plan_dir.mkdir(parents=True)
         write_file(plan_dir / "00-overview.md", textwrap.dedent("""\

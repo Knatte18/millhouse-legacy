@@ -1,10 +1,10 @@
 """
 entrypoints/fetch_issues.py — GitHub issues fetcher for millpy (live).
 
-Fetches open GitHub issues and writes them to _millhouse/scratch/issues.json.
+Fetches open GitHub issues and writes them to .millhouse/scratch/issues.json.
 
 Live after W1 Step 10 skill-text flip: called directly by the mill-inbox
-skill via `_millhouse/fetch-issues.py` or direct plugin-source resolution.
+skill via `.millhouse/fetch-issues.py` or direct plugin-source resolution.
 """
 from __future__ import annotations
 
@@ -13,11 +13,10 @@ from . import _bootstrap  # noqa: F401
 import datetime
 import json
 import sys
-from pathlib import Path
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Fetch open GitHub issues and write to _millhouse/scratch/issues.json.
+    """Fetch open GitHub issues and write to .millhouse/scratch/issues.json.
 
     Parameters
     ----------
@@ -81,8 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         "issues": issues,
     }
 
-    # Write to _millhouse/scratch/issues.json
-    out_dir = root / "_millhouse" / "scratch"
+    # Write to .millhouse/scratch/issues.json
+    out_dir = root / ".millhouse" / "scratch"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_file = out_dir / "issues.json"
 

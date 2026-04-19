@@ -11,7 +11,7 @@ Toggle between normal mode and inspect mode. In inspect mode, all commits made s
 
 ## Entry
 
-Read `_millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
+Read `.millhouse/config.yaml`. If it does not exist, stop and tell the user to run `mill-setup` first.
 
 **Worktree guard:** Must be in a child worktree, not the main worktree. Detect using `git worktree list --porcelain` — if the current path is the first/main entry, stop: "mill-inspect must be run from a child worktree, not the main repo."
 
@@ -42,7 +42,7 @@ If output is non-empty: warn the user that uncommitted changes exist and will in
 
 ### 2. Resolve parent branch
 
-Read `git.parent-branch` from `_millhouse/config.yaml`. If not found, fall back to `git.base-branch`. If neither exists, default to `main`.
+Read `git.parent-branch` from `.millhouse/config.yaml`. If not found, fall back to `git.base-branch`. If neither exists, default to `main`.
 
 ### 3. Compute merge-base
 

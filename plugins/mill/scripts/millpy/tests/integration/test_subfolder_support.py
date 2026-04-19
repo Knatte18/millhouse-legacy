@@ -3,7 +3,7 @@ test_subfolder_support.py — Integration: millhouse works when the project live
 in a subfolder of a git repo.
 
 Regression guard: any helper that accidentally uses ``git rev-parse --show-toplevel``
-instead of ``Path.cwd()`` would land ``.mill/`` and ``_millhouse/`` at the git
+instead of ``Path.cwd()`` would land ``.millhouse/wiki/`` and ``.millhouse/`` at the git
 toplevel instead of the subfolder, causing the assertions below to fail.
 
 Layout under test
@@ -15,17 +15,17 @@ Layout under test
         outer/             ← working clone (git toplevel)
             sub/
                 project/   ← actual millhouse project cwd
-                    _millhouse/
-                    .mill/ → tmp_path/outer.wiki/
+                    .millhouse/
+                    .millhouse/wiki/ → tmp_path/outer.wiki/
         outer.wiki.git/    ← bare wiki repo
         outer.wiki/        ← wiki clone
 
 Steps:
 
 1. ``monkeypatch.chdir`` to ``outer/sub/project/``.
-2. Simulate mill-setup: create ``_millhouse/`` at cwd; create ``.mill/`` junction pointing
+2. Simulate mill-setup: create ``.millhouse/`` at cwd; create ``.millhouse/wiki/`` junction pointing
    at the wiki clone.
-3. Assert ``_millhouse/`` and ``.mill/`` are at the subfolder, NOT at ``outer/``.
+3. Assert ``.millhouse/`` and ``.millhouse/wiki/`` are at the subfolder, NOT at ``outer/``.
 4. Assert ``paths.project_dir()`` returns the subfolder path.
 5. Assert ``paths.mill_junction_path()`` points inside the subfolder.
 6. Write ``active/<slug>/status.md`` via ``append_phase`` (with cfg); assert the file
@@ -148,53 +148,53 @@ class TestSubfolderPathResolution:
         assert result.resolve() != subfolder_layout["working_clone"].resolve()
 
     def test_mill_junction_path_is_inside_subfolder(self, subfolder_layout, monkeypatch):
-        """mill_junction_path() returns <subfolder>/.mill, not <git-root>/.mill."""
+        """mill_junction_path() returns <subfolder>/.millhouse/wiki, not <git-root>/.millhouse/wiki."""
         project = subfolder_layout["project"]
         monkeypatch.chdir(project)
 
         mill = mill_junction_path()
-        assert mill.resolve() == (project / ".mill").resolve()
-        assert mill.resolve() != (subfolder_layout["working_clone"] / ".mill").resolve()
+        assert mill.resolve() == (project / ".millhouse" / "wiki").resolve()
+        assert mill.resolve() != (subfolder_layout["working_clone"] / ".millhouse" / "wiki").resolve()
 
     def test_millhouse_dir_is_inside_subfolder(self, subfolder_layout, monkeypatch):
-        """_millhouse/ created at cwd must be inside the subfolder."""
+        """.millhouse/ created at cwd must be inside the subfolder."""
         project = subfolder_layout["project"]
-        millhouse = project / "_millhouse"
+        millhouse = project / ".millhouse"
         millhouse.mkdir()
         monkeypatch.chdir(project)
 
         # Verify the directory exists at the subfolder, not at git root
         assert millhouse.exists()
-        assert not (subfolder_layout["working_clone"] / "_millhouse").exists()
+        assert not (subfolder_layout["working_clone"] / ".millhouse").exists()
 
 
 @pytest.mark.integration
 class TestSubfolderJunctionSetup:
-    """mill-setup simulation: .mill junction lands at the subfolder, not git root."""
+    """mill-setup simulation: .millhouse/wiki junction lands at the subfolder, not git root."""
 
     def test_mill_junction_created_at_subfolder(self, subfolder_layout, monkeypatch):
-        """.mill junction is created at <subfolder>/.mill, not <git-root>/.mill."""
+        """.millhouse/wiki junction is created at <subfolder>/.millhouse/wiki, not <git-root>/.millhouse/wiki."""
         project = subfolder_layout["project"]
         wiki_clone = subfolder_layout["wiki_clone"]
         monkeypatch.chdir(project)
 
-        mill_link = project / ".mill"
+        mill_link = project / ".millhouse" / "wiki"
         junction.create(wiki_clone, mill_link)
 
         # Junction exists at the subfolder
         assert mill_link.exists()
 
         # Junction does NOT exist at git root
-        git_root_mill = subfolder_layout["working_clone"] / ".mill"
+        git_root_mill = subfolder_layout["working_clone"] / ".millhouse" / "wiki"
         assert not git_root_mill.exists()
 
     def test_mill_junction_points_at_wiki_clone(self, subfolder_layout, monkeypatch):
-        """The .mill junction resolves inside the wiki clone."""
+        """The .millhouse/wiki junction resolves inside the wiki clone."""
         project = subfolder_layout["project"]
         wiki_clone = subfolder_layout["wiki_clone"]
         monkeypatch.chdir(project)
 
-        mill_link = project / ".mill"
+        mill_link = project / ".millhouse" / "wiki"
         junction.create(wiki_clone, mill_link)
 
         # A file created inside wiki_clone is visible through the junction
@@ -214,8 +214,8 @@ class TestSubfolderAppendPhase:
             task: Subfolder Test Task
             phase: discussing
             parent: main
-            discussion: _millhouse/task/discussion.md
-            plan: _millhouse/task/plan.md
+            discussion: .millhouse/task/discussion.md
+            plan: .millhouse/task/plan.md
             task_description: |
               Test task for subfolder support
             ```
@@ -231,11 +231,11 @@ class TestSubfolderAppendPhase:
         """append_phase with cfg writes status.md into the wiki and commits."""
         project = subfolder_layout["project"]
         wiki_clone = subfolder_layout["wiki_clone"]
-        bare_wiki = subfolder_layout["bare_wiki"]
+        subfolder_layout["bare_wiki"]
         monkeypatch.chdir(project)
 
-        # Simulate mill-setup: create .mill junction
-        mill_link = project / ".mill"
+        # Simulate mill-setup: create .millhouse/wiki junction
+        mill_link = project / ".millhouse" / "wiki"
         junction.create(wiki_clone, mill_link)
 
         # Create the active/<slug>/ directory in the wiki clone
@@ -276,8 +276,8 @@ class TestSubfolderAppendPhase:
         wiki_clone = subfolder_layout["wiki_clone"]
         monkeypatch.chdir(project)
 
-        # Create .mill junction
-        mill_link = project / ".mill"
+        # Create .millhouse/wiki junction
+        mill_link = project / ".millhouse" / "wiki"
         junction.create(wiki_clone, mill_link)
 
         slug = "no-cfg-test"
@@ -306,13 +306,13 @@ class TestSubfolderAppendPhase:
         )
 
     def test_status_file_not_at_git_root_level(self, subfolder_layout, monkeypatch):
-        """The status.md file lives inside the wiki clone, not at git-root/_millhouse/."""
+        """The status.md file lives inside the wiki clone, not at git-root/.millhouse/."""
         project = subfolder_layout["project"]
         wiki_clone = subfolder_layout["wiki_clone"]
         monkeypatch.chdir(project)
 
-        # Create .mill junction
-        mill_link = project / ".mill"
+        # Create .millhouse/wiki junction
+        mill_link = project / ".millhouse" / "wiki"
         junction.create(wiki_clone, mill_link)
 
         slug = "root-check"
@@ -323,7 +323,7 @@ class TestSubfolderAppendPhase:
 
         # The traditional pre-migration path must NOT exist at the git root
         git_root = subfolder_layout["working_clone"]
-        legacy_path = git_root / "_millhouse" / "task" / "status.md"
+        legacy_path = git_root / ".millhouse" / "task" / "status.md"
         assert not legacy_path.exists(), (
             f"status.md should NOT exist at the git root legacy path {legacy_path}"
         )

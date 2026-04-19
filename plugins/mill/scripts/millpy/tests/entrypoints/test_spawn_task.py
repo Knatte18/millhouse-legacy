@@ -11,7 +11,6 @@ import os
 import subprocess
 from pathlib import Path
 
-import pytest
 
 from millpy.entrypoints import spawn_task
 
@@ -53,9 +52,9 @@ def _init_fake_tasks_worktree(wt_path: Path, initial_content: str) -> None:
 
 
 def _write_millhouse_project(project_root_dir: Path) -> None:
-    """Create a minimal _millhouse/config.yaml and a fake .mill/ with Home.md."""
-    # Create fake .mill/ directory (simulates the wiki junction) with Home.md
-    mill_dir = project_root_dir / ".mill"
+    """Create a minimal .millhouse/config.yaml and a fake .millhouse/wiki/ with Home.md."""
+    # Create fake .millhouse/wiki/ directory (simulates the wiki junction) with Home.md
+    mill_dir = project_root_dir / ".millhouse" / "wiki"
     mill_dir.mkdir(parents=True, exist_ok=True)
     (mill_dir / "Home.md").write_text(
         "# Tasks\n\n## [s] Ready Task\nA short description.\n",
@@ -83,8 +82,8 @@ def _write_millhouse_project(project_root_dir: Path) -> None:
         env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
              "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
     )
-    (project_root_dir / "_millhouse").mkdir(parents=True, exist_ok=True)
-    (project_root_dir / "_millhouse" / "config.yaml").write_text(
+    (project_root_dir / ".millhouse").mkdir(parents=True, exist_ok=True)
+    (project_root_dir / ".millhouse" / "config.yaml").write_text(
         f"repo:\n  short-name: \"t\"\n  branch-prefix: ~\n"
         f"wiki:\n  clone-path: \"{fake_wiki.as_posix()}\"\n",
         encoding="utf-8",
@@ -117,7 +116,7 @@ def test_main_with_no_git_repo_exits_nonzero(tmp_path, monkeypatch):
 
 
 def test_main_missing_config_exits_nonzero(tmp_path, monkeypatch, capsys):
-    """Inside a git repo but with no _millhouse/config.yaml, spawn_task must fail
+    """Inside a git repo but with no .millhouse/config.yaml, spawn_task must fail
     with a clear stderr mentioning mill-setup."""
     import subprocess
     import os
@@ -210,8 +209,8 @@ class TestPickWorktreeColor:
 class TestWriteVscodeSettings:
     def _make_repo_root(self, tmp_path: Path, short_name: str = "myrepo") -> Path:
         """Create a minimal repo root with config.yaml."""
-        (tmp_path / "_millhouse").mkdir(parents=True, exist_ok=True)
-        config = tmp_path / "_millhouse" / "config.yaml"
+        (tmp_path / ".millhouse").mkdir(parents=True, exist_ok=True)
+        config = tmp_path / ".millhouse" / "config.yaml"
         config.write_text(
             f"repo:\n  short-name: \"{short_name}\"\n",
             encoding="utf-8",
@@ -225,7 +224,7 @@ class TestWriteVscodeSettings:
         worktree.mkdir(parents=True)
 
         spawn_task._write_vscode_settings(
-            worktree, "my-task", repo_root, repo_root / "_millhouse" / "config.yaml"
+            worktree, "my-task", repo_root, repo_root / ".millhouse" / "config.yaml"
         )
 
         settings_path = worktree / ".vscode" / "settings.json"
@@ -244,7 +243,7 @@ class TestWriteVscodeSettings:
         existing.write_text('{"existing": true}', encoding="utf-8")
 
         spawn_task._write_vscode_settings(
-            worktree, "my-task", repo_root, repo_root / "_millhouse" / "config.yaml"
+            worktree, "my-task", repo_root, repo_root / ".millhouse" / "config.yaml"
         )
 
         data = json.loads(existing.read_text(encoding="utf-8"))
@@ -257,7 +256,7 @@ class TestWriteVscodeSettings:
         worktree.mkdir(parents=True)
 
         spawn_task._write_vscode_settings(
-            worktree, "add-feature", repo_root, repo_root / "_millhouse" / "config.yaml"
+            worktree, "add-feature", repo_root, repo_root / ".millhouse" / "config.yaml"
         )
 
         data = json.loads((worktree / ".vscode" / "settings.json").read_text(encoding="utf-8"))
@@ -272,7 +271,7 @@ class TestWorktreeLayout:
     def test_flat_layout_worktrees_dir_is_sibling_of_repo_and_project_root(
         self, tmp_path, monkeypatch, capsys
     ):
-        """Flat layout: worktrees_dir is sibling of git root; _millhouse lives at worktree toplevel."""
+        """Flat layout: worktrees_dir is sibling of git root; .millhouse lives at worktree toplevel."""
         git_root = tmp_path / "myrepo"
         git_root.mkdir()
         _init_repo_with_commit(git_root)
@@ -308,7 +307,7 @@ class TestWorktreeLayout:
     def test_nested_layout_millhouse_written_under_project_offset(
         self, tmp_path, monkeypatch, capsys
     ):
-        """Nested mill project: the worktree's _millhouse lives under projects/sub, not the git toplevel."""
+        """Nested mill project: the worktree's .millhouse lives under projects/sub, not the git toplevel."""
         git_root = tmp_path / "myrepo"
         git_root.mkdir()
         _init_repo_with_commit(git_root)
@@ -324,7 +323,7 @@ class TestWorktreeLayout:
         # status.md is written to the wiki at active/<slug>/status.md (Card 8)
         fake_wiki = git_root / "projects" / "sub.wiki"
         assert (fake_wiki / "active" / "ready-task" / "status.md").exists()
-        assert not (project_path / "_millhouse").exists()
+        assert not (project_path / ".millhouse").exists()
 
     def test_nested_layout_vscode_settings_written_at_project_offset(
         self, tmp_path, monkeypatch, capsys
@@ -354,10 +353,18 @@ class TestWorktreeLayout:
         _write_millhouse_project(git_root)
         subfolder = git_root / "plugins" / "mill" / "scripts"
         subfolder.mkdir(parents=True)
-        # Subfolder needs .mill/ so tasks_md.resolve_path works from cwd=subfolder
-        (subfolder / ".mill").mkdir()
-        (subfolder / ".mill" / "Home.md").write_text(
+        # Subfolder needs .millhouse/wiki/ so tasks_md.resolve_path works from cwd=subfolder
+        (subfolder / ".millhouse" / "wiki").mkdir(parents=True)
+        (subfolder / ".millhouse" / "wiki" / "Home.md").write_text(
             "# Tasks\n\n## [s] Ready Task\nA short description.\n",
+            encoding="utf-8",
+        )
+        # Subfolder also needs .millhouse/config.yaml since project_root() will find
+        # it here (not in git_root) when walking up from cwd=subfolder.
+        fake_wiki = git_root.parent / (git_root.name + ".wiki")
+        (subfolder / ".millhouse" / "config.yaml").write_text(
+            f"repo:\n  short-name: \"t\"\n  branch-prefix: ~\n"
+            f"wiki:\n  clone-path: \"{fake_wiki.as_posix()}\"\n",
             encoding="utf-8",
         )
 
@@ -450,28 +457,14 @@ class TestWorktreeLayout:
 
 
 # ---------------------------------------------------------------------------
-# Card 8: handoff removed, children removed, .mill junction, extract_description
+# Card 8: handoff removed, children removed, .millhouse/wiki junction, extract_description
 # ---------------------------------------------------------------------------
 
 class TestCard8NoHandoffNoChildren:
     """spawn_task must not write handoff.md or children/ after card 8."""
 
     def test_no_handoff_md_written(self, tmp_path, monkeypatch, capsys):
-        """After spawn_task runs, _millhouse/handoff.md must NOT exist."""
-        git_root = tmp_path / "myrepo"
-        git_root.mkdir()
-        _init_repo_with_commit(git_root)
-        _write_millhouse_project(git_root)
-
-        project_path = _run_spawn_and_get_project_path(
-            monkeypatch, capsys, cwd=git_root, repo_dir=git_root
-        )
-
-        # handoff.md must not exist in the PARENT worktree
-        assert not (git_root / "_millhouse" / "handoff.md").exists()
-
-    def test_no_children_md_written(self, tmp_path, monkeypatch, capsys):
-        """After spawn_task runs, _millhouse/children/*.md must NOT exist."""
+        """After spawn_task runs, .millhouse/handoff.md must NOT exist."""
         git_root = tmp_path / "myrepo"
         git_root.mkdir()
         _init_repo_with_commit(git_root)
@@ -481,7 +474,21 @@ class TestCard8NoHandoffNoChildren:
             monkeypatch, capsys, cwd=git_root, repo_dir=git_root
         )
 
-        children_dir = git_root / "_millhouse" / "children"
+        # handoff.md must not exist in the PARENT worktree
+        assert not (git_root / ".millhouse" / "handoff.md").exists()
+
+    def test_no_children_md_written(self, tmp_path, monkeypatch, capsys):
+        """After spawn_task runs, .millhouse/children/*.md must NOT exist."""
+        git_root = tmp_path / "myrepo"
+        git_root.mkdir()
+        _init_repo_with_commit(git_root)
+        _write_millhouse_project(git_root)
+
+        _run_spawn_and_get_project_path(
+            monkeypatch, capsys, cwd=git_root, repo_dir=git_root
+        )
+
+        children_dir = git_root / ".millhouse" / "children"
         child_files = list(children_dir.glob("*.md")) if children_dir.exists() else []
         assert child_files == [], f"Expected no children/*.md but found: {child_files}"
 
@@ -516,8 +523,8 @@ class TestCard8VscodeDisplayName:
     def test_window_title_uses_display_name(self, tmp_path):
         """window.title in settings.json uses the task display name, not the slug."""
         repo_root_dir = tmp_path / "repo"
-        (repo_root_dir / "_millhouse").mkdir(parents=True)
-        (repo_root_dir / "_millhouse" / "config.yaml").write_text(
+        (repo_root_dir / ".millhouse").mkdir(parents=True)
+        (repo_root_dir / ".millhouse" / "config.yaml").write_text(
             'repo:\n  short-name: "proj"\n',
             encoding="utf-8",
         )
@@ -535,7 +542,7 @@ class TestCard8VscodeDisplayName:
             worktree,
             "my-task",
             repo_root_dir,
-            repo_root_dir / "_millhouse" / "config.yaml",
+            repo_root_dir / ".millhouse" / "config.yaml",
             display_name="My Feature Task",
         )
 

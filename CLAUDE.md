@@ -46,7 +46,7 @@ When you need to find a skill for a task, read `SKILLS.md` (repo root) first —
 ## Tasks
 
 - Task list lives in the GitHub Wiki (`<repo>.wiki.git`), cloned locally at `<worktree-parent>/<repo>.wiki/`.
-- Each worktree has a `.mill/` junction pointing at the wiki clone. Per-task runtime state lives in `.mill/active/<slug>/` (status.md, discussion.md, plan/, reviews/).
+- Each worktree has a `.millhouse/wiki/` junction pointing at the wiki clone. Per-task runtime state lives in `.millhouse/wiki/active/<slug>/` (status.md, discussion.md, plan/, reviews/).
 - The slug for a task equals the branch name (minus any configured `repo.branch-prefix/` prefix). Derive via `millpy.core.paths.slug_from_branch(cfg)`.
 - Read/write access to Home.md: always via `millpy.tasks.tasks_md.resolve_path(cfg)` + `tasks_md.parse/render/write_commit_push`. Never run `git` against Home.md directly.
 - Every orchestrator entry point calls `millpy.tasks.wiki.sync_pull(cfg)` before reading wiki state.

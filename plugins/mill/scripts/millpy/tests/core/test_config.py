@@ -125,8 +125,8 @@ class TestLoad:
         assert cfg["models"]["1"] == "opus"
 
     def test_loads_config_yaml(self):
-        """Smoke test: loads the actual _millhouse/config.yaml without raising."""
-        repo_config = Path(__file__).parents[5] / "_millhouse" / "config.yaml"
+        """Smoke test: loads the actual .millhouse/config.yaml without raising."""
+        repo_config = Path(__file__).parents[5] / ".millhouse" / "config.yaml"
         if repo_config.exists():
             cfg = load(repo_config)
             assert isinstance(cfg, dict)
@@ -290,9 +290,9 @@ class TestLoadMerged:
         return path
 
     def test_only_shared_exists(self, tmp_path):
-        """Only .mill/config.yaml → returned as-is, no local overrides."""
+        """Only .millhouse/wiki/config.yaml → returned as-is, no local overrides."""
         shared = self._write(
-            tmp_path / ".mill" / "config.yaml",
+            tmp_path / ".millhouse" / "wiki" / "config.yaml",
             """\
             pipeline:
               implementer: sonnet
@@ -300,21 +300,21 @@ class TestLoadMerged:
         )
         cfg = load_merged(
             shared_path=shared,
-            local_path=tmp_path / "_millhouse" / "config.local.yaml",
+            local_path=tmp_path / ".millhouse" / "config.local.yaml",
         )
         assert cfg["pipeline"]["implementer"] == "sonnet"
 
     def test_local_overrides_shared(self, tmp_path):
         """Local config overrides shared values at nested depth."""
         shared = self._write(
-            tmp_path / ".mill" / "config.yaml",
+            tmp_path / ".millhouse" / "wiki" / "config.yaml",
             """\
             pipeline:
               implementer: sonnet
             """,
         )
         local = self._write(
-            tmp_path / "_millhouse" / "config.local.yaml",
+            tmp_path / ".millhouse" / "config.local.yaml",
             """\
             pipeline:
               implementer: opus
@@ -324,17 +324,17 @@ class TestLoadMerged:
         assert cfg["pipeline"]["implementer"] == "opus"
 
     def test_fallback_to_old_millhouse_config(self, tmp_path, capsys):
-        """When .mill/config.yaml is absent but _millhouse/config.yaml exists, use it."""
+        """When .millhouse/wiki/config.yaml is absent but .millhouse/config.yaml exists, use it."""
         old = self._write(
-            tmp_path / "_millhouse" / "config.yaml",
+            tmp_path / ".millhouse" / "config.yaml",
             """\
             pipeline:
               implementer: sonnet
             """,
         )
         cfg = load_merged(
-            shared_path=tmp_path / ".mill" / "config.yaml",
-            local_path=tmp_path / "_millhouse" / "config.local.yaml",
+            shared_path=tmp_path / ".millhouse" / "wiki" / "config.yaml",
+            local_path=tmp_path / ".millhouse" / "config.local.yaml",
             legacy_path=old,
         )
         assert cfg["pipeline"]["implementer"] == "sonnet"
@@ -342,15 +342,15 @@ class TestLoadMerged:
     def test_both_absent_returns_empty(self, tmp_path):
         """Neither file exists → returns empty dict."""
         cfg = load_merged(
-            shared_path=tmp_path / ".mill" / "config.yaml",
-            local_path=tmp_path / "_millhouse" / "config.local.yaml",
+            shared_path=tmp_path / ".millhouse" / "wiki" / "config.yaml",
+            local_path=tmp_path / ".millhouse" / "config.local.yaml",
         )
         assert cfg == {}
 
     def test_deep_merge_nested_keys(self, tmp_path):
         """Deep-merge: local adds a nested key without destroying sibling keys."""
         shared = self._write(
-            tmp_path / ".mill" / "config.yaml",
+            tmp_path / ".millhouse" / "wiki" / "config.yaml",
             """\
             notifications:
               slack:
@@ -359,7 +359,7 @@ class TestLoadMerged:
             """,
         )
         local = self._write(
-            tmp_path / "_millhouse" / "config.local.yaml",
+            tmp_path / ".millhouse" / "config.local.yaml",
             """\
             notifications:
               slack:
@@ -373,11 +373,11 @@ class TestLoadMerged:
     def test_wiki_clone_path_from_local(self, tmp_path):
         """wiki.clone-path in local config is accessible after merge."""
         shared = self._write(
-            tmp_path / ".mill" / "config.yaml",
+            tmp_path / ".millhouse" / "wiki" / "config.yaml",
             "name: test\n",
         )
         local = self._write(
-            tmp_path / "_millhouse" / "config.local.yaml",
+            tmp_path / ".millhouse" / "config.local.yaml",
             """\
             wiki:
               clone-path: /custom/wiki/path
@@ -391,14 +391,14 @@ class TestLoadMerged:
         # The YAML parser handles lists only at scalar level; use a scalar test
         # that shows override semantics.
         shared = self._write(
-            tmp_path / ".mill" / "config.yaml",
+            tmp_path / ".millhouse" / "wiki" / "config.yaml",
             """\
             pipeline:
               implementer: sonnet
             """,
         )
         local = self._write(
-            tmp_path / "_millhouse" / "config.local.yaml",
+            tmp_path / ".millhouse" / "config.local.yaml",
             """\
             pipeline:
               implementer: opus

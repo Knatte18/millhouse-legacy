@@ -1,5 +1,5 @@
 """
-status_md.py — Parser and writer for _millhouse/task/status.md (and wiki active/<slug>/status.md).
+status_md.py — Parser and writer for .millhouse/task/status.md (and wiki active/<slug>/status.md).
 
 Reads the YAML code block using the shared _parse_yaml_mapping helper from
 millpy.core.config. Does NOT re-implement the YAML parser. Supports nested
@@ -266,7 +266,7 @@ def append_phase(
     2. Call ``update_phase(path, phase)`` — updates the ``phase:`` YAML field.
     3. Call ``append_timeline(path, phase, timestamp=ts)`` — appends entry to
        the ``## Timeline`` block.
-    4. If ``cfg is not None`` and the path is under the ``.mill/`` junction,
+    4. If ``cfg is not None`` and the path is under the ``.millhouse/wiki/`` junction,
        call ``wiki.write_commit_push(cfg, [rel_path], f"task: phase {phase}")``.
        Per-task writes bypass the shared lock (no ``wiki.acquire_lock`` call).
 
@@ -301,22 +301,25 @@ def append_phase(
         )
         return
 
-    # Check if the path is under a .mill/ junction (post-migration layout).
+    # Check if the path is under a .millhouse/wiki/ junction (post-migration layout).
     # Use the *absolute but non-resolved* path so that junction/symlink components
-    # (e.g. ".mill") are preserved. Path.resolve() follows junctions on Windows
-    # and would strip the ".mill" component, causing a false negative here.
+    # (e.g. ".millhouse") are preserved. Path.resolve() follows junctions on Windows
+    # and would strip the ".millhouse" component, causing a false negative here.
     abs_path = Path(path).absolute()
     path_parts = abs_path.parts
-    if ".mill" not in path_parts:
+    if ".millhouse" not in path_parts:
         sys.stderr.write(
-            f"[status_md] DEBUG: path not under .mill/ — skipping wiki commit for phase {phase!r}\n"
+            f"[status_md] DEBUG: path not under .millhouse/ — skipping wiki commit for phase {phase!r}\n"
         )
         return
 
     # Derive relative path inside wiki clone.
-    # Find the .mill component and everything after it.
-    mill_idx = list(path_parts).index(".mill")
-    rel_parts = path_parts[mill_idx + 1:]  # e.g. ("active", "my-task", "status.md")
+    # Find the .millhouse component, advance past the "wiki" component inside it,
+    # and take everything after. This produces wiki-relative paths like
+    # ("active", "my-task", "status.md") — the wiki repo has no "wiki/" prefix.
+    millhouse_idx = list(path_parts).index(".millhouse")
+    wiki_idx = millhouse_idx + 1  # must be "wiki"
+    rel_parts = path_parts[wiki_idx + 1:]  # e.g. ("active", "my-task", "status.md")
     rel_path = "/".join(rel_parts)
 
     from millpy.tasks import wiki

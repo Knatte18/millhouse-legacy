@@ -6,7 +6,6 @@ HTTP code paths are NOT tested (covered by live smoke if ollama is available).
 """
 from __future__ import annotations
 
-import pytest
 
 from millpy.backends.ollama import compute_num_ctx, strip_think_blocks
 

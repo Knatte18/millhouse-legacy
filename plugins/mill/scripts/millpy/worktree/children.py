@@ -1,7 +1,7 @@
 """
 children.py — Child worktree registry parser for millpy.
 
-Scans _millhouse/children/*.md files, parses YAML frontmatter, and returns
+Scans .millhouse/children/*.md files, parses YAML frontmatter, and returns
 Child dataclass instances. Uses the shared _parse_yaml_mapping helper from
 millpy.core.config — does NOT re-implement YAML parsing.
 
@@ -23,7 +23,7 @@ from millpy.core.log_util import log
 
 @dataclass
 class Child:
-    """A child worktree entry parsed from a _millhouse/children/*.md file."""
+    """A child worktree entry parsed from a .millhouse/children/*.md file."""
 
     slug: str
     branch: str
@@ -81,7 +81,7 @@ def list_children(millhouse_dir: Path) -> list[Child]:
     Parameters
     ----------
     millhouse_dir:
-        The _millhouse directory for the worktree (not the children/ subdir).
+        The .millhouse directory for the worktree (not the children/ subdir).
 
     Returns
     -------

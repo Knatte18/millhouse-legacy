@@ -107,7 +107,7 @@ class ClusterReviewer:
 
         # Spawn workers in parallel
         root = project_root()
-        scratch_dir = root / "_millhouse" / "scratch" / "reviews"
+        scratch_dir = root / ".millhouse" / "scratch" / "reviews"
         scratch_dir.mkdir(parents=True, exist_ok=True)
 
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -532,7 +532,7 @@ def _run_handler_prep(
     )
 
     backend = BACKENDS[handler_worker.provider]
-    result = backend.dispatch_tool_use(
+    backend.dispatch_tool_use(
         prep_prompt,
         model=handler_worker.model,
         effort=handler_worker.effort,

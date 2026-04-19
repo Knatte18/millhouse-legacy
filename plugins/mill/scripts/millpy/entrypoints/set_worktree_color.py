@@ -52,12 +52,12 @@ def _resolve_worktree_root() -> Path | None:
 
 
 def _resolve_short_name(repo_root: Path) -> str:
-    """Read `repo.short-name` from `_millhouse/config.yaml`. Fall back to
+    """Read `repo.short-name` from `.millhouse/config.yaml`. Fall back to
     the worktree directory basename if config is missing or malformed.
     """
     import re
 
-    config_path = repo_root / "_millhouse" / "config.yaml"
+    config_path = repo_root / ".millhouse" / "config.yaml"
     if config_path.exists():
         try:
             for line in config_path.read_text(encoding="utf-8").splitlines():

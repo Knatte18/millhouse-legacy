@@ -1,12 +1,12 @@
 """
 entrypoints/open_vscode.py — VS Code launcher for millpy (live).
 
-Scans _millhouse/children/ for active entries, presents a picker,
+Scans .millhouse/children/ for active entries, presents a picker,
 then opens VS Code in the selected worktree. Applies the B.4
 project-within-worktree offset in nested-project layouts.
 
 Live after W1 Step 10 skill-text flip: called directly via
-`_millhouse/mill-vscode.py` or `python plugins/mill/scripts/open_vscode.py`.
+`.millhouse/mill-vscode.py` or `python plugins/mill/scripts/open_vscode.py`.
 """
 from __future__ import annotations
 
@@ -63,11 +63,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[open_vscode] Not in a git repository: {exc}", file=sys.stderr)
         return 1
 
-    millhouse_dir = root / "_millhouse"
+    millhouse_dir = root / ".millhouse"
     children_dir = millhouse_dir / "children"
 
     if not children_dir.exists():
-        print("No _millhouse/children/ directory found. No spawned worktrees.")
+        print("No .millhouse/children/ directory found. No spawned worktrees.")
         return 0
 
     children = list_children(millhouse_dir)

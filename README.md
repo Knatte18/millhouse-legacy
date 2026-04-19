@@ -35,7 +35,7 @@ See [INSTALL.md](INSTALL.md) for setup instructions.
 
 `tasks.md` lives on a dedicated orphan branch `tasks` in this repo. The branch never merges into `main` — it exists solely as a git-synced storage location for the task list. This keeps `main`'s history free of `task:`-prefixed commits from claim/done/cleanup churn.
 
-Locally, the `tasks` branch is checked out as a persistent git worktree at `tasks.worktree-path` in `_millhouse/config.yaml` (typically `<parent-of-repo>/<reponame>.worktrees/tasks`). Open a dedicated VS Code window on that folder to view and edit tasks. On GitHub the file is viewable at `blob/tasks/tasks.md`.
+Locally, the `tasks` branch is checked out as a persistent git worktree at `tasks.worktree-path` in `.millhouse/config.local.yaml` (typically `<parent-of-repo>/<reponame>.worktrees/tasks`). Open a dedicated VS Code window on that folder to view and edit tasks. On GitHub the file is viewable at `blob/tasks/tasks.md`.
 
 All mill skills read and write tasks.md via `millpy.tasks.tasks_md.resolve_path` + `write_commit_push` — never via `git` commands in the current worktree.
 

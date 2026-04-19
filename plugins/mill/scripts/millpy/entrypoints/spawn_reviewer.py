@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "Name of a REVIEWERS or WORKERS entry. "
-            "When absent, resolved from _millhouse/config.yaml using --phase and --round. "
+            "When absent, resolved from .millhouse/config.yaml using --phase and --round. "
             "Use --list-reviewers to see valid names."
         ),
     )
@@ -132,12 +132,12 @@ def main(argv: list[str] | None = None) -> int:
         log("spawn_reviewer", f"missing required argument(s): {', '.join(missing)}")
         parser.error(f"missing required argument(s): {', '.join(missing)}")
 
-    # Load config (merge .mill/config.yaml + _millhouse/config.local.yaml)
+    # Load config (merge .millhouse/wiki/config.yaml + .millhouse/config.local.yaml)
     root = project_root()
     cfg = load_merged(
         shared_path=mill_junction_path(root) / "config.yaml",
         local_path=local_config_path(root),
-        legacy_path=root / "_millhouse" / "config.yaml",
+        legacy_path=root / ".millhouse" / "config.yaml",
     )
 
     # Resolve reviewer name if not provided
@@ -181,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         reviews_dir = active_dir(cfg) / "reviews"
     except Exception:
-        reviews_dir = root / "_millhouse" / "scratch" / "reviews"
+        reviews_dir = root / ".millhouse" / "scratch" / "reviews"
 
     # Dispatch
     try:
@@ -241,7 +241,7 @@ def _run_plan_validation(
     """Run plan_validator before dispatch. Return error string on failure, None on pass.
 
     task_dir is resolved via active_dir(cfg) — the wiki-based active task directory.
-    Falls back to project_root()/_millhouse/task when active_dir is not available
+    Falls back to project_root()/.millhouse/task when active_dir is not available
     (pre-migration). Returns None if no plan path arg was provided (nothing to validate).
 
     Parameters
@@ -261,14 +261,14 @@ def _run_plan_validation(
     try:
         candidate = active_dir(cfg)
         # Only use active_dir if it actually contains a plan (post-migration).
-        # Fall back to the legacy _millhouse/task path otherwise.
+        # Fall back to the legacy .millhouse/task path otherwise.
         if resolve_plan_path(candidate) is not None:
             task_dir = candidate
         else:
-            task_dir = project_root() / "_millhouse" / "task"
+            task_dir = project_root() / ".millhouse" / "task"
     except Exception:
-        # Fallback for pre-migration layouts where .mill/ junction doesn't exist yet.
-        task_dir = project_root() / "_millhouse" / "task"
+        # Fallback for pre-migration layouts where .millhouse/wiki/ junction doesn't exist yet.
+        task_dir = project_root() / ".millhouse" / "task"
 
     loc = resolve_plan_path(task_dir)
     if loc is None:

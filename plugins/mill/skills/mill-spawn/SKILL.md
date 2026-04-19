@@ -28,9 +28,9 @@ Text before the first colon is the title. Text after is the body (description). 
 
 ### Phase 1: Verify setup
 
-If `_millhouse/config.local.yaml` (or the legacy `_millhouse/config.yaml`) does not exist, stop and tell the user to run `mill-setup` first.
+If `.millhouse/config.local.yaml` (or the legacy `.millhouse/config.yaml`) does not exist, stop and tell the user to run `mill-setup` first.
 
-If the `.mill/` junction does not exist at cwd, stop and tell the user to run `mill-setup` first (the wiki junction is required for task state).
+If the `.millhouse/wiki/` junction does not exist at cwd, stop and tell the user to run `mill-setup` first (the wiki junction is required for task state).
 
 ### Phase 2: Sync wiki
 
@@ -45,7 +45,7 @@ Split the argument on the first `:` character.
 
 ### Phase 4: Add task with spawn marker
 
-Read `Home.md` from `.mill/Home.md`. Append a new task block at the end of the file with the `[s]` marker:
+Read `Home.md` from `.millhouse/wiki/Home.md`. Append a new task block at the end of the file with the `[s]` marker:
 
 If no description:
 
@@ -78,7 +78,7 @@ If `LockBusy` is raised, retry once after a brief wait, then fail with a message
 
 Locate `spawn_task.py` using three-tier resolution:
 
-1. **Forwarding wrapper:** `_millhouse/mill-spawn.py` (written by `mill-setup`, resolves the plugin-cache path at runtime)
+1. **Forwarding wrapper:** `.millhouse/mill-spawn.py` (written by `mill-setup`, resolves the plugin-cache path at runtime)
 2. **Plugin source** (works in the millhouse repo itself): `<repo-root>/plugins/mill/scripts/spawn_task.py`
 3. **Plugin cache** (works in any repo with mill plugin installed): `~/.claude/plugins/cache/millhouse/mill/<latest-version>/scripts/spawn_task.py`
 
@@ -96,16 +96,16 @@ The script performs the following (card 8 logic):
 4. Mark the entry `[active]` in `Home.md` via `tasks_md.write_commit_push`.
 5. Release wiki lock.
 6. Create the feature worktree via `git worktree add -b <branch-name> <worktrees-dir>/<slug>`.
-7. Write initial `status.md` at `<new-worktree>/.mill/active/<slug>/status.md` by rendering `plugins/mill/templates/status-discussing.md` (which already contains `phase: discussing` in YAML and a `discussing` entry in Timeline). Do NOT call `append_phase` on the freshly-rendered file. After the template write, the spawn script calls `wiki.write_commit_push(cfg, [f"active/{slug}/status.md"], f"task: init {slug}")`.
+7. Write initial `status.md` at `<new-worktree>/.millhouse/wiki/active/<slug>/status.md` by rendering `plugins/mill/templates/status-discussing.md` (which already contains `phase: discussing` in YAML and a `discussing` entry in Timeline). Do NOT call `append_phase` on the freshly-rendered file. After the template write, the spawn script calls `wiki.write_commit_push(cfg, [f"active/{slug}/status.md"], f"task: init {slug}")`.
 8. Regenerate sidebar via the `regenerate_sidebar` entrypoint.
 
 **Slug derivation:** The slug is derived from the current branch name via `paths.slug_from_branch(cfg)`. This strips the optional `repo.branch-prefix/` (e.g. `"mh"` strips `"mh/"` from `"mh/foo-task"`). The branch name is set to `<branch-prefix>/<slug>` if a prefix is configured, or `<slug>` otherwise.
 
-**Active task directory:** `<new-worktree>/.mill/active/<slug>/` — contains `status.md`, `discussion.md`, `plan/`, `reviews/`.
+**Active task directory:** `<new-worktree>/.millhouse/wiki/active/<slug>/` — contains `status.md`, `discussion.md`, `plan/`, `reviews/`.
 
-**No `_millhouse/children/` registry:** child tracking is replaced by the wiki's `active/<slug>/` directory structure. No junction is created in a `children/` folder.
+**No `.millhouse/children/` registry:** child tracking is replaced by the wiki's `active/<slug>/` directory structure. No junction is created in a `children/` folder.
 
-**`_millhouse/` copy-on-spawn:** When spawning, the script copies `_millhouse/` (excluding `task/`, `scratch/`, and `children/`) from the parent worktree to the new worktree, so the new worktree inherits `config.local.yaml` and wrapper scripts.
+**`.millhouse/` copy-on-spawn:** When spawning, the script copies `.millhouse/` (excluding `task/`, `scratch/`, and `children/`) from the parent worktree to the new worktree, so the new worktree inherits `config.local.yaml` and wrapper scripts.
 
 ### Phase 8: Report
 
@@ -140,8 +140,8 @@ The user types a number. The selected task is claimed and the worktree is create
 
 | Condition | Action |
 |---|---|
-| `_millhouse/config.local.yaml` missing | Stop, tell user to run `mill-setup` |
-| `.mill/` junction missing | Stop, tell user to run `mill-setup` |
+| `.millhouse/config.local.yaml` missing | Stop, tell user to run `mill-setup` |
+| `.millhouse/wiki/` junction missing | Stop, tell user to run `mill-setup` |
 | `wiki.sync_pull` fails | Report error; do not proceed (stale state risk) |
 | `LockBusy` on write | Retry once, then fail with message |
 | `tasks_md.validate` fails | Report issue and stop before pushing |

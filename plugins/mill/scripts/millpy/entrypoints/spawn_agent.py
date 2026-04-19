@@ -8,7 +8,7 @@ CLI flags (pythonic kebab-case):
     --role            reviewer | implementer (required)
     --prompt-file     path to materialized prompt file (required)
     --provider        WORKERS registry name (optional; falls back to
-                      pipeline.implementer from _millhouse/config.yaml)
+                      pipeline.implementer from .millhouse/config.yaml)
     --dispatch        tool-use | bulk (default: tool-use)
     --bulk-output     path where bulk worker stdout is saved
                       (required when --dispatch bulk)
@@ -49,7 +49,7 @@ _IMPLEMENTER_REQUIRED_FIELDS = ("phase", "status_file", "final_commit")
 
 
 def _resolve_provider_from_config() -> str | None:
-    """Read pipeline.implementer from _millhouse/config.yaml. Returns None on any failure."""
+    """Read pipeline.implementer from .millhouse/config.yaml. Returns None on any failure."""
     from millpy.core.config import load
     from millpy.core.paths import project_root
 
@@ -57,7 +57,7 @@ def _resolve_provider_from_config() -> str | None:
         root = project_root()
     except Exception:
         return None
-    config_path = root / "_millhouse" / "config.yaml"
+    config_path = root / ".millhouse" / "config.yaml"
     if not config_path.exists():
         return None
     try:
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     if not provider:
         _log(
             "No provider specified. Pass --provider <name> or set "
-            "pipeline.implementer in _millhouse/config.yaml."
+            "pipeline.implementer in .millhouse/config.yaml."
         )
         return 1
 

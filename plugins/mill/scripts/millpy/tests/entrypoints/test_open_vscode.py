@@ -44,10 +44,10 @@ def _make_real_run_passthrough():
 
 
 def test_flat_layout_launch_cwd_equals_worktree(temp_git_repo, monkeypatch):
-    (temp_git_repo / "_millhouse" / "children").mkdir(parents=True)
+    (temp_git_repo / ".millhouse" / "children").mkdir(parents=True)
     child_worktree = temp_git_repo / "fake-child-worktree"
     child_worktree.mkdir()
-    (child_worktree / "_millhouse").mkdir()
+    (child_worktree / ".millhouse").mkdir()
 
     captured_cwd = {}
     captured_argv = {}
@@ -72,7 +72,7 @@ def test_flat_layout_launch_cwd_equals_worktree(temp_git_repo, monkeypatch):
 
 def test_nested_layout_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
     project = temp_git_repo / "projects" / "sub"
-    (project / "_millhouse" / "children").mkdir(parents=True)
+    (project / ".millhouse" / "children").mkdir(parents=True)
     child_worktree = temp_git_repo / "fake-child-worktree"
     child_worktree.mkdir()
     (child_worktree / "projects" / "sub").mkdir(parents=True)
@@ -99,7 +99,7 @@ def test_nested_layout_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
 
 
 def test_offset_failure_falls_back_to_worktree(temp_git_repo, monkeypatch):
-    (temp_git_repo / "_millhouse" / "children").mkdir(parents=True)
+    (temp_git_repo / ".millhouse" / "children").mkdir(parents=True)
     child_worktree = temp_git_repo / "fake-child-worktree"
     child_worktree.mkdir()
 
@@ -130,7 +130,7 @@ def test_offset_failure_falls_back_to_worktree(temp_git_repo, monkeypatch):
 
 def test_flat_subfolder_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
     """Flat layout with cwd in a subfolder: launch_cwd and argv path == child/<subfolder>."""
-    (temp_git_repo / "_millhouse" / "children").mkdir(parents=True)
+    (temp_git_repo / ".millhouse" / "children").mkdir(parents=True)
     subfolder = temp_git_repo / "plugins" / "mill" / "scripts"
     subfolder.mkdir(parents=True)
 
@@ -163,7 +163,7 @@ def test_flat_subfolder_launch_cwd_includes_offset(temp_git_repo, monkeypatch):
 def test_argv_uses_launch_cwd_not_worktree_when_offset_nonempty(temp_git_repo, monkeypatch):
     """Critical invariant: argv path always equals launch_cwd, not child.worktree."""
     project = temp_git_repo / "projects" / "sub"
-    (project / "_millhouse" / "children").mkdir(parents=True)
+    (project / ".millhouse" / "children").mkdir(parents=True)
 
     child_worktree = temp_git_repo / "fake-child-worktree"
     child_worktree.mkdir()
