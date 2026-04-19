@@ -39,7 +39,7 @@ Determine the label from the **user's message** (case-insensitive). If it contai
 Run:
 
 ```bash
-gh issue create --repo Knatte18/millhouse --label "<auto-picked label>" \
+gh issue create --repo Knatte18/millhouse-legacy --label "<auto-picked label>" \
   --title "<user's message>" \
   --body "$(cat <<'BODY'
 ## Feedback
@@ -64,11 +64,11 @@ Fall back to opening a pre-filled GitHub issue URL in the browser:
 ```bash
 # Detect platform and open URL
 # Windows:
-start "https://github.com/Knatte18/millhouse/issues/new?labels=<auto-picked label>&title=<url-encoded title>&body=<url-encoded body>"
+start "https://github.com/Knatte18/millhouse-legacy/issues/new?labels=<auto-picked label>&title=<url-encoded title>&body=<url-encoded body>"
 # macOS:
-open "https://github.com/Knatte18/millhouse/issues/new?labels=<auto-picked label>&title=<url-encoded title>&body=<url-encoded body>"
+open "https://github.com/Knatte18/millhouse-legacy/issues/new?labels=<auto-picked label>&title=<url-encoded title>&body=<url-encoded body>"
 # Linux:
-xdg-open "https://github.com/Knatte18/millhouse/issues/new?labels=<auto-picked label>&title=<url-encoded title>&body=<url-encoded body>"
+xdg-open "https://github.com/Knatte18/millhouse-legacy/issues/new?labels=<auto-picked label>&title=<url-encoded title>&body=<url-encoded body>"
 ```
 
 URL-encode the title, body, and label name. Detect the platform from the environment.

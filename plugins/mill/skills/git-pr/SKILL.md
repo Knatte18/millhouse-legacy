@@ -127,7 +127,7 @@ Parsing rules for the fallback:
 - `git@github.com:owner/repo.git` → strip `git@github.com:` prefix and `.git` suffix
 - If no `.git` suffix, strip only the prefix
 
-Result: `owner/repo` (e.g. `Knatte18/millhouse`).
+Result: `owner/repo` (e.g. `Knatte18/millhouse-legacy`).
 
 If both methods fail, stop and tell the user: "Could not detect the repository. Are you in a git repo with a GitHub remote?"
 
